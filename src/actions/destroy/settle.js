@@ -54,7 +54,7 @@ async function recordLeg(data, destroy, error, guardFee, gas, debits){
         // Bill the controller-guard gas to SOURCE (in GAS). Reduce the in-memory GAS
         // balance so a later controlled leg in this same multi-destroy sees the spend.
         if(this.util.bcgt(guardFee, 0)){
-            debits.push([gas.gasTick, guardFee, destroy['SOURCE']]);
+            this.util.billGuardGas(debits, gas.gasTick, guardFee, destroy['SOURCE'], data);
             this.util.addAddressTicker(destroy['SOURCE'], gas.gasTick);
             if(gas.gasInfo)
                 gas.gasBalances = this.util.debitBalances(gas.gasBalances, gas.gasInfo['TICK_ID'], guardFee);

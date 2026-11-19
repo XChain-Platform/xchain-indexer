@@ -59,6 +59,23 @@ const MIRRORED_CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attest
 let baseGateReadOverlay;            // the venue overlay, read before any witness overlay exists
 let witnessOverlay = null;          // the recorded-rules overlay this module installed, if any
 
+async function runStartupMigrations(){
+    let startedAt = Date.now();
+    let attempt = 0;
+    let result;
+    do {
+        attempt++;
+        result = await this.indexerDb.runMigrations();
+        if(!result.lockSkipped || this.stopFlag) return result;
+        let waitedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+        getLogger().warn('Indexer schema migrations deferred: migration lock for ' +
+            this.indexerDbName + ' is held by another process; retrying (attempt ' +
+            attempt + ', waited ' + waitedSeconds + 's). Block processing will not start.');
+        await this.util.sleep(5000);
+    } while(!this.stopFlag);
+    return result;
+}
+
 // Read on first use rather than at load, so a stand-in protocol_changes without a
 // registry can still load this module.
 function baseReadOverlay(){
@@ -407,16 +424,15 @@ module.exports = {
             if(!indexerTablesVerified)
                 this.util.throwError("Database " + this.indexerDbName + " tables don't exist!");
 
-            // Apply any pending `auto` schema migrations (additive/idempotent changes the
-            // drift reconciler can't make on its own). Manual/destructive migrations stay
-            // gated for an explicit operator run (`node src/db/migration/migrate.js`). Recorded in the
-            // schema_migrations ledger, so this is a no-op once applied.
-            const migrationResult = await this.indexerDb.runMigrations();
+            // Apply pending auto migrations before any writer starts. A contended migration
+            // lock is retried in-process so status remains available with schemaReady false.
+            // Manual migrations stay gated for an explicit operator run.
+            const migrationResult = await runStartupMigrations.call(this);
+            if(migrationResult.lockSkipped && this.stopFlag) return;
             if(this.indexerDb instanceof database ||
                typeof this.indexerDb.recordConsensusGateBoot === 'function')
                 await this.recordConsensusGateBoot();
-            if(!migrationResult.lockSkipped)
-                this.schemaReady = true;
+            this.schemaReady = true;
 
             // Invariant probe (a precondition for arming the dense-id rules): the deterministic
             // address/ticker id counter (getNextAddressId = MAX(id)+1) and every wire ^<id>

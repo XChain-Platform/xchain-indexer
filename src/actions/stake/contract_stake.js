@@ -335,7 +335,7 @@ function planContractStakeLedger(data, guardFee, debits, escrows){
     // The controller-guard gas is a genuine BURN, so it stays a lone debit with no
     // escrow row: those tokens really are destroyed and supply really should fall.
     if(this.util.bcgt(guardFee, 0)){
-        debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+        this.util.billGuardGas(debits, this.config['GAS'], guardFee, data['SOURCE'], data);
         this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
     }
 }

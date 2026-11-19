@@ -107,8 +107,8 @@ async function parse(params, data, error){
     if(status=='valid'){
         data['SIBLING_ACTIONS'] = preParseSiblings.call(this, commands, gates.normalize);
         seedValueLedger(data, gates.limitsActive);
-        let isProbe = probe.seedProbeCollectors(data);
-        await dispatchSubCommands.call(this, commands, data, error, gates.normalize, isProbe);
+        let collect = probe.seedProbeCollectors(data);
+        await dispatchSubCommands.call(this, commands, data, error, gates.normalize, collect);
     }
 
     // Restore the BATCH's own verdict, which the dispatch loop overwrote with the LAST
@@ -169,7 +169,7 @@ function seedValueLedger(data, limitsActive){
 }
 
 // Dispatch every sub-command through the loader, in list order, one ACTION_INDEX each.
-async function dispatchSubCommands(commands, data, error, normalize, isProbe){
+async function dispatchSubCommands(commands, data, error, normalize, collect){
     // Snapshot the transaction-level field names. Anything a sub-action
     // adds beyond these is action-specific and must be cleared before the
     // next sub-action runs, otherwise it bleeds across commands (e.g. a
@@ -196,13 +196,13 @@ async function dispatchSubCommands(commands, data, error, normalize, isProbe){
         // batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
         // but only this one is impossible to spell around, because there is no further
         // transformation between the check and the call.
-        if(isProbe && this.actions.isBatchProbeForbiddenSubAction(action)){
-            data['PROBE_SUB_VERDICTS'].push({
-                position: batchPosition,
-                action:   action,
-                status:   null,
-                refused:  'VM action not dispatched on the public pre-flight'
-            });
+        if(data['GUARD_INERT'] === true && this.actions.isBatchProbeForbiddenSubAction(action)){
+            if(collect) data['PROBE_SUB_VERDICTS'].push({
+                    position: batchPosition,
+                    action:   action,
+                    status:   null,
+                    refused:  'VM action not dispatched on the public pre-flight'
+                });
             continue;
         }
 
@@ -210,18 +210,18 @@ async function dispatchSubCommands(commands, data, error, normalize, isProbe){
         // returns without recording one (a settlement leg that skips, e.g. the coinpay/ handler
         // on an unmatched payee) reports null rather than inheriting its predecessor's
         // status. STATUS is a base key, so the field clear above never touches it.
-        if(isProbe) delete data['STATUS'];
+        if(data['FEE_PROBE'] === true) delete data['STATUS'];
 
         // Probe only: give this sub-command its own match snapshot. processAction keeps only the
         // first ORDER_MATCH/SWAP_MATCH capture per transaction, so a filling ORDER read as its
         // match's pending_coinpay and the batch answered with that ORDER's verdict and fee.
-        let outerPrimary = isProbe ? this.actions._primaryVerdict : null;
-        if(isProbe) this.actions._primaryVerdict = null;
+        let outerPrimary = collect ? this.actions._primaryVerdict : null;
+        if(collect) this.actions._primaryVerdict = null;
 
         // Process the specific ACTION commands
         await this.actions.processAction(action, params, data, error);
 
-        if(isProbe){
+        if(collect){
             probe.recordSubVerdict.call(this, data, action, batchPosition, this.actions._primaryVerdict);
             // Restore, so no sub-command's snapshot is left to answer for the batch itself.
             this.actions._primaryVerdict = outerPrimary;

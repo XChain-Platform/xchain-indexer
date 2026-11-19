@@ -349,9 +349,7 @@ module.exports = {
             this.releaseCapabilityProofWaiters();
         }
         if (!verdict || verdict.verdict !== 'refused') return false;
-        getLogger().error('HubDbSync: REFUSED a capability_snapshots row this node can disprove from its own ' +
-            'stakes - ' + verdict.reason + '. The hub is serving a validator set that contradicts the chain; ' +
-            'off-BTC nodes cannot see this and will have mirrored it.');
+        getLogger().error('HubDbSync: REFUSED a capability_snapshots row: ' + verdict.reason);
         return true;
     },
 

@@ -98,6 +98,24 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             assert.strictEqual(r.valid, true, r.error);
             assert.strictEqual(localReads, 0);
         });
+
+        it('does not read an unrepresentable validator pair after the staged early returns', async function () {
+            let priceReads = 0;
+            const db = {
+                async getOraclePrice(){ return { value: '0.05', fee: '0.01' }; },
+                async getPricesInTimeRange(){ priceReads++; return []; }
+            };
+            const bad = await util.quoteOracleFee(BLOCK_TIME,
+                dispenserFields({ GET_COIN: 'a😀' }), db);
+            assert.deepStrictEqual(bad, { valid: false,
+                error: 'invalid: ORACLE_ADDRESS (no validator price to value the oracle fee)' });
+            assert.strictEqual(priceReads, 0);
+
+            const ascii = await util.quoteOracleFee(BLOCK_TIME,
+                dispenserFields({ GET_COIN: 'ZZZ' }), db);
+            assert.deepStrictEqual(ascii, bad);
+            assert.strictEqual(priceReads, 1);
+        });
     });
 });
 describe('Utility.validateOracleFee() - @regression @tier1', function () {

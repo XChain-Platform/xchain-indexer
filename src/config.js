@@ -277,6 +277,10 @@ function applyBlockTiming(config){
     // for no value; the hub only cares about the live tip. Default 100; override via
     // CHAIN_TIP_PUSH_MAX_LAG.
     config['CHAIN_TIP_PUSH_MAX_LAG'] = parseIntMin0(process.env.CHAIN_TIP_PUSH_MAX_LAG, 100);
+
+    // Live post-commit hub delivery is only a near-tip fast path. Further behind,
+    // HubPushQueue delivers the already durable rows without holding the block loop.
+    config['HUB_LIVE_PUSH_MAX_LAG'] = parseIntMin0(process.env.HUB_LIVE_PUSH_MAX_LAG, 3);
 }
 
 function applyRetroactiveReplayCap(config, coin){

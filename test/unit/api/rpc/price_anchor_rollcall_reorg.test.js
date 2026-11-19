@@ -14,8 +14,8 @@
  * The federation-read JSON-RPC families for price batches, anchors, roll calls
  * and reorg history (src/api/rpc/price_batches.js, anchor.js, rollcall.js,
  * reorg_history.js), driven against the indexer double: each read resolves
- * through apiView(), binds the arguments its query layer expects, and answers
- * a missing database or a throw with its own error.
+ * through apiView(), binds the arguments its query layer expects, and keeps
+ * price-batch rows when only their decoder landing times are unavailable.
  */
 
 'use strict';
@@ -73,9 +73,13 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
             [[3, 9, 1700000900], [4, 9, 1700000900], [7, 12, null]]);
         assert.deepStrictEqual(decoderView.calls,
             [['protocolTimesForStoredBlocks', [9, 12]]]);
-        sinon.stub(observability.getLogger(), 'error');
+        const logError = sinon.stub(observability.getLogger(), 'error');
         decoderView.protocolTimesForStoredBlocks = async () => { throw new Error('x'); };
-        assert.deepStrictEqual(await rpc.getpricebatches({ first_round: 1, last_round: 2 }), { error: 'failed to look up price batches' });
+        const degraded = await rpc.getpricebatches({ first_round: 1, last_round: 2 });
+        assert.strictEqual(degraded.block_index, 20);
+        assert.deepStrictEqual(degraded.batches.map(b => [b.first_round, b.block_index, b.block_time]),
+            [[3, 9, null], [4, 9, null], [7, 12, null]]);
+        assert.strictEqual(logError.callCount, 1);
     });
 
     it('getpricebatchpayload rebuilds the committed valid batch body that pushpricebatch received', async function () {

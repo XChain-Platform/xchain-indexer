@@ -77,7 +77,7 @@ function isTxLockBusy(e){
 // `rawData` (optional) is the caller's literal wire, dry-run in place of the string rebuilt
 // from `action` and `params`; set for a BATCH only (see batchRequestWire).
 //
-// Returns dryRunOutcome's { blockIndex, blockTime, status, error, xchainFee, sourceFeeBalance,
+// Returns dryRunOutcome's { blockIndex, blockTime, status, error, xchainFee, guardGasFee, sourceFeeBalance,
 // subCommands, legs, oracleFeesOwed, nativeFeeOwed, coinPaymentsOwed }: xchainFee is the staged fee
 // ('0' for a valid zero-fee action, null for a withheld BATCH sum or none staged); the last five
 // are probe disclosures, else null.
@@ -85,7 +85,7 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
     let dryRunError = null, sourceFeeBalance = null;
     // Seed BATCH subcommand and multi-leg SEND disclosures: subCommands, legs and
     // the three owed totals stay null for other actions and decoded transactions.
-    let verdict = { status: null, feeRecord: null, subCommands: null, legs: null,
+    let verdict = { status: null, feeRecord: null, guardGasFee: null, subCommands: null, legs: null,
                     oracleFeesOwed: null, nativeFeeOwed: null, coinPaymentsOwed: null };
     // beginTransaction acquires the db transaction mutex (serializes against block processing
     // and reorgs); the finally guarantees rollback + lock release even on a handler throw.

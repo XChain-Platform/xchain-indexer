@@ -151,7 +151,7 @@ async function settleLedger(handler, st){
 
         // Bill the controller-guard gas to SOURCE (in GAS), reserved above.
         if(handler.util.bcgt(guardFee, 0)){
-            debits.push([handler.config['GAS'], guardFee, data['SOURCE']]);
+            handler.util.billGuardGas(debits, handler.config['GAS'], guardFee, data['SOURCE'], data);
             handler.util.addAddressTicker(data['SOURCE'], handler.config['GAS']);
         }
 

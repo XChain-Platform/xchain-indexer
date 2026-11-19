@@ -20,6 +20,7 @@ const membership = require('../../src/consensus/bridge_settle/policy_membership.
 const swq = require('../../src/consensus/stake_weighted_quorum.js');
 
 const HEX64 = /^[0-9a-f]{64}$/;
+const LEGACY_HEX64_ID = /^[0-9a-f]{64}$/i;
 const STATUSES = new Set(['finalized', 'retracted']);
 const LIST_SHARE_PRODUCER_GATE =
     'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
@@ -39,7 +40,7 @@ function text(value){
 function validateShared(kind, row, idKey, network){
     let id = row && row[idKey];
     if(!row || typeof row !== 'object' || Array.isArray(row)) fail(kind, id, 'has malformed shape');
-    if(!HEX64.test(String(id || ''))) fail(kind, id, 'has malformed ' + idKey);
+    if(!LEGACY_HEX64_ID.test(String(id || ''))) fail(kind, id, 'has malformed ' + idKey);
     if(!integer(row.id) || !integer(row.snapshot_block) || !integer(row.effective_time) || !integer(row.finalizing_view))
         fail(kind, id, 'has malformed integer fields');
     if(row.network !== network) fail(kind, id, 'network does not match archive head');
@@ -63,7 +64,8 @@ function validatePolicy(row, network){
     validateShared('policy snapshot', row, 'snapshot_id', network);
     for(let key of ['origin_chain', 'tick', 'policy_hash'])
         if(!text(row[key])) fail('policy snapshot', row.snapshot_id, 'has malformed ' + key);
-    if(!HEX64.test(row.policy_hash) || !integer(row.policy_seq) || !integer(row.origin_block))
+    let policyHash = String(row.policy_hash || '').toLowerCase();
+    if(!HEX64.test(policyHash) || !integer(row.policy_seq) || !integer(row.origin_block))
         fail('policy snapshot', row.snapshot_id, 'has malformed policy fields');
     if(row.allow_list !== null && typeof row.allow_list !== 'string')
         fail('policy snapshot', row.snapshot_id, 'has malformed allow_list');
@@ -84,7 +86,7 @@ function validatePolicy(row, network){
         fail('policy snapshot', row.snapshot_id, 'carries a shared-list ref below the producer gate');
     if(!membership.verifyMembershipOrder(allow) || !membership.verifyMembershipOrder(block))
         fail('policy snapshot', row.snapshot_id, 'has malformed or unordered membership list');
-    if(membership.policyHash(allow, block, !!row.sleeping, refs) !== row.policy_hash)
+    if(membership.policyHash(allow, block, !!row.sleeping, refs) !== policyHash)
         fail('policy snapshot', row.snapshot_id, 'policy_hash does not match membership lists');
 }
 

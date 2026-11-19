@@ -89,7 +89,7 @@ module.exports = {
                 blockIndex: run.blockIndex, blockTime: run.blockTime,
                 valid: null, noVerdict: true, retryable: true, status: null,
                 error: 'dry-run produced no verdict (the dry-run did not finish: ' + run.error + '); retry shortly',
-                xchainFee: null, requiredFeeNative: null, requiredFeeSatsExact: null,
+                xchainFee: null, guardGasFee: null, requiredFeeNative: null, requiredFeeSatsExact: null,
                 feeSupported: false
             };
 
@@ -106,12 +106,15 @@ module.exports = {
             status:         run.status,
             error:          valid ? null : (run.error || run.status || 'dry-run produced no status'),
             xchainFee:      (run.xchainFee == null) ? null : this.util.bcformat(this.util.bcnum(run.xchainFee), 8),
+            guardGasFee:    (run.guardGasFee == null) ? null : this.util.bcformat(this.util.bcnum(run.guardGasFee), 8),
             requiredFeeNative: null,
             requiredFeeSatsExact: null,
             feeSupported:   false
         };
 
         Object.assign(result, payloadUnjudgedFields(action, run.status));
+        if(run.subCommands) result.subCommands = run.subCommands;
+        if(run.legs) result.legs = run.legs;
 
         // Native-fee sizing for the extracted fee, merged without letting a pricing failure
         // (missing/stale oracle) overwrite the handler's validity verdict: on this raw surface

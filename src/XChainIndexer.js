@@ -257,6 +257,10 @@ class XChainIndexer {
         this.buildBlockModules();
         await this.verifyDecoderDatabase();
         await this.verifyIndexerDatabase();
+        if(this.schemaReady !== true){
+            if(this.stopFlag) return;
+            throw new Error('Indexer schema is not ready; refusing to start the block loop.');
+        }
         this.startBackgroundServices();
 
         // Parse blocks until stop() is requested.

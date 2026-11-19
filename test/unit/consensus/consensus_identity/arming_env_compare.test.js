@@ -34,8 +34,23 @@ const REPO = path.resolve(__dirname, '../../../..');
 const BIN  = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN  = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
 const { REGTEST_ARMING } = require(path.join(REPO, 'src', 'protocol_changes', 'shared_rows.js'));
-const NAMES = Array.from(new Set(Object.values(REGTEST_ARMING).map((rule) => rule.env))).sort();
+const { INDEXER_ONLY_ARMING = [] } = require(BIN);
+const NAMES = Array.from(new Set(Object.values(REGTEST_ARMING).map((rule) => rule.env)
+    .concat(INDEXER_ONLY_ARMING))).sort();
 const ROLLCALL = { XC_ROLLCALL_REGTEST_ACTIVATION: 'armed', XC_ROLLCALL_GATES_REGTEST_ACTIVATION: 'armed' };
+
+function changeTableRegtestLevers() {
+    const dir = path.join(REPO, 'src', 'protocol_changes');
+    const names = new Set();
+    for (const file of fs.readdirSync(dir).filter((name) => name.endsWith('.js'))) {
+        const source = fs.readFileSync(path.join(dir, file), 'utf8');
+        for (const match of source.matchAll(/regtestTimeOverride\(\s*['"]([A-Z0-9_]+)['"]\s*\)/g))
+            names.add(match[1]);
+        for (const match of source.matchAll(/process\.env\.([A-Z0-9_]*REGTEST[A-Z0-9_]*)/g))
+            names.add(match[1]);
+    }
+    return Array.from(names).sort();
+}
 
 // The child sees PATH, HOME and TMPDIR plus exactly the levers a case names.
 function run(args, levers = {}) {
@@ -85,6 +100,13 @@ describe('bin/consensus-identity.js --compare against the committed pin and the 
         assertRefused(run(['--compare', PIN], { XC_ROLLCALL_REGTEST_ACTIVATION: 'armed' }),
             'XC_ROLLCALL_REGTEST_ACTIVATION');
     });
+
+    it('refuses change-table regtest-time levers instead of reporting fingerprint drift', function () {
+        assertRefused(run(['--compare', PIN], { CONTROLLER_CUSTODY_GUARD_REGTEST_TIME: '100' }),
+            'CONTROLLER_CUSTODY_GUARD_REGTEST_TIME');
+        assertRefused(run(['--compare', PIN], { EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME: 'off' }),
+            'EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME');
+    });
 });
 
 describe('bin/consensus-identity.js --compare against a flat reading and the arming env', function () {
@@ -97,6 +119,15 @@ describe('bin/consensus-identity.js --compare against a flat reading and the arm
         assert.deepStrictEqual(Object.keys(identity.env), NAMES);
         assert.strictEqual(identity.env.XC_ROLLCALL_REGTEST_ACTIVATION, 'armed');
         assert.strictEqual(identity.env.XC_MIRROR_ADMISSION_ACTIVATION, null);
+    });
+
+    it('records every change-table regtest environment read', function () {
+        const { codeIdentity } = require(BIN);
+        const names = changeTableRegtestLevers();
+        assert.ok(names.includes('EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME'));
+        assert.ok(names.includes('CONTROLLER_CUSTODY_GUARD_REGTEST_TIME'));
+        const recorded = Object.keys(codeIdentity('regtest').env);
+        assert.deepStrictEqual(names.filter((name) => !recorded.includes(name)), []);
     });
 
     it('compares a flat reading under its own arming, and refuses it under another', function () {
@@ -112,6 +143,16 @@ describe('bin/consensus-identity.js --compare against a flat reading and the arm
         const file = flatReading({}, (identity) => { delete identity.env; });
         assert.strictEqual(run(['--compare', file]).status, 0);
         assertRefused(run(['--compare', file], ROLLCALL), 'XC_ROLLCALL_REGTEST_ACTIVATION');
+    });
+
+    it('round-trips a change-table lever and refuses the reading when it is absent', function () {
+        const lever = { CONTROLLER_CUSTODY_GUARD_REGTEST_TIME: '100' };
+        const file = flatReading(lever);
+        const identity = JSON.parse(fs.readFileSync(file, 'utf8'));
+        assert.strictEqual(identity.env.CONTROLLER_CUSTODY_GUARD_REGTEST_TIME, '100');
+        const same = run(['--compare', file], lever);
+        assert.strictEqual(same.status, 0, same.stdout + same.stderr);
+        assertRefused(run(['--compare', file]), 'CONTROLLER_CUSTODY_GUARD_REGTEST_TIME');
     });
 
     it('refuses a flat reading whose env is not an object', function () {

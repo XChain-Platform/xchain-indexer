@@ -33,6 +33,7 @@ const { buildOrdersRpc } = require('../../../src/api/rpc/orders.js');
 const { validateAnchorActionParams } = require('../../../src/actions/anchor/anchor_action_query');
 const { buildAnchorRpc } = require('../../../src/api/rpc/anchor.js');
 const { buildFeesRpc } = require('../../../src/api/rpc/fees.js');
+const Utility = require('../../../src/utility.js');
 const { buildAttestationRpc } = require('../../../src/api/rpc/attest/attestation.js');
 const { buildBridgeRpc } = require('../../../src/api/rpc/bridge.js');
 const escrowFixture = require('../api/reads/helpers/escrow_proof_origin.js');
@@ -191,6 +192,21 @@ function feesRpc(db){
     return { rpc: buildFeesRpc({ indexer: { indexerDb, util, config: { COIN: 'BTC' } } }), util };
 }
 
+function realOracleFeesRpc(db){
+    const view = Object.create(db);
+    view._blockTimeCache = new Map();
+    view.getLatestBlockIndex = sinon.stub().resolves(5);
+    view.getBlockTime = sinon.stub().resolves(1700000000);
+    db.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
+    db.getPricesInTimeRange = sinon.spy(async coinPair =>
+        db.doQueryStrict('SELECT 1 FROM price_snapshots WHERE coin_pair = ?', [coinPair]));
+    const indexer = {
+        indexerDb: { apiView: () => view }, util: new Utility(),
+        config: { COIN: 'BTC' }
+    };
+    return buildFeesRpc({ indexer });
+}
+
 function oracleFeeQuoteSuite(){
 
     it('the ASCII control answers no effective oracle price', async function () {
@@ -210,6 +226,17 @@ function oracleFeeQuoteSuite(){
             sinon.assert.notCalled(util.quoteOracleFee);
         });
     }
+
+    it('a supplementary getCoin answers the unknown ASCII pair without binding it', async function () {
+        const db = strictDb();
+        const rpc = realOracleFeesRpc(db);
+        const bad = await rpc.oraclefeequote(Object.assign({}, ORACLE_QUOTE_BASE, { getCoin: EMOJI }));
+        const ascii = await rpc.oraclefeequote(Object.assign({}, ORACLE_QUOTE_BASE, { getCoin: 'ZZZ' }));
+        assert.deepStrictEqual(bad, ascii);
+        assert.match(bad.error, /no validator price/);
+        assert.strictEqual(db.doQueryStrict.callCount, 1);
+        assert.deepStrictEqual(db.doQueryStrict.firstCall.args[1], ['ZZZ/USD']);
+    });
 
 }
 

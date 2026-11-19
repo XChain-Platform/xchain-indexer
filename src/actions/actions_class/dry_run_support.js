@@ -84,6 +84,9 @@ function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeF
         source_pubkey: null,
         tx_outputs:    txOutputs,
         raw_data:      null,
+        // Every synthetic run keeps read-only verdict disclosures. Decoded
+        // transactions never carry this marker.
+        dry_run:       true,
         // Marks a run whose controller guards must NOT enter the VM (the public
         // feequote path; see computeFeeQuote). Set only here on the synthetic tx and
         // only when the caller asks, so it is absent from every decoder-fed block tx
@@ -193,6 +196,8 @@ async function readDryRunVerdict(actions, resultData, verdict){
                 verdict.coinPaymentsOwed = payments.coinPaymentsOwed;
         }
     }
+    if(resultData && resultData['SOURCE'] !== undefined)
+        verdict.guardGasFee = actions.util.guardGasTotal(resultData['SOURCE']);
 }
 
 // The dryRunAction result shape.
@@ -208,6 +213,8 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
                    : verdict.feeWithheld ? null
                    : verdict.feeRecord ? String(verdict.feeRecord.amount)
                    : ((verdict.status === 'valid') ? '0' : null),
+        guardGasFee: dryRunError || verdict.feeWithheld || verdict.status !== 'valid'
+                   ? null : String(verdict.guardGasFee || '0'),
         sourceFeeBalance: sourceFeeBalance,
         subCommands:      verdict.subCommands,
         legs:             verdict.legs,

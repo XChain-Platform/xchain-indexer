@@ -139,6 +139,22 @@ describe('readinessVerdict()', function(){
         since = nextBehindSince(since, episodeBehind(0, 5, false), NOW, lastCommit);
         assert.deepStrictEqual(readinessVerdict(clean({ behindSince: since, chainLag: 5, decoderLag: 0,
             lastBlockCommittedAt: lastCommit })).reasons, ['behind_tip_no_commit']);
+        let carried = clean({ chainTipStale: true, chainTipStaleSince: NOW - 2 * MIN,
+                              chainLag: null, decoderLag: 0, behindSince: NOW - 11 * MIN,
+                              lastBlockCommittedAt: NOW - 20 * MIN });
+        assert.deepStrictEqual(readinessVerdict(carried).reasons, ['behind_tip_no_commit']);
+        assert.strictEqual(readinessVerdict(Object.assign({}, carried, {
+            lastBlockCommittedAt: NOW - 1000
+        })).ready, true);
+        assert.strictEqual(readinessVerdict(Object.assign({}, carried, {
+            waitingOnFutureBlock: true
+        })).ready, true);
+        assert.deepStrictEqual(readinessVerdict(Object.assign({}, carried, {
+            chainTipStaleSince: NOW - 11 * MIN
+        })).reasons, ['behind_tip_no_commit', 'chain_tip_stale']);
+        assert.strictEqual(readinessVerdict(Object.assign({}, carried, {
+            behindSince: undefined
+        })).ready, true);
     });
 
     it('reports an aged configured chain tip only after the no-commit window', function(){

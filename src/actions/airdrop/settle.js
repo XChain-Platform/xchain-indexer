@@ -91,7 +91,7 @@ module.exports = {
             // end-of-action updateTokens recomputes GAS supply from the ledger so the per-block
             // sanityCheck (ledger == supply == balances) holds. `balances` was already reduced above.
             if(this.util.bcgt(guardFee, 0)){
-                ctx.debits.push([ctx.gasTick, guardFee, data['SOURCE']]);
+                this.util.billGuardGas(ctx.debits, ctx.gasTick, guardFee, data['SOURCE'], data);
                 this.util.addAddressTicker(data['SOURCE'], ctx.gasTick);
             }
 

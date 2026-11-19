@@ -33,6 +33,7 @@ const gateRegistry = require('../../consensus/gate_registry.js');
 const archivePublish = require('../../consensus/archive_publish_set.js');
 const mirrorJudgement = require('../../consensus/capability_snapshot_proof/mirror_judgement.js');
 const capabilityProof = require('../../consensus/capability_snapshot_proof/verify.js');
+const { canonicalBlockHeight } = require('../../hub/hub_db_sync/apply/canonical_height.js');
 const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
@@ -232,6 +233,11 @@ module.exports = {
     // deliberately out of scope for this step.
     async verifyCapabilitySnapshotRow(row, opts){
         if(!row) return { verdict: 'unknown', reason: 'no row' };
+        let block = canonicalBlockHeight(row.snapshot_block);
+        if(block === null)
+            return { verdict: 'refused', reason: 'non-canonical snapshot_block ' +
+                String(row.snapshot_block).slice(0, 32) };
+        row = Object.assign({}, row, { snapshot_block: block });
         let capability = row.capability == null ? '' : String(row.capability);
         // A chain that RESOLVES this capability from the mirror has no local stakes to
         // re-derive from. Once the proof gate reaches the row's BTC watermark, judge the
@@ -240,9 +246,6 @@ module.exports = {
             return judgeMirrorResolvedRow(this, row, capability, opts);
         if(!this.isCapabilityConfigured(capability))
             return { verdict: 'unknown', reason: 'capability ' + capability + ' is not configured on this node' };
-        let block = Number(row.snapshot_block);
-        if(!Number.isFinite(block) || block < 0 || Math.floor(block) !== block)
-            return { verdict: 'unknown', reason: 'unusable snapshot_block ' + String(row.snapshot_block).slice(0, 32) };
         // The hub resolves every capability set at the BURIED height (declared minus
         // CANONICAL_REORG_BUFFER) but writes the row under the declared block, and the
         // wire convention is that every consumer buries it exactly once, locally. Resolving

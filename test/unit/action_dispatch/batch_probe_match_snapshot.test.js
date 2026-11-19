@@ -74,7 +74,7 @@ function makeCtx(){
 }
 
 function txData(probe){
-    let extra = probe ? { FEE_PROBE: true } : {};
+    let extra = probe ? { FEE_PROBE: true, GUARD_INERT: true, DRY_RUN: true } : {};
     return createBaseData(Object.assign({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE }, extra));
 }
 

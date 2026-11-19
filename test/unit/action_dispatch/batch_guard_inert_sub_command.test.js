@@ -79,7 +79,8 @@ const INERT = 'invalid: FEE_QUOTE_CONTROLLER_UNSUPPORTED (contract 9 controls tr
 const WIRE = 'BATCH|0|SEND|0|CTRL|10|' + DEST + ';SEND|0|TEST|5|' + DEST;
 
 function probeData(){
-    return createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE, FEE_PROBE: true });
+    return createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE,
+        FEE_PROBE: true, GUARD_INERT: true, DRY_RUN: true });
 }
 
 describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid @regression @tier1', function () {

@@ -154,7 +154,7 @@ module.exports = {
 
             // Bill the controller-guard gas to SOURCE (in GAS), reserved above.
             if(this.util.bcgt(guardFee, 0)){
-                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.billGuardGas(debits, this.config['GAS'], guardFee, data['SOURCE'], data);
                 this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
             }
 

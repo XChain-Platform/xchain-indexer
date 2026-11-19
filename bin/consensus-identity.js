@@ -80,6 +80,8 @@
  * named gate instead of two opaque hashes. A reading records that environment as
  * `env` (a flat reading with none was taken bare), and --compare refuses (exit
  * 2) a pin block or reading taken under another, so exit 1 only means drift.
+ * The recorded environment also includes change-table *_REGTEST_TIME levers,
+ * because those rows move the armed-map fingerprint without moving the digest.
  *
  * READING THE TIP AGAINST A REGTEST RAIL, READ-ONLY. Run it on the host that
  * runs the regtest stack, as a user whose grants are SELECT only, with the
@@ -270,19 +272,46 @@ const ARMING_READERS = {
     XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION: (env) => env.XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION,
     XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION: (env) => env.XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION,
     XC_TICK_NORMALIZE_REGTEST_ACTIVATION: (env) => env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION,
+    CALLBACK_ARGS_EXACT_REGTEST_TIME: (env) => env.CALLBACK_ARGS_EXACT_REGTEST_TIME,
+    CONTROLLER_CUSTODY_GUARD_REGTEST_TIME: (env) => env.CONTROLLER_CUSTODY_GUARD_REGTEST_TIME,
+    CROSS_CHAIN_ROYALTY_REGTEST_TIME: (env) => env.CROSS_CHAIN_ROYALTY_REGTEST_TIME,
+    DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME: (env) => env.DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME,
+    DISPENSER_REFILL_REGTEST_TIME: (env) => env.DISPENSER_REFILL_REGTEST_TIME,
+    EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME: (env) => env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME,
+    FILE_MULTIPART_REGTEST_TIME: (env) => env.FILE_MULTIPART_REGTEST_TIME,
+    GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME: (env) => env.GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME,
+    OWNER_WITHDRAW_OPT_IN_REGTEST_TIME: (env) => env.OWNER_WITHDRAW_OPT_IN_REGTEST_TIME,
+    STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME: (env) => env.STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME,
 };
 
+// Change-table rows read these at module load and feed their resolved values into
+// armed_map_fingerprint. REGTEST_ARMING cannot name them because they are not gates.
+const INDEXER_ONLY_ARMING = Object.freeze([
+    'CALLBACK_ARGS_EXACT_REGTEST_TIME',
+    'CONTROLLER_CUSTODY_GUARD_REGTEST_TIME',
+    'CROSS_CHAIN_ROYALTY_REGTEST_TIME',
+    'DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME',
+    'DISPENSER_REFILL_REGTEST_TIME',
+    'EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME',
+    'FILE_MULTIPART_REGTEST_TIME',
+    'GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME',
+    'OWNER_WITHDRAW_OPT_IN_REGTEST_TIME',
+    'STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME',
+]);
+
 /**
- * Every variable REGTEST_ARMING names, mapped to its raw value, null when unset.
+ * Every variable REGTEST_ARMING or INDEXER_ONLY_ARMING names, mapped to its raw
+ * value, null when unset.
  * @param {object} env the environment to read
  * @returns {Object<string, string|null>}
  */
 function armingEnv(env) {
     const { REGTEST_ARMING } = require('../src/protocol_changes/shared_rows.js');
     const out = {};
-    for (const name of Array.from(new Set(Object.values(REGTEST_ARMING).map((rule) => rule.env))).sort()) {
+    const names = Object.values(REGTEST_ARMING).map((rule) => rule.env).concat(INDEXER_ONLY_ARMING);
+    for (const name of Array.from(new Set(names)).sort()) {
         // A variable with no reader would arm the digest unrecorded, so it is a refusal.
-        if (!ARMING_READERS[name]) throw new Error(`REGTEST_ARMING names ${name}, which armingEnv has no reader for`);
+        if (!ARMING_READERS[name]) throw new Error(`arming environment names ${name}, which armingEnv has no reader for`);
         const raw = ARMING_READERS[name](env);
         out[name] = raw === undefined ? null : String(raw);
     }
@@ -605,5 +634,6 @@ module.exports = {
     compareIdentity,
     selectedPinBlock,
     armingEnv,
+    INDEXER_ONLY_ARMING,
     REPO_ROOT,
 };

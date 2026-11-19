@@ -39,8 +39,8 @@ const rpcParams = require('./params.js');
 // Protocol time of each distinct landing block in rows, read from the DECODER database
 // the way block_parse.js takes data['BLOCK_TIME'] for the batch's pushpricebatch, through
 // its committed view. The plural reader leaves the hot-path memo alone and resolves every
-// landing block in one statement. An unresolvable block, or no decoder database, is left
-// out, so its batch answers null.
+// landing block in one statement. An unresolvable block, absent decoder database or failed
+// decoder read is left out, so its batch answers null while the primary batch list survives.
 async function landingBlockTimes(decoderDb, rows){
     if(!decoderDb) return new Map();
     let blockIndexes = [];
@@ -53,7 +53,13 @@ async function landingBlockTimes(decoderDb, rows){
         blockIndexes.push(blockIndex);
     }
     if(blockIndexes.length === 0) return new Map();
-    return await committedView(decoderDb).protocolTimesForStoredBlocks(blockIndexes);
+    try {
+        let times = await committedView(decoderDb).protocolTimesForStoredBlocks(blockIndexes);
+        return times instanceof Map ? times : new Map();
+    } catch(err) {
+        getLogger().error('getpricebatches decoder landing-time read failed:', err);
+        return new Map();
+    }
 }
 
 function priceBatchesRpc({ indexer }){

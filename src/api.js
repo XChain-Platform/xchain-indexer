@@ -163,6 +163,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getactivestakeweights',
     'getcapabilityvalidators',
     'getstakeweightsbycapability',
+    'getcapabilitystakeproof',
     'getstakesourcebypubkey',
     'getfullnodeverifiers',
     'getpendingattestation_requests',

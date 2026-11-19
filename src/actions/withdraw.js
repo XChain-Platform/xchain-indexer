@@ -212,7 +212,7 @@ class Withdraw {
             debits.push([data['TICK'], data['AMOUNT'], contractAddress]);
             credits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
             if(this.util.bcgt(guardFee, 0)){
-                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.billGuardGas(debits, this.config['GAS'], guardFee, data['SOURCE'], data);
                 this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
             }
         }

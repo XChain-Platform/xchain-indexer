@@ -40,9 +40,13 @@ let indexer, actionsCtx;
 // Run one SEND wire through the real handler as the read-only pre-flight does (FEE_PROBE set
 // on the record), then read its verdict and pre-flight answer exactly as dryRunAction and
 // computePreflight do.
-async function preflight(params, { probe = true } = {}){
+async function preflight(params, { probe = true, raw = false } = {}){
     const data = makeData({ SOURCE, FORMAT: Number(params[0]) });
-    if(probe) data['FEE_PROBE'] = true;
+    if(probe){
+        data['FEE_PROBE'] = true;
+        data['DRY_RUN'] = true;
+    }
+    if(raw) data['DRY_RUN'] = true;
     await new Send(actionsCtx).parse(params, data, null);
     const verdict = { status: null };
     await readDryRunVerdict(Object.assign({ _primaryVerdict: null }, actionsCtx), data, verdict);
@@ -134,6 +138,15 @@ describe('SEND pre-flight answers for every leg of a multi-send @regression @tie
         const unjudged = batchVerdict([{ status: inert }]);
         assert.strictEqual(unjudged.status, null);
         assert.ok(unjudged.refused);
+    });
+
+    it('the authenticated raw dry-run folds legs without enabling fee optimism', async function () {
+        const { data, run } = await preflight(
+            ['1', 'TEST', '1', DEST2, '1', DESTINATION, ''], { probe: false, raw: true });
+        assert.strictEqual(data['FEE_PROBE'], undefined);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.strictEqual(run.status, REFUSED);
+        assert.deepStrictEqual(run.legs.map((leg) => leg.status), [REFUSED, 'valid']);
     });
 });
 

@@ -64,7 +64,7 @@ module.exports = {
             // in-memory GAS balance so a later controlled leg in this same
             // multi-send sees the spend when it re-checks its reservation.
             if(this.util.bcgt(guardFee, 0)){
-                ctx.debits.push([ctx.gasTick, guardFee, send['SOURCE']]);
+                this.util.billGuardGas(ctx.debits, ctx.gasTick, guardFee, send['SOURCE'], data);
                 this.util.addAddressTicker(send['SOURCE'], ctx.gasTick);
                 if(ctx.gasInfo){
                     // When the sent tick IS the gas tick, debit the guard fee out of the same

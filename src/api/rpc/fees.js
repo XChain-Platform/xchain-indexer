@@ -26,12 +26,39 @@ const rpcParams = require('./params.js');
 
 const hasOwn = (object, property) => Object.prototype.hasOwnProperty.call(object, property);
 const PARAMS_TYPE_ERROR = 'params must be a pipe-delimited string or an array of strings, numbers, booleans or null';
+const QUOTE_SOURCE_MAX_LENGTH = 4096;
+const QUOTE_PARAMS_MAX_BYTES = 390000;
+const FEE_MODE_MAX_LENGTH = 16;
+const FEE_OUTPUT_MAX_LENGTH = 32;
 
 function invalidQuoteParams(params){
     let primitive = value => value == null || ['string', 'number', 'boolean'].includes(typeof value);
-    if(primitive(params)) return null;
-    if(Array.isArray(params) && params.every(primitive)) return null;
-    return { error: PARAMS_TYPE_ERROR };
+    if(!primitive(params) && !(Array.isArray(params) && params.every(primitive)))
+        return { error: PARAMS_TYPE_ERROR };
+    let wire = Array.isArray(params)
+        ? params.map(value => value == null ? '' : String(value)).join('|')
+        : String(params == null ? '' : params);
+    if(Buffer.byteLength(wire, 'utf8') > QUOTE_PARAMS_MAX_BYTES)
+        return { error: 'params must be at most ' + QUOTE_PARAMS_MAX_BYTES + ' bytes' };
+    return null;
+}
+
+// The bound is in UTF-8 bytes to match the public proxy; the character bound runs first
+// so a type or length failure never reaches the byte count.
+function quoteSource(value){
+    let parsed = rpcParams.string(value, { name: 'source', maxLength: QUOTE_SOURCE_MAX_LENGTH });
+    if(parsed.error) return parsed;
+    if(typeof parsed.value === 'string' && Buffer.byteLength(parsed.value, 'utf8') > QUOTE_SOURCE_MAX_LENGTH)
+        return { error: 'source must be at most ' + QUOTE_SOURCE_MAX_LENGTH + ' bytes' };
+    return parsed;
+}
+
+function feeOutput(value){
+    if(value === undefined || value === null) return { value };
+    if((typeof value !== 'string' && typeof value !== 'number') ||
+       String(value).length > FEE_OUTPUT_MAX_LENGTH)
+        return { error: 'feeOutputSats must be a string or number of at most 32 characters' };
+    return { value };
 }
 
 // A fee quote may still be resolving the tip time when rollback clears the block loop's
@@ -81,10 +108,16 @@ function feeQuoteRpc({ indexer }){
                 return { error: 'action is required' };
             let paramsError = invalidQuoteParams(params);
             if(paramsError) return paramsError;
+            let parsedSource = quoteSource(source);
+            if(parsedSource.error) return parsedSource;
+            let parsedFeeOutput = feeOutput(feeOutputSats);
+            if(parsedFeeOutput.error) return parsedFeeOutput;
             if(!indexer.indexerDb || !indexer.actions)
                 return { error: 'indexer not ready' };
             try {
-                return await indexer.actions.computeFeeQuote({ action, params, source, feeOutputSats });
+                return await indexer.actions.computeFeeQuote({
+                    action, params, source: parsedSource.value, feeOutputSats: parsedFeeOutput.value
+                });
             } catch (err) {
                 getLogger().error('feequote error:', err);
                 return { error: 'failed to compute fee quote' };
@@ -231,10 +264,18 @@ function preflightRpc({ indexer }){
                 return { error: 'action is required' };
             let paramsError = invalidQuoteParams(params);
             if(paramsError) return paramsError;
+            let parsedSource = quoteSource(source);
+            if(parsedSource.error) return parsedSource;
+            let parsedMode = rpcParams.string(feeMode, {
+                name: 'feeMode', maxLength: FEE_MODE_MAX_LENGTH
+            });
+            if(parsedMode.error) return parsedMode;
             if(!indexer.indexerDb || !indexer.actions)
                 return { error: 'indexer not ready' };
             try {
-                return await indexer.actions.computePreflight({ action, params, source, feeMode });
+                return await indexer.actions.computePreflight({
+                    action, params, source: parsedSource.value, feeMode: parsedMode.value
+                });
             } catch (err) {
                 getLogger().error('preflight error:', err);
                 return { error: 'failed to compute pre-flight' };
@@ -246,16 +287,21 @@ function preflightRpc({ indexer }){
         // block watchdog as timeout. That unrestricted surface (VM actions on demand) is why
         // it stays regtest-gated (see ENABLE_DRYRUN) even though the default feequote now
         // dry-runs publicly. Never persists.
-        // Body: { action, params, source, feeOutputs? }
+        // Body: { action, params, source, feeOutputs? }. The response reports protocol cost
+        // as xchainFee and any separately burned controller gas as guardGasFee.
         async feequotedryrun({action, params, source, feeOutputs}){
             if(!action || typeof action !== 'string')
                 return { error: 'action is required' };
             let paramsError = invalidQuoteParams(params);
             if(paramsError) return paramsError;
+            let parsedSource = quoteSource(source);
+            if(parsedSource.error) return parsedSource;
             if(!indexer.indexerDb || !indexer.actions)
                 return { error: 'indexer not ready' };
             try {
-                return await indexer.actions.computeFeeQuoteDryRun({ action, params, source, feeOutputs });
+                return await indexer.actions.computeFeeQuoteDryRun({
+                    action, params, source: parsedSource.value, feeOutputs
+                });
             } catch (err) {
                 getLogger().error('feequotedryrun error:', err);
                 return { error: 'dry-run failed: ' + ((err && err.message) ? err.message : String(err)) };

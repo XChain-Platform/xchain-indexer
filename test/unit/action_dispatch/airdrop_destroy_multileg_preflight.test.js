@@ -54,7 +54,10 @@ async function airdropRun(probe){
     indexer.config['NETWORK'] = 'regtest';
     data['NETWORK'] = 'regtest';
     data['TX_OUTPUTS'] = [];
-    if(probe) data['FEE_PROBE'] = true;
+    if(probe){
+        data['FEE_PROBE'] = true;
+        data['DRY_RUN'] = true;
+    }
     indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000', 9: '0.00250000' });
     indexer.indexerDb.getList.callsFake(async list => Number(list) === 2
         ? ['middle-recipient-a', 'middle-recipient-b']
@@ -75,7 +78,10 @@ async function destroyRun(probe, params, balances){
     const rows = [];
     indexer.indexerDb.createDestroy.callsFake(async destroy => rows.push(destroy['STATUS']));
     const data = createBaseData({ ACTION: 'DESTROY', FORMAT: 1, SOURCE });
-    if(probe) data['FEE_PROBE'] = true;
+    if(probe){
+        data['FEE_PROBE'] = true;
+        data['DRY_RUN'] = true;
+    }
     await handler.parse(params, data, null);
     return { actionsCtx, data, rows };
 }

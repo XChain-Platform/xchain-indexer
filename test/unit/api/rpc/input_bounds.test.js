@@ -18,6 +18,7 @@ const { buildRpcController } = require('../../../../src/api/rpc/index.js');
 const { buildBetsRpc } = require('../../../../src/api/rpc/bets.js');
 const { buildAttestationRpc } = require('../../../../src/api/rpc/attest/attestation.js');
 const { buildSystemRpc } = require('../../../../src/api/rpc/system.js');
+const { buildFeesRpc } = require('../../../../src/api/rpc/fees.js');
 const { jsonRpcBatchGuard, JSON_RPC_MAX_BATCH } = require('../../../../src/api/middleware.js');
 const { apiKeyGate } = require('../../../../src/api/auth_gate.js');
 const betListings = require('../../../../src/db/bets/listings.js');
@@ -33,6 +34,18 @@ function runMiddleware(middleware, body) {
     };
     middleware({ body }, res, () => { passed = true; });
     return { passed, status, payload };
+}
+
+function quoteRpc(){
+    const calls = [];
+    const actions = {
+        computeFeeQuote: async request => { calls.push(['feequote', request]); return request; },
+        computePreflight: async request => { calls.push(['preflight', request]); return request; },
+        computeFeeQuoteDryRun: async request => { calls.push(['feequotedryrun', request]); return request; }
+    };
+    return { calls, rpc: buildFeesRpc({
+        indexer: fakeIndexer({ actions }), ENABLE_DRYRUN: true
+    }) };
 }
 
 describe('JSON-RPC input boundaries @regression @tier1', function () {
@@ -211,5 +224,50 @@ describe('JSON-RPC input boundaries @regression @tier1', function () {
             status: null,
             payload: null
         });
+    });
+
+    it('bounds quote source, fee mode and fee output before the actions layer', async function () {
+        const { calls, rpc } = quoteRpc();
+        for(const method of ['feequote', 'preflight', 'feequotedryrun']){
+            for(const source of [{}, [], 7, 'x'.repeat(4097)])
+                assert.ok((await rpc[method]({ action: 'SEND', source })).error);
+        }
+        assert.ok((await rpc.preflight({ action: 'SEND', feeMode: 'x'.repeat(17) })).error);
+        for(const feeOutputSats of [{}, [], '1'.repeat(33)])
+            assert.ok((await rpc.feequote({ action: 'SEND', feeOutputSats })).error);
+        assert.deepStrictEqual(calls, []);
+    });
+
+    it('bounds quote source by UTF-8 bytes like the public proxy', async function () {
+        const { calls, rpc } = quoteRpc();
+        for(const method of ['feequote', 'preflight', 'feequotedryrun']){
+            for(const source of ['¢'.repeat(2049), '€'.repeat(1366), '\u{1F600}'.repeat(1025)])
+                assert.ok((await rpc[method]({ action: 'SEND', source })).error);
+        }
+        assert.deepStrictEqual(calls, []);
+        await rpc.preflight({ action: 'SEND', source: '¢'.repeat(2048) });
+        await rpc.preflight({ action: 'SEND', source: '\u{1F600}'.repeat(1024) });
+        assert.strictEqual(calls.length, 2);
+    });
+
+    it('bounds quote params by their UTF-8 wire bytes', async function () {
+        const { calls, rpc } = quoteRpc();
+        for(const params of [
+            'x'.repeat(390001),
+            ['x'.repeat(390000), ''],
+            '¢'.repeat(195001)
+        ])
+            assert.ok((await rpc.preflight({ action: 'SEND', params })).error);
+        assert.deepStrictEqual(calls, []);
+    });
+
+    it('accepts quote inputs at the public envelope boundaries', async function () {
+        const { calls, rpc } = quoteRpc();
+        await rpc.preflight({
+            action: 'SEND', params: 'x'.repeat(390000), source: 's'.repeat(4096), feeMode: 'native'
+        });
+        await rpc.feequote({ action: 'SEND', params: ['x'.repeat(389999)], feeOutputSats: 1 });
+        await rpc.feequotedryrun({ action: 'SEND' });
+        assert.deepStrictEqual(calls.map(call => call[0]), ['preflight', 'feequote', 'feequotedryrun']);
     });
 });

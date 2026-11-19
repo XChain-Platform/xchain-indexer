@@ -329,6 +329,29 @@ describe('JSON-RPC cross-chain call family @regression @tier1', function () {
         assert.deepStrictEqual(await rpc.getcrosschaincallresult({ call_id: 'nope' }), { error: 'call_id must be a 64-hex id' });
     });
 
+    it('keeps not-executed and retired answers when the advisory rejection read fails', async function () {
+        const logError = sinon.stub(observability.getLogger(), 'error');
+        let retired = false;
+        const view = recordingView({
+            getLatestBlockIndex: 100,
+            getCrossChainCallExecutionById: () => retired
+                ? { result_status: 'retired:no_quorum', block_index: '300' }
+                : null,
+            getCrossChainCallRejectionById: () => { throw new Error('no such table'); }
+        });
+        const rpc = buildCrossChainCallsRpc({ indexer: fakeIndexer({ view }) });
+        assert.deepStrictEqual(await rpc.getcrosschaincallresult({ call_id: ID }),
+            { exists: false, network: 'regtest', latest_block_index: 100 });
+        retired = true;
+        assert.deepStrictEqual(await rpc.getcrosschaincallresult({ call_id: ID }), {
+            exists: false,
+            network: 'regtest',
+            latest_block_index: 100,
+            retired: { reason: 'no_quorum', block_index: 300 }
+        });
+        assert.strictEqual(logError.callCount, 2);
+    });
+
     it('both reads refuse without a database and report a throw', async function () {
         sinon.stub(observability.getLogger(), 'error');
         const notReady = buildCrossChainCallsRpc({ indexer: fakeIndexer({ indexerDb: null }) });

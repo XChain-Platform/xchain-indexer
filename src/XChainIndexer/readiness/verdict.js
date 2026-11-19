@@ -87,7 +87,9 @@ function episodeBehind(decoderLag, chainLag, chainTipStale){
 //                            stallReason while decoderReorgHalted remains false.
 //   barrier_ceiling_exceeded - one block has been held behind a barrier for longer
 //                            than its named ceiling.
-//   behind_tip_no_commit   - behind a known tip for noCommitMs without a commit.
+//   behind_tip_no_commit   - behind a known tip for noCommitMs without a commit, including
+//                            an episode first observed against a known tip and kept open
+//                            after that tip source goes stale.
 //   chain_tip_stale        - the configured tip source has stayed stale for a full
 //                            readiness window, so current state is unverified.
 // A future-stamped block wait is never behind_tip_no_commit: consensus forbids
@@ -110,6 +112,7 @@ function readinessVerdict(input){
     if(barrierCeilingExceeded) reasons.push('barrier_ceiling_exceeded');
 
     let behind = blocksBehind(decoderLag, chainLag);
+    let episodeCarried = chainTipStale === true && Number.isFinite(behindSince) && behindSince > 0;
     // Since boot when nothing has committed: a restart must not reset the clock to
     // "never judged", which is the hole stallWedged() has by design.
     let progressAt = Number.isFinite(lastBlockCommittedAt) && lastBlockCommittedAt > 0
@@ -126,7 +129,7 @@ function readinessVerdict(input){
         : null;
     let chainTipStaleForMs = chainTipStale && Number.isFinite(chainTipStaleSince)
         && Number.isFinite(now) ? Math.max(0, now - chainTipStaleSince) : null;
-    if(behind != null && behind > 0 && !waitingOnFutureBlock
+    if(((behind != null && behind > 0) || episodeCarried) && !waitingOnFutureBlock
        && Number.isFinite(noCommitMs) && noCommitMs > 0
        && behindNoCommitForMs != null && behindNoCommitForMs > noCommitMs)
         reasons.push('behind_tip_no_commit');

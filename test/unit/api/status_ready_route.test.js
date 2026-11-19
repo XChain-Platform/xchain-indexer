@@ -199,7 +199,9 @@ describe('GET /status and GET /ready on faults a restart cannot clear', function
         ix.readChainTip = async () => ({ height: null, source: null, at: staleSince - ix.chainTipTtlMs,
                                         stale: true, staleSince: staleSince });
         await serve(ix);
-        assert.strictEqual((await get(port, '/ready')).status, 200);
+        let staleReady = await get(port, '/ready');
+        assert.strictEqual(staleReady.status, 503);
+        assert.deepStrictEqual(staleReady.body.notReadyReasons, ['behind_tip_no_commit']);
         assert.strictEqual(ix.readyBehindSince, episodeAt, 'an unknown tip is not a caught-up tip');
         ix.readChainTip = async () => ({ height: 905, source: 'utxo_tracker', at: Date.now(),
                                         stale: false, staleSince: null });

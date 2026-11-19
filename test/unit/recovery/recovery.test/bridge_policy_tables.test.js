@@ -111,6 +111,20 @@ describe('AnchorRecovery bridge and policy tables @regression @tier2', function 
         assert.strictEqual(db.policies.length, 0);
     });
 
+    it('restores legacy uppercase ids and policy hashes without changing signed bytes', async function () {
+        let bridge = rawBridge('a'.repeat(64).toUpperCase(), 'finalized');
+        let policy = rawPolicy('b'.repeat(64).toUpperCase());
+        policy.policy_hash = policy.policy_hash.toUpperCase();
+        let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+            { bridges: [bridge], policies: [policy] });
+        let db = memDb([batch.v1], batch.v2s);
+        let report = await new AnchorRecovery(db, quiet).run();
+        assert.strictEqual(report.verified, 1);
+        assert.strictEqual(db.bridges[0].transfer_id, bridge.transfer_id);
+        assert.strictEqual(db.policies[0].snapshot_id, policy.snapshot_id);
+        assert.strictEqual(db.policies[0].policy_hash, policy.policy_hash);
+    });
+
     it('rejects a policy list that does not hash to the signed policy_hash', async function () {
         let policy = rawPolicy('f'.repeat(64));
         policy.allow_list = JSON.stringify(['addr1', 'addr2', 'attacker']);

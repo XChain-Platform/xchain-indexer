@@ -31,6 +31,8 @@ const Database = require('../../../../src/db/index.js');
 const SC = require('../../../../src/state_commitment/index.js');
 const M = require('../../../../src/consensus/merkle.js');
 const { buildCapabilitiesRpc } = require('../../../../src/api/rpc/capabilities.js');
+const { apiKeyGate } = require('../../../../src/api/auth_gate.js');
+const { readApiSource } = require('../../../helpers/api_source.js');
 
 const CAPABILITY = 'price';
 const HEIGHT = 90210;
@@ -120,6 +122,30 @@ function assertEnvelope(answer, rootRow, total){
         answer.total_proof.siblings), true);
 }
 
+function authSets(){
+    const source = readApiSource();
+    const parse = name => {
+        const match = source.match(new RegExp('const\\s+' + name + '\\s*=\\s*new Set\\(\\[([\\s\\S]*?)\\]\\)'));
+        assert.ok(match, name + ' must be declared');
+        return new Set(Array.from(match[1].matchAll(/['"]([^'"]+)['"]/g), row => row[1]));
+    };
+    return {
+        WRITE_METHODS: parse('WRITE_METHODS'),
+        GATED_EXEC_METHODS: parse('GATED_EXEC_METHODS'),
+        FEDERATION_READ_METHODS: parse('FEDERATION_READ_METHODS')
+    };
+}
+
+function runGate(gate, body, headers = {}){
+    let nextCalled = false;
+    let status = null;
+    gate({ body, headers }, {
+        status(value){ status = value; return this; },
+        json(){ return this; }
+    }, () => { nextCalled = true; });
+    return { nextCalled, status };
+}
+
 describe('getcapabilitystakeproof @regression @tier1', function(){
     it('proves membership, absence, committed preimages, totals, and state-root assembly', async function(){
         const { rpc, rootRow, total } = await proofFixture();
@@ -163,5 +189,25 @@ describe('getcapabilitystakeproof @regression @tier1', function(){
         sinon.stub(db, 'doQueryStrict').resolves([]);
         assert.deepStrictEqual(await db.getCapabilityStakeProof(CAPABILITY, HEIGHT, []),
             { error: 'NO_STATE_TREE' });
+    });
+});
+
+describe('getcapabilitystakeproof auth tier @regression @tier1', function(){
+    it('is a federation read and no other auth tier', function(){
+        const sets = authSets();
+        assert.strictEqual(sets.FEDERATION_READ_METHODS.has('getcapabilitystakeproof'), true);
+        assert.strictEqual(sets.WRITE_METHODS.has('getcapabilitystakeproof'), false);
+        assert.strictEqual(sets.GATED_EXEC_METHODS.has('getcapabilitystakeproof'), false);
+    });
+
+    it('requires the API key for a single call and a batch', function(){
+        const gate = apiKeyGate(Object.assign({
+            INDEXER_API_KEY: 'k', ALLOW_UNAUTHED: false
+        }, authSets()));
+        const call = { method: 'getcapabilitystakeproof' };
+        assert.deepStrictEqual(runGate(gate, call), { nextCalled: false, status: 401 });
+        assert.deepStrictEqual(runGate(gate, [call]), { nextCalled: false, status: 401 });
+        assert.deepStrictEqual(runGate(gate, call, { 'x-api-key': 'k' }),
+            { nextCalled: true, status: null });
     });
 });

@@ -15,8 +15,8 @@
  * XChain Platform Action - BATCH: the public pre-flight collectors
  *
  * What the BATCH handler records only when it runs as the read-only fee probe
- * (data['FEE_PROBE'] === true, requested by the quote surfaces in
- * actions_class/quote_surfaces.js and copied off tx.fee_probe by actions_class/transaction.js):
+ * (data['DRY_RUN'] === true, set on synthetic transactions by
+ * actions_class/dry_run_support.js and copied by actions_class/transaction.js):
  * the per-sub-command verdict list and the per-oracle fee table. Nothing here runs for a
  * decoded transaction, so nothing here can move a consensus value.
  *
@@ -29,9 +29,8 @@ const DISPENSE_UNJUDGED_NOTE =
 
 // Seed the probe-local collectors on `data`; returns whether this run is the probe.
 function seedProbeCollectors(data){
-    // Public BATCH pre-flight collectors (spec row 46). data['FEE_PROBE'] is set ONLY
-    // on the synthetic transaction the read-only quote surfaces build
-    // (actions_class/transaction.js sources it from tx.fee_probe), so it is false for
+    // BATCH dry-run collectors (spec row 46). data['DRY_RUN'] is set ONLY
+    // on synthetic dry-run transactions, so it is false for
     // every decoded transaction and nothing in this block can move a consensus value.
     // Seeded before the dispatch loop's
     // baseKeys snapshot, for the same reason the value ledger is: the per-sub-command
@@ -49,12 +48,12 @@ function seedProbeCollectors(data){
     // key's PRESENCE is how the coinpay/ and dispense/ handlers and validateOracleFee recognise
     // "inside a flagged batch", and its CONTENTS are consensus state a read-only
     // surface must never write. No probe collector writes to it.
-    let isProbe = data['FEE_PROBE'] === true;
-    if(isProbe){
+    let collect = data['DRY_RUN'] === true;
+    if(collect){
         data['PROBE_SUB_VERDICTS'] = [];
         data['PROBE_ORACLE_FEES']  = {};
     }
-    return isProbe;
+    return collect;
 }
 
 // Record the verdict the sub-command just dispatched left in data['STATUS'], or, when it set

@@ -55,6 +55,23 @@ module.exports = {
      * Programmable policy layer: shared controller-guard enforcement.
      ****************************************************************/
 
+    resetGuardGasTotals(){
+        this._guardGasTotals = Object.create(null);
+    },
+
+    billGuardGas(debits, gasTick, guardFee, source, data){
+        debits.push([gasTick, guardFee, source]);
+        if(!data || data['DRY_RUN'] !== true) return;
+        if(!this._guardGasTotals) this.resetGuardGasTotals();
+        let key = String(source);
+        this._guardGasTotals[key] = this.bcadd(this._guardGasTotals[key] || '0', guardFee, 8);
+    },
+
+    guardGasTotal(source){
+        if(!this._guardGasTotals) return '0';
+        return String(this._guardGasTotals[String(source)] || '0');
+    },
+
     // Static map from a native action (in its guarded context) to the controlled action-class.
     // Deliberately NOT derived from data['ACTION'] dynamically, so a newly added action can never
     // silently fall into a controlled class. An unmapped action returns null (never gated).
