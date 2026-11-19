@@ -15,7 +15,7 @@
  * XChain shared observability - SQL timing sender
  *
  * Buffers normalized timing contract lines and posts bounded NDJSON batches
- * to the configured SQL timing intake. The API key is confined to the request header.
+ * to Prometheus. The API key is confined to the request header.
  *
  ********************************************************************/
 
@@ -167,7 +167,7 @@ class SqlTimingShipper {
             url: this.config.url,
             headers: {
                 'Content-Type': 'application/x-ndjson',
-                Authorization: `Bearer ${this.config.apiKey}`
+                'X-Prometheus-Api-Key': this.config.apiKey
             },
             body: `${batch.join('\n')}\n`
         };
