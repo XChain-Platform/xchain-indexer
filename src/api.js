@@ -40,7 +40,7 @@ const { installCrashHandlers } = require('./actions/anchor/diagnostic_events.js'
 // Before anything else logs. The env-validation failures immediately below are
 // exactly the lines an operator needs levelled and timestamped, and
 // installObservability does not run until startApi installs the middleware.
-const { patchConsole } = require('./observability');
+const { patchConsole, getSqlTiming } = require('./observability');
 const { getLogger } = require('./observability/index.js');
 const fs   = require('fs');
 const path = require('path');
@@ -330,7 +330,9 @@ async function startApi(){
     const app = express();
     const ctx = apiContext(indexer, liveness);
     installMiddleware(app, ctx);
-    const jsonRpcController = buildRpcController(ctx, [crossChainCallRpc]);
+    // Keep the method table prototype-free (the router dispatches inherited names like "constructor").
+    const jsonRpcController = Object.assign(Object.create(null),
+        getSqlTiming().wrapRpcMethods(buildRpcController(ctx, [crossChainCallRpc])));
     mountStatusRoute(app, ctx);
 
     // Express 5 / body-parser 2.x leaves req.body undefined when a request carries

@@ -20,6 +20,7 @@
 
 // Load required libraries
 const mariadb = require('mariadb');
+const { getSqlTiming } = require('../observability');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { requireStakeWeight } = require('./shared.js');
@@ -53,7 +54,7 @@ class Database {
         this.connectionPoolParams = connectionPoolParams(this);
 
         // Setup pool of connections
-        this.pool = mariadb.createPool(this.connectionPoolParams);
+        this.pool = getSqlTiming().wrapPool(mariadb.createPool(this.connectionPoolParams));
         this.transactionConnection = null;
 
         // The rest of the instance state, in the order the fields were always assigned:

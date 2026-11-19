@@ -58,6 +58,7 @@ const crypto = require('crypto');
 const util = require('util');
 const { Registry, collectDefaultMetrics, DEFAULT_DURATION_BUCKETS } = require('./metrics');
 const { createLogShipper, readLogEnv, toBool } = require('./logShipper');
+const { createSqlTiming } = require('./sql_timing');
 
 // Process-wide handles. A service is one process loading exactly one vendored
 // copy of this module, so module scope is the right scope: a globalThis key
@@ -77,6 +78,7 @@ let _shipperAttached = false;
 // formatted line INTO the patched console and get it formatted a second time
 // (`<ts> warn [svc] <ts> warn [svc] msg`).
 let _sink = null;
+let _sqlTiming = createSqlTiming({ env: process.env, deferShipper: true });
 
 // routeLabel's unmatched-path fallback (below) hands out one label per
 // distinct first path segment, and that segment is chosen by whoever sends
@@ -160,6 +162,37 @@ function hoistToFront(app, handle) {
 }
 
 /**
+ * Installs SQL timing independently of the metrics endpoint gate.
+ *
+ * @param {object} app Express application
+ * @param {object} opts timing options
+ * @returns {object} configured timing instance
+ */
+function installSqlTiming(app, opts = {}) {
+    const service = opts.service || 'xchain-service';
+    _sqlTiming.configure({
+        env: opts.env || process.env,
+        routePrefix: `/${service}`,
+        registry: opts.registry || null,
+        transport: opts.transport || null,
+        console: opts.console || console
+    });
+    if (_sqlTiming.enabled && app && typeof app.use === 'function') {
+        app.use(_sqlTiming.middleware);
+        hoistToFront(app, _sqlTiming.middleware);
+    }
+    return _sqlTiming;
+}
+
+const _sqlTimingFacade = {
+    wrapPool(pool) { return _sqlTiming.wrapPool(pool); },
+    wrapRpcMethods(methods) { return _sqlTiming.wrapRpcMethods(methods); }
+};
+
+/** Returns stable SQL timing wrappers for early database and RPC wiring. */
+function getSqlTiming() { return _sqlTimingFacade; }
+
+/**
  * Registers the metrics endpoint and HTTP instrumentation on an Express app.
  *
  * @param {object} app                Express application (may be null: logging-only use)
@@ -190,6 +223,14 @@ function installObservability(app, opts = {}) {
     // unscraped. Registering series costs nothing until something renders them.
     const registry = getRegistry({ service, version, coin, network });
 
+    const sqlTiming = installSqlTiming(app, {
+        service,
+        env,
+        registry,
+        transport: opts.sqlTimingTransport || null,
+        console: sink || _sink || console
+    });
+
     // One process, one shipper. When patchConsole already built it and this
     // caller wants no special sink or transport, adopt it rather than running a
     // second one: two shippers would split the line counters and each hold
@@ -206,7 +247,7 @@ function installObservability(app, opts = {}) {
             config,
             registry,
             logger,
-            shutdown: () => logger.stop()
+            shutdown: () => Promise.all([logger.stop(), sqlTiming.stop()])
         };
     }
 
@@ -282,7 +323,7 @@ function installObservability(app, opts = {}) {
         config,
         registry,
         logger,
-        shutdown: () => logger.stop()
+        shutdown: () => Promise.all([logger.stop(), sqlTiming.stop()])
     };
 }
 
@@ -406,6 +447,8 @@ function unpatchConsole() { if (_patched) _patched.unpatch(); }
 // Tests only: drops the process-wide handles so an assertion about a fresh
 // process does not inherit the previous test's shipper or registry.
 function _resetObservability() {
+    _sqlTiming.stop().catch(() => {});
+    _sqlTiming = createSqlTiming({ env: process.env, deferShipper: true });
     unpatchConsole();
     _logger = null;
     _registry = null;
@@ -415,6 +458,8 @@ function _resetObservability() {
 
 module.exports = {
     installObservability,
+    installSqlTiming,
+    getSqlTiming,
     readObservabilityEnv,
     routeLabel,
     Registry,
