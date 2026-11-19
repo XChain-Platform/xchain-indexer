@@ -93,14 +93,6 @@ what had happened. Only the endpoint is gated.
 | `LOG_SHIP_INTERVAL_MS` | 5000 | Flush interval |
 | `LOG_SHIP_MAX_BUFFER` | 5000 | Bounded buffer; oldest dropped and counted |
 | `LOG_SHIP_TIMEOUT_MS` | 5000 | Per-batch POST timeout |
-| `SQL_TIMING_ENABLED` | off | Emit and ship request SQL timing; needs URL, key and project |
-| `SQL_TIMING_URL` | unset | HTTPS Prometheus SQL timing intake endpoint |
-| `SQL_TIMING_KEY` | unset | Intake API key; sent only in `X-Prometheus-Api-Key` |
-| `SQL_TIMING_PROJECT` | unset | Project slug stamped on each contract line |
-| `SQL_TIMING_REQUEST_RATE` | 1 | Fraction of request timing lines emitted |
-| `SQL_TIMING_STATEMENT_RATE` | 0.05 | Fraction of spans carrying normalized statements |
-| `SQL_TIMING_INTERVAL_MS` | 60000 | Batch send interval |
-| `SQL_TIMING_MAX_BUFFER` | 20000 | Bounded line buffer; oldest dropped first |
 
 The endpoint has no auth unless `METRICS_TOKEN` is set. On a public-facing box,
 set the token or bind the scrape behind the reverse proxy.
@@ -117,8 +109,6 @@ set the token or bind the scrape behind the reverse proxy.
   `http_request_duration_seconds{method,route}`, `http_requests_in_flight`
 - `log_lines_emitted_total{level}`, `log_lines_shipped_total`,
   `log_lines_dropped_total`, `log_ship_failures_total`, `log_ship_buffer_lines`
-- `sql_timing_lines_shipped_total`, `sql_timing_lines_dropped_total`,
-  `sql_timing_ship_failures_total`
 - `xchain_metrics_series_dropped_total{metric}` (cardinality guard tripped)
 
 ## Adding a service metric
