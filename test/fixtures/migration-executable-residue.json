@@ -470,5 +470,9 @@
   "2026-11-19-pending-hub-pushes-widen-payload.sql": {
     "residue": "2c55a72d019255b08a4636df3b9f5701f677b24f0ac6eda4e16aa0976234c17d",
     "sha256": "a3fbee1967cf769450c5fffff4188f18fac7287583a96efb505ad4564203b75f"
+  },
+  "2026-11-19-vote-watermark-action-index-idx.sql": {
+    "residue": "8d7b48509aad3b370e22c58e1e379e5096ce2bba12d57989ca0f09dca2c4b54e",
+    "sha256": "cf86d73e231ffa9b2e4a58f20d70f5f2e820c8f4d0b4bf0d878dfd623f7b626f"
   }
 }
