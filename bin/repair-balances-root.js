@@ -44,7 +44,8 @@
  * with the indexer process stopped, since a running indexer can write past the
  * tip this tool repairs. The tool refuses a non-tip --block, rechecks that tip in
  * the write transaction so a chain that moves underneath it is refused, and
- * refuses no-op work.
+ * refuses no-op work. It also refuses a committed row whose state_root does not
+ * reassemble from its own stored sub-roots.
  *
  * Credentials come from the service environment exactly as the benches read
  * them: never from the command line, never printed.
@@ -105,6 +106,8 @@ function parseArgs(){
     }
 
     async function tipRow(forUpdate){
+        // Only contract_state_root has a column today. Add each future reserved
+        // slot here when its persisted column is introduced.
         const rows = await db.doQueryStrict(
             'SELECT block_index, balances_root, stakes_root, state_root, block_merkle_root, contract_state_root ' +
             'FROM state_tree_roots WHERE chain=? AND network=? ORDER BY block_index DESC LIMIT 1' +
@@ -132,6 +135,12 @@ function parseArgs(){
         console.error('refusing: ' + targetError);
         process.exit(2);
     }
+    const committedError = Target.committedRowError(before);
+    if(committedError){
+        console.error('refusing: ' + committedError);
+        if(db.close) await db.close();
+        process.exit(4);
+    }
     const height = Number(before.block_index);
     console.log('# chain ' + opts.chain + '/' + opts.network + '  repair height ' + height);
     console.log('# committed balances_root ' + before.balances_root);
@@ -157,22 +166,13 @@ function parseArgs(){
     // from the STORED column rather than re-running the gate is the same choice
     // the explorer makes: the row already carries the arming decision for its own
     // height, and a second copy of the activation map could only drift from it.
-    const extras = (before.contract_state_root == null) ? null
-                 : { contract_state_root: String(before.contract_state_root) };
+    const extras = Target.storedExtras(before);
     const stateRoot = SC.assembleStateRoot(rebuilt, before.stakes_root, extras);
     console.log('# committed state_root    ' + before.state_root);
     console.log('# rebuilt   state_root    ' + stateRoot);
     console.log('# reserved slots carried  ' + (extras ? Object.keys(extras).join(', ') : '(none: v1 assembly)'));
     console.log('# state_root_version at this height: ' +
                 SUB.stateRootVersion(height, opts.network, opts.chain));
-
-    // Sanity: the repaired state_root must reassemble from its parts, or the row
-    // would serve PROOF_STATE_ROOT_MISMATCH for every proof at this height.
-    const check = SC.assembleStateRoot(rebuilt, before.stakes_root, extras);
-    if(check !== stateRoot){
-        console.error('refusing: state_root is not reproducible from its own parts');
-        process.exit(4);
-    }
 
     if(!opts.apply){
         console.log('#');
@@ -197,8 +197,8 @@ function parseArgs(){
         }
         const update = await db.doQueryStrict(
             'UPDATE state_tree_roots SET balances_root=?, state_root=? ' +
-            'WHERE chain=? AND network=? AND block_index=? AND balances_root=?',
-            [rebuilt, stateRoot, opts.chain, opts.network, height, before.balances_root]);
+            'WHERE chain=? AND network=? AND block_index=? AND balances_root=? AND state_root=?',
+            [rebuilt, stateRoot, opts.chain, opts.network, height, before.balances_root, before.state_root]);
         if(!update || Number(update.affectedRows) !== 1){
             await db.rollbackTransaction();
             console.error('refusing: the repair target changed before the conditional update');

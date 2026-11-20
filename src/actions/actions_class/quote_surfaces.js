@@ -97,9 +97,9 @@ function isTxLockBusy(e){
 // from `action` and `params`; set for a BATCH only (see batchRequestWire).
 //
 // Returns dryRunOutcome's { blockIndex, blockTime, status, error, xchainFee, guardGasFee, sourceFeeBalance,
-// subCommands, legs, oracleFeesOwed, nativeFeeOwed, coinPaymentsOwed }: xchainFee is the staged fee
-// ('0' for a valid zero-fee action, null for a withheld BATCH sum or none staged); the last five
-// are probe disclosures, else null.
+// subCommands, legs, oracleFeesOwed, nativeFeeOwed, coinPaymentsOwed, nativeFeeLegs }: xchainFee is the
+// staged fee ('0' for a valid zero-fee action, null for a withheld BATCH sum or none staged); the
+// last six are probe disclosures, else null (nativeFeeLegs: each tallied AIRDROP leg's own fee).
 async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, feeBalanceTick, rawData }){
     let dryRunError = null, sourceFeeBalance = null;
     // Seed BATCH subcommand and multi-leg SEND disclosures: subCommands, legs and
@@ -353,7 +353,7 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
         quote.note = 'EXECUTE fee includes a ' + EXECUTE_QUOTE_GAS_SAFETY_MARGIN_PERCENT +
             '% dry-run gas safety margin, floored at the base fee and capped at the protocol ceiling.';
     } else {
-        quote = verdictQuote || await this.priceFeeQuote(base, run.xchainFee, feeOutputSats);
+        quote = verdictQuote || await this.priceFeeQuote(base, run.xchainFee, feeOutputSats, run.nativeFeeLegs);
     }
     // Disclose the oracle usage fee a Mode B DISPENSER owes, as the pre-flight does: the probe
     // skips that output check, so valid:true alone hides a second native output the chain requires.

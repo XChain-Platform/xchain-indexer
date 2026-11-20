@@ -40,13 +40,11 @@
  *
  ********************************************************************/
 
-const http    = require('http');
-const https   = require('https');
-const url     = require('url');
 const crypto  = require('crypto');
 const fs      = require('fs');
 const path    = require('path');
 const { decideReply } = require('./rollcall_proof_client/reply_decision.js');
+const { postJsonRpc, blockWatchdogDeadline } = require('../peer_json_rpc/index.js');
 
 const { getLogger } = require('../../observability/index.js');
 const { CONFIG_ENV } = require('../../config.js');
@@ -166,37 +164,15 @@ class RollcallProofClient {
                                publishers || []]);
     }
 
-    // JSON-RPC over the node http/https core modules, matching AnchorProofClient.
+    // JSON-RPC over the shared proof transport. Keep this method replaceable for tests.
     rpc(method, params){
-        return new Promise((resolve, reject) => {
-            let parsed  = url.parse(this.url);
-            let isHttps = parsed.protocol === 'https:';
-            let lib     = isHttps ? https : http;
-            let body    = JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: method, params: params });
-            let headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) };
-            if(this.apiKey) headers['x-api-key'] = this.apiKey;
-            let req = lib.request({
-                hostname: parsed.hostname,
-                port:     parsed.port || (isHttps ? 443 : 80),
-                path:     parsed.pathname || '/',
-                method:   'POST',
-                headers:  headers,
-                timeout:  this.timeoutMs
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => { data += chunk; });
-                res.on('end', () => {
-                    try {
-                        let payload = JSON.parse(data);
-                        if(payload.error) return reject(new Error(payload.error.message || JSON.stringify(payload.error)));
-                        resolve(payload.result);
-                    } catch(e){ reject(new Error('Invalid JSON response: ' + e.message)); }
-                });
-            });
-            req.on('error',   (err) => reject(err));
-            req.on('timeout', ()    => { req.destroy(new Error('Request timeout')); });
-            req.write(body);
-            req.end();
+        return postJsonRpc({
+            url: this.url,
+            apiKey: this.apiKey,
+            method: method,
+            params: params,
+            timeoutMs: this.timeoutMs,
+            deadlineMs: blockWatchdogDeadline(this.config)
         });
     }
 }

@@ -194,6 +194,8 @@ async function readDryRunVerdict(actions, resultData, verdict){
        typeof resultData['PROBE_ORACLE_FEES'] === 'object' &&
        Object.keys(resultData['PROBE_ORACLE_FEES']).length > 0)
         verdict.oracleFeesOwed = resultData['PROBE_ORACLE_FEES'];
+    if(resultData && Array.isArray(resultData['PROBE_NATIVE_FEE_LEGS']))
+        verdict.nativeFeeLegs = resultData['PROBE_NATIVE_FEE_LEGS'].slice();
     if(resultData && Object.prototype.hasOwnProperty.call(resultData, 'BATCH_POSITION')){
         let payments = actions.util.probePaymentDisclosure(resultData);
         if(payments){
@@ -234,7 +236,8 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
         legs:             verdict.legs,
         oracleFeesOwed:   verdict.oracleFeesOwed,
         nativeFeeOwed:    verdict.nativeFeeOwed,
-        coinPaymentsOwed: verdict.coinPaymentsOwed
+        coinPaymentsOwed: verdict.coinPaymentsOwed,
+        nativeFeeLegs:    verdict.nativeFeeLegs || null
     };
 }
 

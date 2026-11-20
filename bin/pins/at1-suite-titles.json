@@ -193,6 +193,14 @@
       "ATTEST seeded undelivered mirror response @regression @tier3 ignores the seeded row when the local request is absent",
       "ATTEST seeded undelivered mirror response @regression @tier3 ignores the seeded row when the local request is already valid"
     ],
+    "03533bd5b864e86b": [
+      "multi-leg AIRDROP fee quote replays the in-order leg draw @regression @tier1 agrees with the chain across outputs for equal, unequal and zero-fee middle legs",
+      "multi-leg AIRDROP fee quote replays the in-order leg draw @regression @tier1 hands the probe's per-leg disclosure from the run to the quote",
+      "multi-leg AIRDROP fee quote replays the in-order leg draw @regression @tier1 judges a computeFeeQuote AIRDROP output by the run's per-leg disclosure",
+      "multi-leg AIRDROP fee quote replays the in-order leg draw @regression @tier1 keeps the summed expected fee as the recommendation, and the chain accepts it",
+      "multi-leg AIRDROP fee quote replays the in-order leg draw @regression @tier1 leaves a single charged leg and an undisclosed run on the summed band",
+      "multi-leg AIRDROP fee quote replays the in-order leg draw @regression @tier1 refuses 0.019 for two 0.01 legs and reports the in-order minimum 0.0195"
+    ],
     "03972b69204c5a4d": [
       "state_hash source: ACTIVATION_DELAY_BLOCKS resolution BTC: STAKING.ACTIVATION_DELAY_BLOCKS equals the frozen per-coin constant",
       "state_hash source: ACTIVATION_DELAY_BLOCKS resolution BTC: the source resolves a NON-NULL delay matching the follower constant",
@@ -2916,29 +2924,6 @@
       "HubDbSync _applyRow price_snapshots skipped\u2192finalized upgrade @regression @tier2 guards every column on the incoming status and never reassigns the unique-key columns",
       "HubDbSync _applyRow price_snapshots skipped\u2192finalized upgrade @regression @tier2 still filters hub-only columns the local mirror does not carry",
       "HubDbSync _applyRow price_snapshots skipped\u2192finalized upgrade @regression @tier2 uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for price_snapshots"
-    ],
-    "27c2f2b1c95303c8": [
-      "bin/consensus-identity.js --assert-no-absent REFUSES (exit 2) naming the key when a registry row is missing, with the flag",
-      "bin/consensus-identity.js --assert-no-absent carries the refusal without the flag too: a missing row is never a lower count",
-      "bin/consensus-identity.js --assert-no-absent exits 0 and prints no ABSENT line when every shared gate resolves",
-      "bin/consensus-identity.js --assert-no-absent reads every gate with a carrier hidden: the value is the registry row, never the file",
-      "bin/consensus-identity.js --at-block height accepts a decimal height, zero included, and turns on the tip read",
-      "bin/consensus-identity.js --at-block height refuses anything but a decimal non-negative integer with one stderr line (exit 2)",
-      "bin/consensus-identity.js --compare against a flat --out reading delivers the whole compare output, last line included, through a pipe",
-      "bin/consensus-identity.js --compare against a flat --out reading refuses a shapeless, hub or blockless pin with one named line (exit 2)",
-      "bin/consensus-identity.js --compare against a flat --out reading round-trips its own --out file with every field ok, arrays included",
-      "bin/consensus-identity.js --compare against a flat --out reading skips a stored tip visibly rather than reading it as a mismatch",
-      "bin/consensus-identity.js --compare against a flat --out reading still reports a moved gate in a flat reading as a mismatch",
-      "bin/consensus-identity.js an unread tip exits 1 in the human summary, and 0 with no tip read asked for",
-      "bin/consensus-identity.js an unread tip exits 1 under --json, printing the payload with tip.error and one stderr line",
-      "bin/consensus-identity.js an unread tip exits 1 with --out and still writes the reading",
-      "bin/consensus-identity.js argument validation documents every long flag parseArgs accepts",
-      "bin/consensus-identity.js argument validation implements the hub-compatible --out JSON write",
-      "bin/consensus-identity.js argument validation refuses a positional argument as an unknown flag",
-      "bin/consensus-identity.js argument validation refuses a value option whose value is missing",
-      "bin/consensus-identity.js argument validation refuses an unknown flag before producing output",
-      "bin/consensus-identity.js function-valued gate rows emits one row per resolved gate, naming a function gate by presence",
-      "bin/consensus-identity.js function-valued gate rows reports a pin that lacks a function gate row as a mismatch"
     ],
     "27d2f20884f9f5c7": [
       "Attest (ATTEST) @regression @tier3 relay fee carve helpers adds one flat native allowance for each relay leg on the GAS grid",
@@ -10154,6 +10139,10 @@
       "Integration: live SLASH equivocation drill + determinism @regression @tier1 the equivocation proof burns the offender's entire capability bond",
       "Integration: live SLASH equivocation drill + determinism @regression @tier1 the offender qualified for cross_chain at the RESOLVED snapshot height before the slash (sanity)"
     ],
+    "778d2a6353ea2d16": [
+      "Airdrop FEE_PROBE per-leg native fee disclosure @regression @tier1 adds no disclosure to a block AIRDROP, a BATCH leg or an XCHAIN-balance fee",
+      "Airdrop FEE_PROBE per-leg native fee disclosure @regression @tier1 lists each tallied leg's own fee under a probe while drawing nothing"
+    ],
     "77aaf409029b39bb": [
       "resolveRollbackGraceMs is a multiple of the stall grace, never below it",
       "resolveRollbackGraceMs leaves an unusable stall grace unchanged",
@@ -13842,6 +13831,31 @@
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 routes a mid-cooldown slash to contract_unstakes only (never the deactivated phantom)",
       "Database.slashContractStake() mid-cooldown double-count guard @regression @tier1 still slashes an active (never-unstaked) staker from contract_stakes (Pass 1)"
     ],
+    "a4a7ea4599ccdbcc": [
+      "bin/consensus-identity.js --assert-no-absent REFUSES (exit 2) naming the key when a registry row is missing, with the flag",
+      "bin/consensus-identity.js --assert-no-absent carries the refusal without the flag too: a missing row is never a lower count",
+      "bin/consensus-identity.js --assert-no-absent exits 0 and prints no ABSENT line when every shared gate resolves",
+      "bin/consensus-identity.js --assert-no-absent reads every gate with a carrier hidden: the value is the registry row, never the file",
+      "bin/consensus-identity.js --at-block height accepts a decimal height, zero included, and turns on the tip read",
+      "bin/consensus-identity.js --at-block height refuses anything but a decimal non-negative integer with one stderr line (exit 2)",
+      "bin/consensus-identity.js --compare against a flat --out reading delivers the whole compare output, last line included, through a pipe",
+      "bin/consensus-identity.js --compare against a flat --out reading refuses a shapeless, hub or blockless pin with one named line (exit 2)",
+      "bin/consensus-identity.js --compare against a flat --out reading round-trips its own --out file with every field ok, arrays included",
+      "bin/consensus-identity.js --compare against a flat --out reading skips a stored tip visibly rather than reading it as a mismatch",
+      "bin/consensus-identity.js --compare against a flat --out reading still reports a moved gate in a flat reading as a mismatch",
+      "bin/consensus-identity.js --compare with an UNREADABLE armed map exits 1 comparing a sentinel reading under the same failure, never a pass",
+      "bin/consensus-identity.js --compare with an UNREADABLE armed map reports a readable build compared against a sentinel reading as a mismatch",
+      "bin/consensus-identity.js an unread tip exits 1 in the human summary, and 0 with no tip read asked for",
+      "bin/consensus-identity.js an unread tip exits 1 under --json, printing the payload with tip.error and one stderr line",
+      "bin/consensus-identity.js an unread tip exits 1 with --out and still writes the reading",
+      "bin/consensus-identity.js argument validation documents every long flag parseArgs accepts",
+      "bin/consensus-identity.js argument validation implements the hub-compatible --out JSON write",
+      "bin/consensus-identity.js argument validation refuses a positional argument as an unknown flag",
+      "bin/consensus-identity.js argument validation refuses a value option whose value is missing",
+      "bin/consensus-identity.js argument validation refuses an unknown flag before producing output",
+      "bin/consensus-identity.js function-valued gate rows emits one row per resolved gate, naming a function gate by presence",
+      "bin/consensus-identity.js function-valued gate rows reports a pin that lacks a function gate row as a mismatch"
+    ],
     "a4c5e76f1b00c73b": [
       "COINPAY settlement clears its ORDER_MATCH the handler calls a match-scoped writer, not the order-scoped one",
       "COINPAY settlement clears its ORDER_MATCH the obligation is still marked fulfilled alongside it",
@@ -14660,6 +14674,15 @@
       "protocol_changes/LINT_REGEX_GROUP_DEPTH row @regression @tier1 is registered in part 5 and has the registry shape",
       "protocol_changes/LINT_REGEX_GROUP_DEPTH row @regression @tier1 is unarmed on mainnet, armed on testnet at its instant and active on regtest",
       "protocol_changes/LINT_REGEX_GROUP_DEPTH row @regression @tier1 matches the bundled VM activation map per network"
+    ],
+    "b02de4869f852757": [
+      "peer JSON-RPC response settling @regression preserves result, RPC error, and malformed JSON behavior",
+      "peer JSON-RPC response settling @regression rejects a drip-fed response at the wall-clock deadline",
+      "peer JSON-RPC response settling @regression rejects a truncated response instead of remaining pending",
+      "peer JSON-RPC response settling @regression routes interrupted anchor, rollcall, and bridge calls to their failure paths",
+      "peer JSON-RPC wall-clock bound follows the block watchdog @regression arms no wall-clock deadline without a positive block watchdog",
+      "peer JSON-RPC wall-clock bound follows the block watchdog @regression bounds a drip-fed reply by the configured block watchdog",
+      "peer JSON-RPC wall-clock bound follows the block watchdog @regression resolves a complete reply that streams for longer than the idle timeout"
     ],
     "b06e6a79b9e81a02": [
       "ProtocolChanges @regression @tier3 CONTROLLER_GUARD activation gate (consensus) a pre-guard (v1.x) node treats it as not-yet-active; guard stays off",
@@ -21273,8 +21296,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1694,
-      "titleCount": 16481,
+      "fileCount": 1697,
+      "titleCount": 16498,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21664,6 +21687,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_probe_legs.test.js": "778d2a6353ea2d16",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/multi_leg_xchain_fee_failed_leg.test.js": "d14673f26a6c6cb1",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
@@ -22065,7 +22089,7 @@
         "test/unit/consensus/consensus_identity/absent_sentinel.test.js": "1c6dd4642cc2afbc",
         "test/unit/consensus/consensus_identity/arming_env_compare.test.js": "5cffe9363bb1aaac",
         "test/unit/consensus/consensus_identity/pin_shape_compare.test.js": "1e89d0e95cbfdf59",
-        "test/unit/consensus/consensus_identity_cli.test.js": "27c2f2b1c95303c8",
+        "test/unit/consensus/consensus_identity_cli.test.js": "a4a7ea4599ccdbcc",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
         "test/unit/consensus/consensus_params.test/vm_coupling.test.js": "d455b480b0ad9954",
         "test/unit/consensus/consensus_params.test/vm_status_error_prefix_coupling.test.js": "84f7b72687be7722",
@@ -22095,6 +22119,7 @@
         "test/unit/consensus/list_tick_coin.test.js": "47267650c637f209",
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
+        "test/unit/consensus/peer_json_rpc/response_settle.test.js": "b02de4869f852757",
         "test/unit/consensus/protocol_address_roles.test.js": "4419d7ba08b430c7",
         "test/unit/consensus/protocol_time.test.js": "f5f64f28d68dc118",
         "test/unit/consensus/protocol_time_caller_order.test.js": "7891fe7146b2d1e7",
@@ -22410,6 +22435,7 @@
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
+        "test/unit/fees/fee_quote.test/airdrop_leg_draw_parity.test.js": "03533bd5b864e86b",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "f617f8c3e61185f6",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "ee89b27c2210a19c",
@@ -23354,8 +23380,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1295,
-      "titleCount": 13022,
+      "fileCount": 1298,
+      "titleCount": 13037,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23731,6 +23757,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_probe_legs.test.js": "778d2a6353ea2d16",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/multi_leg_xchain_fee_failed_leg.test.js": "d14673f26a6c6cb1",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
@@ -23993,6 +24020,7 @@
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
+        "test/unit/consensus/peer_json_rpc/response_settle.test.js": "b02de4869f852757",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
@@ -24244,6 +24272,7 @@
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
+        "test/unit/fees/fee_quote.test/airdrop_leg_draw_parity.test.js": "03533bd5b864e86b",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "f617f8c3e61185f6",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "ee89b27c2210a19c",
@@ -24655,8 +24684,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 694,
-      "titleCount": 7252,
+      "fileCount": 696,
+      "titleCount": 7260,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24763,6 +24792,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_probe_legs.test.js": "778d2a6353ea2d16",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/multi_leg_xchain_fee_failed_leg.test.js": "d14673f26a6c6cb1",
         "test/unit/actions/token/airdrop.test/unparsable_amount_gate_off.test.js": "dc93ad5538dab979",
@@ -25087,6 +25117,7 @@
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
+        "test/unit/fees/fee_quote.test/airdrop_leg_draw_parity.test.js": "03533bd5b864e86b",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "f617f8c3e61185f6",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "ee89b27c2210a19c",
@@ -25355,8 +25386,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1295,
-      "titleCount": 13022,
+      "fileCount": 1298,
+      "titleCount": 13037,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25732,6 +25763,7 @@
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_batch_probe.test.js": "39a4570af1805f2f",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_below_gate.test.js": "7cb20332949b9a22",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_failed_leg_below_gate.test.js": "817d2f1665ad0f9e",
+        "test/unit/actions/token/airdrop.test/multi_leg_native_fee_probe_legs.test.js": "778d2a6353ea2d16",
         "test/unit/actions/token/airdrop.test/multi_leg_native_fee_tally.test.js": "9c95541b9ad230ad",
         "test/unit/actions/token/airdrop.test/multi_leg_xchain_fee_failed_leg.test.js": "d14673f26a6c6cb1",
         "test/unit/actions/token/airdrop.test/recipient_lists.test.js": "d4807309ef63e46d",
@@ -25994,6 +26026,7 @@
         "test/unit/consensus/gates/validator_wire_actions.test.js": "4aed6d7e717233e4",
         "test/unit/consensus/merkle.test.js": "9661eae9e1b0e704",
         "test/unit/consensus/merkle/merkle_stakes_golden.test.js": "2bf9fdbc116b80d0",
+        "test/unit/consensus/peer_json_rpc/response_settle.test.js": "b02de4869f852757",
         "test/unit/consensus/quorum/swq_truncation.test.js": "530989a972a5d731",
         "test/unit/consensus/retroactive/boot_plan.test.js": "2614f9344a30480b",
         "test/unit/consensus/retroactive/boot_replay.test.js": "65adae7ccb7afd63",
@@ -26245,6 +26278,7 @@
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
+        "test/unit/fees/fee_quote.test/airdrop_leg_draw_parity.test.js": "03533bd5b864e86b",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "f617f8c3e61185f6",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "ee89b27c2210a19c",

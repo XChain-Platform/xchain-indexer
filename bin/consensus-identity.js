@@ -130,8 +130,11 @@
  *                                                     flat reading taken under
  *                                                     another regtest arming
  *                                                     environment is refused
- *                                                     (exit 2)
- *   node bin/consensus-identity.js --out <file>       write the identity as JSON
+ *                                                     (exit 2); an UNREADABLE
+ *                                                     fresh armed map exits 1
+ *                                                     even against a pin that
+ *                                                     holds the same sentinel
+ *   node bin/consensus-identity.js --out <file>      write the identity as JSON
  *   node bin/consensus-identity.js --help             print this usage banner
  *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
@@ -548,6 +551,11 @@ async function main() {
     if (opts.help) { console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]); return; }
 
     const identity = codeIdentity(opts.network);
+    // Fail an unresolvable armed map before --compare too, so a sentinel pin under the same failure never passes.
+    if (identity.armed_map_fingerprint_unreadable_reason !== null) {
+        console.error(`armed_map_fingerprint UNREADABLE: ${identity.armed_map_fingerprint_unreadable_reason}`);
+        process.exitCode = 1;
+    }
     if (opts.compare) {
         runComparison(opts.compare, identity);
         return;
@@ -563,11 +571,6 @@ async function main() {
         console.error(`ABSENT GATES (${identity.absent_gates.length}): the digest is over a rules set `
             + 'this build has lost:');
         for (const key of identity.absent_gates) console.error(`  ${key}`);
-        process.exitCode = 1;
-    }
-    // Fail an unresolvable armed map like an unread tip, so a sentinel pin never reads as a pass.
-    if (identity.armed_map_fingerprint_unreadable_reason !== null) {
-        console.error(`armed_map_fingerprint UNREADABLE: ${identity.armed_map_fingerprint_unreadable_reason}`);
         process.exitCode = 1;
     }
     // Fail an unread tip in every output mode, so a scripted --json reading never takes a missing ledger read for a pass.

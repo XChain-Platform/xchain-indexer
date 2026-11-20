@@ -33,28 +33,79 @@ function zeroFeeQuote(base){
     });
 }
 
-// If the caller supplied a proposed output, judge it against the SAME lower-bound rule
-// the on-chain validator enforces (validateNativeCoinFee rejects only below min).
-function judgeFeeOutput(util, feeOutputSats, band){
+// A non-BATCH multi-leg AIRDROP past its tally gate pays every leg from ONE output through an
+// action NATIVE_FEE_LEDGER: each leg in order judges what earlier legs left against its OWN
+// band, then drains at most its expected fee (validateNativeCoinFee, drawNativeFeeOutput). One
+// band over the summed fee applies the tolerance once and passes outputs a later leg refuses,
+// so the quote replays that draw. The 1-based leg the chain refuses first, or 0.
+function firstRefusedLeg(util, paidCoin, legBands){
+    let consumed = '0';
+    for(let i = 0; i < legBands.length; i++){
+        let band = legBands[i];
+        let available = util.bcsub(paidCoin, consumed, 8);
+        if(util.bclte(available, 0) || util.bclt(available, band.minAcceptable)) return i + 1;
+        let attributed = util.bclt(available, band.expectedNative) ? available : band.expectedNative;
+        consumed = util.bcformat(util.bcadd(consumed, attributed, 8), 8);
+    }
+    return 0;
+}
+
+// The least output every leg of that draw accepts: the most, over legs, of what the legs before
+// it drain (accumulated as the ledger does) plus its own minimum. The chain refuses an emptied
+// output outright, so a leg whose minimum rounds to zero still needs one satoshi left.
+function inOrderMinimum(util, legBands){
+    let consumed = '0', minimum = util.bcnum(0);
+    for(let band of legBands){
+        let floor = util.bcgt(band.minAcceptable, 0) ? band.minAcceptable : '0.00000001';
+        let legMinimum = util.bcadd(consumed, floor, 8);
+        if(util.bcgt(legMinimum, minimum)) minimum = legMinimum;
+        consumed = util.bcformat(util.bcadd(consumed, band.expectedNative, 8), 8);
+    }
+    return minimum;
+}
+
+// The bands of the AIRDROP legs the probe disclosed that owe a fee, or null when fewer than two
+// do: a zero-fee leg draws nothing on chain, and a single charged leg is the summed band itself.
+function chargedLegBands(util, nativeFeeLegs, bandOf){
+    if(!Array.isArray(nativeFeeLegs)) return null;
+    let bands = nativeFeeLegs.filter((fee) => util.bcgt(fee, 0)).map(bandOf);
+    return bands.length > 1 ? bands : null;
+}
+
+// If the caller supplied a proposed output, judge it against the SAME lower-bound rule the
+// on-chain validator enforces: below min for one band, the in-order draw for charged AIRDROP
+// legs. Also returns minAcceptable, the least output that rule accepts.
+function judgeFeeOutput(util, feeOutputSats, band, legBands){
+    let minAcceptable = legBands ? inOrderMinimum(util, legBands) : band.minAcceptable;
     let valid = true, error = null;
     if(feeOutputSats !== undefined && feeOutputSats !== null && String(feeOutputSats) !== ''){
         let paidCoin = util.bcdiv(util.bcnum(feeOutputSats), 100000000, 8);
-        if(util.bclt(paidCoin, band.minAcceptable)){
+        let refusedLeg = legBands ? firstRefusedLeg(util, paidCoin, legBands) : 0;
+        if(legBands ? refusedLeg : util.bclt(paidCoin, minAcceptable)){
             valid = false;
             error = 'native fee output too small (provided: ' + util.bcformat(paidCoin, 8) +
-                    ', min: ' + util.bcformat(band.minAcceptable, 8) + ')';
+                    ', min: ' + util.bcformat(minAcceptable, 8) +
+                    (refusedLeg ? ', AIRDROP leg ' + refusedLeg + ' of ' + legBands.length + ' refused' : '') + ')';
         }
     }
-    return { valid, error };
+    return { valid, error, minAcceptable };
+}
+
+// The recommended output: the summed band's expected fee, raised to the in-order minimum on the
+// rare multi-leg quote where per-leg rounding lifts that minimum above it.
+function recommendedOutput(util, band, minAcceptable){
+    let native = util.bclt(band.expectedNative, minAcceptable) ? minAcceptable : band.expectedNative;
+    return { native: util.bcformat(native, 8), satsExact: util.bcformat(util.bcmul(native, 100000000, 0), 0) };
 }
 
 module.exports = {
 
     // Price an XCHAIN-denominated fee in the native coin via current oracle prices, and
     // (optionally) judge a proposed fee-output amount against the same lower-bound rule the
-    // on-chain validator enforces (util.validateNativeCoinFee rejects only below min). Pure
-    // pricing, shared by computeFeeQuote and computeFeeQuoteDryRun; extends and returns `base`.
-    async priceFeeQuote(base, xchainFeeRaw, feeOutputSats){
+    // on-chain validator enforces (judgeFeeOutput). `nativeFeeLegs` (optional) is the dry run's
+    // per-leg AIRDROP fee disclosure. Pure pricing, shared by computeFeeQuote and
+    // computeFeeQuoteDryRun; extends and returns `base`.
+    async priceFeeQuote(base, xchainFeeRaw, feeOutputSats, nativeFeeLegs){
         let coin         = this.config['COIN'];
         let toleranceMin = this.util.bcnum(this.config['FEE_TOLERANCE_MIN'] || '0.95');
         let toleranceMax = this.util.bcnum(this.config['FEE_TOLERANCE_MAX'] || '1.10');
@@ -87,15 +138,12 @@ module.exports = {
         if(prices.error)
             return Object.assign(base, { valid: false, error: prices.error });
 
-        let band = this.util.computeNativeFeeBand(xchainFee, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
-
-        // Recommended output (what the client should pay). Satoshi rounding is dwarfed by the
-        // tolerance band, so plain 8-dp formatting is safe (only under-MIN risks forfeiture).
-        let requiredFeeNative = this.util.bcformat(band.expectedNative, 8);
-        let requiredFeeSatsExact = this.util.bcformat(this.util.bcmul(band.expectedNative, 100000000, 0), 0);
-        let requiredFeeSats   = Number(requiredFeeSatsExact);
-
-        let { valid, error } = judgeFeeOutput(this.util, feeOutputSats, band);
+        let bandOf = (fee) => this.util.computeNativeFeeBand(fee, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
+        let band = bandOf(xchainFee);
+        let { valid, error, minAcceptable } = judgeFeeOutput(this.util, feeOutputSats, band,
+            chargedLegBands(this.util, nativeFeeLegs, bandOf));
+        // Satoshi rounding is dwarfed by the tolerance band, so plain 8-dp formatting is safe.
+        let required = recommendedOutput(this.util, band, minAcceptable);
 
         return Object.assign(base, {
             valid:             valid,
@@ -103,12 +151,12 @@ module.exports = {
             oracleRound:       prices.oracleRound,
             xchainUsdPrice:    this.util.bcformat(prices.xchainUsdPrice, 8),
             coinUsdPrice:      this.util.bcformat(prices.coinUsdPrice, 8),
-            expectedNative:    requiredFeeNative,
-            minAcceptable:     this.util.bcformat(band.minAcceptable, 8),
+            expectedNative:    this.util.bcformat(band.expectedNative, 8),
+            minAcceptable:     this.util.bcformat(minAcceptable, 8),
             maxAcceptable:     this.util.bcformat(band.maxAcceptable, 8),
-            requiredFeeNative: requiredFeeNative,
-            requiredFeeSats:   requiredFeeSats,
-            requiredFeeSatsExact: requiredFeeSatsExact
+            requiredFeeNative: required.native,
+            requiredFeeSats:   Number(required.satsExact),
+            requiredFeeSatsExact: required.satsExact
         });
     },
 

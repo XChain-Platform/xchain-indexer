@@ -272,6 +272,48 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
     });
 });
 
+// A sentinel reading compared under the same armed-map failure matches field for
+// field, so the unreadable check has to fire in --compare mode as well.
+describe('bin/consensus-identity.js --compare with an UNREADABLE armed map', function () {
+    this.timeout(120000);
+    // A preload that adds one throwing armed-map row in the child, so the real fingerprint reads UNREADABLE.
+    function throwingRowPreload() {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-unreadable-'));
+        const file = path.join(dir, 'throwing_row.js');
+        fs.writeFileSync(file, 'require(' + JSON.stringify(path.resolve(REPO, 'src/consensus/armed_map/manifest.js'))
+            + ").ENTRIES.push(['zz_test.THROWS', () => { throw new Error('carrier failed to load'); }]);\n");
+        return file;
+    }
+
+    // Write a sentinel --out reading under the preload and return its path.
+    function sentinelPin(preload) {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-sentinel-'));
+        const file = path.join(dir, 'identity.json');
+        const res = run(['--out', file, '--json'], preload);
+        assert.strictEqual(res.status, 1, res.stdout + res.stderr);
+        const written = JSON.parse(fs.readFileSync(file, 'utf8'));
+        assert.strictEqual(written.armed_map_fingerprint, 'UNREADABLE');
+        assert.ok(written.armed_map_fingerprint_unreadable_reason.includes('zz_test.THROWS'));
+        assert.strictEqual(written.armed_map_rows, null);
+        return file;
+    }
+
+    it('exits 1 comparing a sentinel reading under the same failure, never a pass', function () {
+        const preload = throwingRowPreload();
+        const res = run(['--compare', sentinelPin(preload)], preload);
+        assert.strictEqual(res.status, 1, res.stdout + res.stderr);
+        assert.match(res.stderr, /^armed_map_fingerprint UNREADABLE: .*zz_test\.THROWS/m);
+        assert.ok(res.stdout.includes('ok armed_map_fingerprint'), res.stdout);
+    });
+
+    it('reports a readable build compared against a sentinel reading as a mismatch', function () {
+        const res = run(['--compare', sentinelPin(throwingRowPreload())]);
+        assert.strictEqual(res.status, 1, res.stdout + res.stderr);
+        assert.ok(res.stdout.includes('MISMATCH armed_map_fingerprint'), res.stdout);
+        assert.ok(!res.stderr.includes('UNREADABLE'), res.stderr);
+    });
+});
+
 // A requested tip read that fails is a failed run in every output mode: a script
 // reading --json must never take a missing ledger read for a pass. The child gets
 // no database variables, which is one of the ways the read comes back unread.
