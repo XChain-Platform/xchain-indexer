@@ -80,7 +80,8 @@ function drawNativeFeeOutput(util, ledger, available, paidAmount, band, prices, 
         nativeCoinAmount: util.bcformat(attributed, 8),
         nativeCoin:       coin,
         oracleRound:      prices.oracleRound,
-        expectedAmount:   util.bcformat(band.expectedNative, 8)
+        expectedAmount:   util.bcformat(band.expectedNative, 8),
+        minAcceptableAmount: util.bcformat(band.minAcceptable, 8)
     };
 }
 

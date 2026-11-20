@@ -134,7 +134,8 @@ class Utility {
     vmGasCost(schedule, family, bytes){
         let s = (schedule && typeof schedule === 'object') ? schedule : {};
         switch(family){
-            // Metered gas re-prices only the recorded fee, never this acceptance number.
+            // The base admission for ledger-paid EXECUTE and pre-activation native payment.
+            // Activated native payment converts the accepted output back into a VM budget.
             case 'EXECUTE':        return s.VM_EXECUTE_BASE;
             case 'DEPLOY_INLINE':  return s.VM_DEPLOY_BASE + (bytes * s.VM_DEPLOY_PER_BYTE);
             // Chunked (v2/v3) charges base only (its v4 carriers already paid per-byte). The

@@ -141,6 +141,7 @@ class Execute {
             balances:        null,
             feePaymentMode:  2,
             skipFee:         false,
+            paidGasCeiling:  null,
             execCeiling:     null,
             gasUsed:         null,
             gasBilled:       null,
@@ -151,7 +152,7 @@ class Execute {
         };
 
         await validate.validateExecute.call(this, ctx, params);
-        await fees.chargeGasFee.call(this, ctx);
+        await fees.chargeGasFee.call(this, ctx, LIMITS);
         await validate.validateSourceAwake.call(this, ctx);
         await runVm.runVmExecution.call(this, ctx, LIMITS);
         await settle.settleExecution.call(this, ctx);

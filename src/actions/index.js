@@ -21,7 +21,7 @@
  * 
  ********************************************************************/
 
-// Actions the PUBLIC feequote pre-flight refuses to dry-run. DEPLOY/EXECUTE run
+// Actions the PUBLIC feequote pre-flight normally refuses to dry-run. DEPLOY/EXECUTE run
 // caller-supplied code in the VM (up to the VM CPU cap) while the dry-run holds the shared
 // transaction mutex, XEXEC re-runs a target contract, and BATCH can smuggle any of them as
 // a sub-action; quoting these on a shared node would hand unauthenticated callers a
@@ -35,13 +35,13 @@ const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 // so a denied action there was composable but literally unpayable (no way to size the required
 // output), and any client offering it burned a network fee on a guaranteed-invalid action.
 //
-// Safe because the fee these two stage is decided BEFORE the VM runs and is pure arithmetic
-// over the gas schedule: deploy.js charges VM_DEPLOY_BASE + codeBytes * VM_DEPLOY_PER_BYTE and
-// execute.js charges VM_EXECUTE_BASE, and that pre-VM number is exactly what
-// validateNativeCoinFee judges the native output against (the post-VM recalculation from metered
-// gas re-prices the recorded fee, never the acceptance rule). So a static quote reproduces the
-// acceptance rule byte-for-byte while never entering the VM: no dry-run, no mutex, no compute
-// primitive. What it CANNOT answer is on-chain validity (class-B: contract exists, source has
+// Safe because the fee these two stage before their later gates is decided BEFORE the VM runs
+// and is pure arithmetic: DEPLOY charges VM_DEPLOY_BASE + codeBytes * VM_DEPLOY_PER_BYTE;
+// EXECUTE charges VM_EXECUTE_BASE before its native-metered-gas height gate. After that gate,
+// EXECUTE leaves this static path and uses a bounded rollback dry run plus a safety margin.
+// That pre-VM number is exactly what validateNativeCoinFee judges the native output against.
+// So a static quote reproduces the acceptance rule without entering the VM: no dry-run, no
+// mutex, no compute primitive. What it CANNOT answer is on-chain validity (class-B: contract exists, source has
 // funds, code compiles), so the quote reports `valid: null` and `validated: false` rather than
 // claiming a verdict it did not compute.
 //

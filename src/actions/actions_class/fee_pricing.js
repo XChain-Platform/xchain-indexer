@@ -169,7 +169,8 @@ module.exports = {
     //   v0/v1 inline   - DEPLOY_INLINE  over decoded code bytes (deploy.js)
     //   v2/v3 chunked  - DEPLOY_CHUNKED, base only; the v4 carriers already paid per-byte (deploy.js)
     //   v4 carrier     - DEPLOY_CARRIER over the carried CODE_PART slice (deploy_chunk.js)
-    //   EXECUTE        - EXECUTE base (execute.js; metered gas re-prices only the record)
+    //   EXECUTE        - EXECUTE base before its native-metered height gate. After the
+    //                    gate, computeFeeQuote uses a dry-run estimate instead.
     // The arithmetic itself is NOT reproduced here: it is the single util.vmGasCost each of
     // those handlers calls, so a term added to one is added to this quote too.
     // Returns { gasCost, xchainFee }, { error } for an input the handler would reject outright,

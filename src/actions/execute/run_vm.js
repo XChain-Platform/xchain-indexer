@@ -284,10 +284,12 @@ async function runVmExecution(ctx, limits){
 
     // Per-call gas ceiling. A cross-contract callee (reached via emit.execute)
     // runs against its caller-funded reservation (VM_GAS_LIMIT, validated in
-    // processEmission); top-level EXECUTEs and system-injected callbacks (which
-    // carry IS_EMISSION but no VM_GAS_LIMIT) use the protocol ceiling.
+    // processEmission); activated native-paid top-level calls use their paid
+    // budget, while every other top-level call and system callback uses the protocol ceiling.
     ctx.execCeiling = (data['IS_EMISSION'] && Number.isInteger(data['VM_GAS_LIMIT']))
-        ? data['VM_GAS_LIMIT'] : limits.GAS_CEILING;
+        ? data['VM_GAS_LIMIT']
+        : (Number.isInteger(ctx.paidGasCeiling)
+            ? Math.min(ctx.paidGasCeiling, limits.GAS_CEILING) : limits.GAS_CEILING);
 
     // Unused cross-contract gas reservations accumulated from this run's
     // emitted EXECUTEs (each callee's gasLimit minus what it was billed).

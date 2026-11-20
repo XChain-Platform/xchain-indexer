@@ -26,11 +26,30 @@
 const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { isUsableFeeDestination, usableFeeDestination } = require('../../config/fee_destination.js');
+const gateRegistry = require('../../consensus/gate_registry');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
 const { launchGateAdmits, rollbackPreservingError, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
 const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, feeQuoteNoVerdict, isIncompleteDryRun, dryRunVerdictQuote } = quoteAnswers;
 const { malformedActionAnswer } = quoteAnswers;
 const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightNoVerdict, preflightResult } = quoteAnswers;
+
+const EXECUTE_NATIVE_METERED_GAS_KEY =
+    'execute_native_metered_gas_activation.EXECUTE_NATIVE_METERED_GAS_ACTIVATION';
+const EXECUTE_QUOTE_GAS_SAFETY_MARGIN_PERCENT = 20;
+const EXECUTE_GAS_CEILING = 1000000;
+
+function executeNativeMeteredGasActive(actions, blockIndex){
+    return gateRegistry.activeAt(EXECUTE_NATIVE_METERED_GAS_KEY,
+        actions.config['NETWORK'], actions.config['COIN'], Number(blockIndex), null);
+}
+
+function executeQuoteGas(actions, xchainFee){
+    let baseGas = Number(actions.util.vmGasCost(actions.config['GAS_SCHEDULE'] || {}, 'EXECUTE', 0));
+    let estimated = actions.util.bcfloor(actions.util.bcdiv(
+        xchainFee, actions.config['GAS_PRICE'], 18));
+    let withMargin = Math.ceil(estimated * (100 + EXECUTE_QUOTE_GAS_SAFETY_MARGIN_PERCENT) / 100);
+    return Math.min(EXECUTE_GAS_CEILING, Math.max(baseGas, withMargin));
+}
 
 // How long a public read-only dry-run waits for the block-processing transaction mutex before
 // giving up. The default is deliberately well under the explorer's own 5s hop cap,
@@ -211,9 +230,11 @@ async function staticFeeQuote(policy, base, action, params, feeOutputSats){
 }
 
 // Static and exempt answers skip dryRunAction, so apply the block loop's launch gate here.
-async function mainnetLaunchRefusal(actions, base, action, params, source){
+async function mainnetLaunchRefusal(actions, base, action, params, source, knownBlockIndex){
     if(actions.config['NETWORK'] !== 'mainnet') return null;
-    let tipTime = await actions.indexerDb.getBlockTime(await actions.indexerDb.getLatestBlockIndex());
+    let blockIndex = knownBlockIndex == null
+        ? await actions.indexerDb.getLatestBlockIndex() : knownBlockIndex;
+    let tipTime = await actions.indexerDb.getBlockTime(blockIndex);
     let tx = { data: [action].concat(params).join('|'), source: source, block_time: tipTime };
     return launchGateAdmits(actions, tx)
         ? null
@@ -227,9 +248,9 @@ async function mainnetLaunchRefusal(actions, base, action, params, source){
 // ticker, expired order, ...), surfaced verbatim in `error`/`status`. The fee is the
 // handler's own staged number, so there is no estimator to drift (estimateActionFee is
 // retired) and no supported-subset restriction. The VM/compound actions in
-// FEE_QUOTE_DENYLIST never reach the engine here; DEPLOY/EXECUTE instead get a
-// schedule-priced, verdict-free quote (FEE_QUOTE_STATIC / staticFeeQuote) and XEXEC/BATCH
-// stay unquotable. Never persists.
+// FEE_QUOTE_DENYLIST normally never reach the engine here. DEPLOY and legacy EXECUTE get a
+// schedule-priced, verdict-free quote; activated native-metered EXECUTE uses the bounded dry
+// run below, while XEXEC/BATCH stay unquotable. Never persists.
 //
 // Guardrails for a public endpoint: quotes serialize against the block loop on the db
 // transaction mutex, so each is time-boxed (INDEXER_FEEQUOTE_TIMEOUT_MS, default 10s,
@@ -245,16 +266,18 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     // Native-coin fees are off unless a real FEE_DESTINATION is configured.
     if(!isUsableFeeDestination(feeDestination))
         return Object.assign(base, { supported: false, valid: false, error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
+    let tipBlockIndex = action === 'EXECUTE' ? await this.indexerDb.getLatestBlockIndex() : null;
+    let meteredExecuteQuote = action === 'EXECUTE' && executeNativeMeteredGasActive(this, tipBlockIndex);
 
     // Single classification path (classifyFeeQuoteAction) shared with the conformance test;
     // it re-applies the same trim/uppercase/de-alias normalization (idempotent on the already
     // normalized `action` above) and preserves deny-before-exempt ordering.
     let feeClass = policy.classifyFeeQuoteAction(action);
     if((feeClass === 'denied' && policy.FEE_QUOTE_STATIC.has(action)) || feeClass === 'exempt'){
-        let launchRefusal = await mainnetLaunchRefusal(this, base, action, params, source);
+        let launchRefusal = await mainnetLaunchRefusal(this, base, action, params, source, tipBlockIndex);
         if(launchRefusal) return launchRefusal;
     }
-    if(feeClass === 'denied')
+    if(feeClass === 'denied' && !meteredExecuteQuote)
         return await this.staticFeeQuote(base, action, params, feeOutputSats);
     if(feeClass === 'exempt')
         return exemptFeeQuote(base, action);
@@ -289,9 +312,26 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
         // caller retries instead of reading a proxy timeout as an outage.
         if(isTxLockBusy(e))
             return feeQuoteLockBusy(base, acquireMs);
-        throw e;
+        if(!meteredExecuteQuote) throw e;
+        run = {
+            blockIndex: tipBlockIndex,
+            blockTime: await this.indexerDb.getBlockTime(tipBlockIndex),
+            status: null,
+            error: 'handler threw: ' + ((e && e.message) ? e.message : e),
+        };
     } finally {
         this._feeQuotePending--;
+    }
+    if(isIncompleteDryRun(run) && meteredExecuteQuote){
+        base.blockIndex = run.blockIndex;
+        base.blockTime = run.blockTime;
+        base.gasCost = Number(this.util.vmGasCost(this.config['GAS_SCHEDULE'] || {}, 'EXECUTE', 0));
+        let fallback = await this.priceFeeQuote(base,
+            this.util.bcmul(base.gasCost, this.config['GAS_PRICE'], 8), feeOutputSats);
+        fallback.valid = null;
+        fallback.validated = false;
+        fallback.note = 'EXECUTE dry-run gas estimation was unavailable; this quote covers only the base fee.';
+        return fallback;
     }
     if(isIncompleteDryRun(run))
         return feeQuoteNoVerdict(base, run);
@@ -301,7 +341,20 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     base.status     = run.status;
     base.validated  = true;
 
-    let quote = dryRunVerdictQuote(this, base, run, action) || await this.priceFeeQuote(base, run.xchainFee, feeOutputSats);
+    let verdictQuote = dryRunVerdictQuote(this, base, run, action);
+    let quote;
+    if(!verdictQuote && meteredExecuteQuote){
+        base.estimatedGasCost = this.util.bcfloor(this.util.bcdiv(
+            run.xchainFee, this.config['GAS_PRICE'], 18));
+        base.gasSafetyMarginPercent = EXECUTE_QUOTE_GAS_SAFETY_MARGIN_PERCENT;
+        base.gasCost = executeQuoteGas(this, run.xchainFee);
+        quote = await this.priceFeeQuote(base,
+            this.util.bcmul(base.gasCost, this.config['GAS_PRICE'], 8), feeOutputSats);
+        quote.note = 'EXECUTE fee includes a ' + EXECUTE_QUOTE_GAS_SAFETY_MARGIN_PERCENT +
+            '% dry-run gas safety margin, floored at the base fee and capped at the protocol ceiling.';
+    } else {
+        quote = verdictQuote || await this.priceFeeQuote(base, run.xchainFee, feeOutputSats);
+    }
     // Disclose the oracle usage fee a Mode B DISPENSER owes, as the pre-flight does: the probe
     // skips that output check, so valid:true alone hides a second native output the chain requires.
     if(run.status === 'valid' && run.oracleFeesOwed) quote.oracleFeesOwed = run.oracleFeesOwed;
