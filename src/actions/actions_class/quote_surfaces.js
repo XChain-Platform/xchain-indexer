@@ -322,17 +322,9 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     } finally {
         this._feeQuotePending--;
     }
-    if(isIncompleteDryRun(run) && meteredExecuteQuote){
-        base.blockIndex = run.blockIndex;
-        base.blockTime = run.blockTime;
-        base.gasCost = Number(this.util.vmGasCost(this.config['GAS_SCHEDULE'] || {}, 'EXECUTE', 0));
-        let fallback = await this.priceFeeQuote(base,
-            this.util.bcmul(base.gasCost, this.config['GAS_PRICE'], 8), feeOutputSats);
-        fallback.valid = null;
-        fallback.validated = false;
-        fallback.note = 'EXECUTE dry-run gas estimation was unavailable; this quote covers only the base fee.';
-        return fallback;
-    }
+    // A metered EXECUTE whose dry run did not finish has no gas estimate. Answer the
+    // retryable no-verdict shape with no amount, never a base-only fee: a caller that paid
+    // only the base would run out of gas and lose the fee.
     if(isIncompleteDryRun(run))
         return feeQuoteNoVerdict(base, run);
 

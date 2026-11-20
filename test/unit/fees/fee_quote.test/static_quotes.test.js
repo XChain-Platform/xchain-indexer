@@ -96,7 +96,7 @@ describe('native coin fee quote @regression @tier1', function () {
                 assert.strictEqual(q.requiredFeeSats, 600000);
             });
 
-            it('EXECUTE after activation: falls back to the base quote when the dry run is unavailable', async function () {
+            it('EXECUTE after activation: refuses to quote when the dry run is unavailable', async function () {
                 const before = process.env[EXECUTE_METER_ENV];
                 process.env[EXECUTE_METER_ENV] = '0';
                 let util = makeUtil('LTC', FEE_DEST);
@@ -112,9 +112,10 @@ describe('native coin fee quote @regression @tier1', function () {
                 assert.strictEqual(calls.dryRuns, 1);
                 assert.strictEqual(q.valid, null);
                 assert.strictEqual(q.validated, false);
-                assert.strictEqual(q.gasCost, 1000);
-                assert.strictEqual(q.requiredFeeSats, 10000);
-                assert.match(q.note, /covers only the base fee/);
+                assert.strictEqual(q.noVerdict, true);
+                assert.strictEqual(q.retryable, true);
+                assert.strictEqual(q.requiredFeeSats, undefined, 'a metered EXECUTE without a gas estimate must not quote a payable amount');
+                assert.strictEqual(q.requiredFeeSatsExact, undefined);
             });
 
             it('DEPLOY v2/v3 chunked: base only, the v4 carriers already paid per-byte', async function () {
