@@ -15135,21 +15135,6 @@
       "findFeeOutput returns the first output whose address matches",
       "findFeeOutput returns the first output whose scriptPubKey_address matches"
     ],
-    "b625d9620635a130": [
-      "bin/ci_shard: options and runs caps concurrent shard jobs by available memory or an explicit override",
-      "bin/ci_shard: options and runs does not exceed the requested shard concurrency",
-      "bin/ci_shard: options and runs fails the run when any shard fails or dies on a signal, and prints every shard",
-      "bin/ci_shard: options and runs passes the run only when every shard passed",
-      "bin/ci_shard: options and runs reads an unsharded run with no exit status as red",
-      "bin/ci_shard: options and runs reads quoted globs as single words",
-      "bin/ci_shard: options and runs repeats the options the step ran with, and drops mocha defaults",
-      "bin/ci_shard: options and runs takes CI_SHARDS when sane and otherwise bounds shards by cores and file count",
-      "bin/ci_shard: the chain and its files collects every tracked file the main step globs name, once each",
-      "bin/ci_shard: the chain and its files deals an exact partition of the collected files at every shard count",
-      "bin/ci_shard: the chain and its files finds exactly one main mocha step in the ci chain and keeps every other step in order",
-      "bin/ci_shard: the chain and its files names a dropped, doubled or stray file",
-      "bin/ci_shard: the chain and its files refuses a chain with no mocha step or with two"
-    ],
     "b62915b19c0b37bc": [
       "Security: balance integrity and adversarial arithmetic @regression @tier4 SEC-29: hasBalance({1: '100'}, 1, '50') \u2192 true (normal case)",
       "Security: balance integrity and adversarial arithmetic @regression @tier4 SEC-30: hasBalance({1: '100'}, 1, '200') \u2192 false (insufficient)",
@@ -17739,6 +17724,22 @@
       "HubDbSync refused-row names @regression @tier2 names the snapshot_id of a refused foreign-chain row under XPOLICY, once",
       "HubDbSync refused-row names @regression @tier2 refuses a foreign-network row on arrival and names its snapshot_id once, under XPOLICY",
       "HubDbSync refused-row names @regression @tier2 the foreign-network purge names up to ten snapshot_ids and counts the rest"
+    ],
+    "da9ae3202f81f5e7": [
+      "bin/ci_shard: options and runs caps concurrent shard jobs by available memory or an explicit override",
+      "bin/ci_shard: options and runs does not exceed the requested shard concurrency",
+      "bin/ci_shard: options and runs fails the run when any shard fails or dies on a signal, and prints every shard",
+      "bin/ci_shard: options and runs passes the run only when every shard passed",
+      "bin/ci_shard: options and runs reads an unsharded run with no exit status as red",
+      "bin/ci_shard: options and runs reads quoted globs as single words",
+      "bin/ci_shard: options and runs repeats the options the step ran with, and drops mocha defaults",
+      "bin/ci_shard: options and runs runs package bins with the parent Node runtime ahead of the inherited PATH",
+      "bin/ci_shard: options and runs takes CI_SHARDS when sane and otherwise bounds shards by cores and file count",
+      "bin/ci_shard: the chain and its files collects every tracked file the main step globs name, once each",
+      "bin/ci_shard: the chain and its files deals an exact partition of the collected files at every shard count",
+      "bin/ci_shard: the chain and its files finds exactly one main mocha step in the ci chain and keeps every other step in order",
+      "bin/ci_shard: the chain and its files names a dropped, doubled or stray file",
+      "bin/ci_shard: the chain and its files refuses a chain with no mocha step or with two"
     ],
     "daaa06423dba0a37": [
       "admission binding: the attest-response canonical twin ARMED at height 0 a request below the activation handed a map uses legacy bytes",
@@ -21260,7 +21261,7 @@
   "scripts": {
     "test": {
       "fileCount": 1692,
-      "titleCount": 16471,
+      "titleCount": 16472,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21902,7 +21903,7 @@
         "test/unit/bin/archive_heads_by_author.test.js": "03a05246418ce8ac",
         "test/unit/bin/backfill_price_v1_mappings.test.js": "277896f6701a1593",
         "test/unit/bin/bench_net_balance.test.js": "5067c65bdfb4419a",
-        "test/unit/bin/ci_shard.test.js": "b625d9620635a130",
+        "test/unit/bin/ci_shard.test.js": "da9ae3202f81f5e7",
         "test/unit/bin/compare_credit_debit_sum.test.js": "1ef5df479a5d3d5d",
         "test/unit/bin/count_u64_above_2p53.test.js": "954c7a168f6a266b",
         "test/unit/bin/escrow_arming_tools_in_image.test.js": "171bbe3d05660700",
