@@ -1299,6 +1299,10 @@
       "Chaos: Query Error Propagation QP-07: null query returns empty array without touching pool",
       "Chaos: Query Error Propagation QP-08: successful query returns results normally"
     ],
+    "12f2b5a544062d85": [
+      "protocol_changes/EXECUTE_NATIVE_METERED_GAS row @regression @tier1 arms regtest only from the named environment height",
+      "protocol_changes/EXECUTE_NATIVE_METERED_GAS row @regression @tier1 is a height row unarmed on mainnet and every testnet"
+    ],
     "1332bcf8f7981634": [
       "prelaunchAdmits admits a pinned seed source only",
       "prelaunchAdmits admits any non-mainnet network",
@@ -2172,6 +2176,13 @@
       "contract_state_root: arming boundary and reorg @regression a reorg back below the armed height recommits EMPTY and restores the exact v1 state_root",
       "contract_state_root: arming boundary and reorg @regression below the armed height the slot is EMPTY and state_root is byte-identical to v1",
       "contract_state_root: arming boundary and reorg @regression the arming block full-builds (its predecessor stored NULL) and moves state_root"
+    ],
+    "1e4fc89f17abfed5": [
+      "EXECUTE native metered gas gate @regression @tier1 keeps the fee when a native-paid run exhausts its bought budget",
+      "EXECUTE native metered gas gate @regression @tier1 keeps the native base fee and verdict before activation",
+      "EXECUTE native metered gas gate @regression @tier1 leaves ledger-paid base admission and metered settlement unchanged",
+      "EXECUTE native metered gas gate @regression @tier1 lets a base-fee output buy enough budget for a cheap call",
+      "EXECUTE native metered gas gate @regression @tier1 settles when the bought native gas budget covers the run"
     ],
     "1e6961868b37382e": [
       "SQL schema column parity (table tail) @regression every pre-ledger definition keeps its pinned tail unless a dated migration names the move",
@@ -8829,21 +8840,6 @@
       "protocol_changes: anchor stake and slash regtest overlay @regression @tier1 leaves all five committed regtest values at zero when the variables are unset",
       "protocol_changes: anchor stake and slash regtest overlay @regression @tier1 moves exactly the five intended rows when both variables are set",
       "protocol_changes: anchor stake and slash regtest overlay @regression @tier1 never changes the mainnet or testnet entries"
-    ],
-    "67bef1526f62d2e4": [
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression BATCH/XEXEC refusal on a native-only chain does not advise the XCHAIN lane",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression DEPLOY v0 inline: payable fee, no verdict, engine never invoked",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression DEPLOY v2/v3 chunked: base only, the v4 carriers already paid per-byte",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression DEPLOY v4 carrier: per-byte on the base64 slice as carried",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression EXECUTE: VM_EXECUTE_BASE only (metered gas re-prices the record, not the check)",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression a caller-supplied output below the band is still a hard reject",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression a schedule that cannot price the action fails closed to the refusal",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression an over-long CODE_ENCODING is rejected without being decoded",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression an unpriceable oracle keeps the quote invalid (never a payable-looking answer)",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression missing CODE_ENCODING and unknown VERSION reject before pricing",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression no FEE_DESTINATION still short-circuits before any static pricing",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression non-canonical CODE_ENCODING rejects with the handler string, no fee sizing",
-      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression pre-activation hex era decodes as hex (byte count must match the handler)"
     ],
     "67c89e84e7aba170": [
       "groupByLogicalReward does not mutate the input list or its rows",
@@ -18885,6 +18881,23 @@
       "Price v2 (PRICE batch) @regression @tier3 storage (step 5) stores rounds_json in the snake-cased per-round shape sql/prices.sql documents",
       "Price v2 (PRICE batch) @regression @tier3 storage (step 5) stores the batch signature set in sigs_json, lowercased"
     ],
+    "e80653d78dba60cb": [
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression BATCH/XEXEC refusal on a native-only chain does not advise the XCHAIN lane",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression DEPLOY v0 inline: payable fee, no verdict, engine never invoked",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression DEPLOY v2/v3 chunked: base only, the v4 carriers already paid per-byte",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression DEPLOY v4 carrier: per-byte on the base64 slice as carried",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression EXECUTE after activation: falls back to the base quote when the dry run is unavailable",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression EXECUTE after activation: quotes dry-run gas plus the safety margin",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression EXECUTE before activation: VM_EXECUTE_BASE only",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression a caller-supplied output below the band is still a hard reject",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression a pre-activation schedule that cannot price the action fails closed to the refusal",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression an over-long CODE_ENCODING is rejected without being decoded",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression an unpriceable oracle keeps the quote invalid (never a payable-looking answer)",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression missing CODE_ENCODING and unknown VERSION reject before pricing",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression no FEE_DESTINATION still short-circuits before any static pricing",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression non-canonical CODE_ENCODING rejects with the handler string, no fee sizing",
+      "native coin fee quote @regression @tier1 computeFeeQuote() [dry-run-backed default] static (no-VM) quotes for DEPLOY/EXECUTE @regression pre-activation hex era decodes as hex (byte count must match the handler)"
+    ],
     "e8571b4e4ce9eb18": [
       "getBlockTime() fail-loud fault handling (#898) RETHROWS an infrastructure fault (lock-wait timeout 1205) instead of returning false",
       "getBlockTime() fail-loud fault handling (#898) absorbs a benign missing-table fault (1146) as false and does not cache it",
@@ -21260,8 +21273,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1692,
-      "titleCount": 16472,
+      "fileCount": 1694,
+      "titleCount": 16481,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21478,6 +21491,7 @@
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "4251f6c732dd7817",
+        "test/unit/actions/execute/native_metered_gas_gate.test.js": "1e4fc89f17abfed5",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
@@ -22402,7 +22416,7 @@
         "test/unit/fees/fee_quote.test/fee_destination_sentinel.test.js": "5a194095ec3e3e45",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
-        "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
+        "test/unit/fees/fee_quote.test/static_quotes.test.js": "e80653d78dba60cb",
         "test/unit/fees/fee_quote_dry_run.test.js": "12d85fd04f18a7a4",
         "test/unit/fees/fee_quote_dry_run.test/vm_settled_gas_fee.test.js": "b3bb19f3c24eef10",
         "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
@@ -22713,6 +22727,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/execute_native_metered_gas_row.test.js": "12f2b5a544062d85",
         "test/unit/protocol_changes/file_multipart_row.test.js": "2810fd21a0a8863a",
         "test/unit/protocol_changes/indexer_rows/bridge_policy_detach_row.test.js": "92a7376fba3db524",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
@@ -23339,8 +23354,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1293,
-      "titleCount": 13013,
+      "fileCount": 1295,
+      "titleCount": 13022,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23569,6 +23584,7 @@
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "4251f6c732dd7817",
+        "test/unit/actions/execute/native_metered_gas_gate.test.js": "1e4fc89f17abfed5",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/execute/state_value_astral_escape.test.js": "eb8b9afa8687c40b",
@@ -24234,7 +24250,7 @@
         "test/unit/fees/fee_quote.test/fee_destination_sentinel.test.js": "5a194095ec3e3e45",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
-        "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
+        "test/unit/fees/fee_quote.test/static_quotes.test.js": "e80653d78dba60cb",
         "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
         "test/unit/fees/gas_mint_network_gate.test.js": "bd9b18d570905037",
         "test/unit/fees/guard_gas_chain_gate.test.js": "0aa5897f5f625a79",
@@ -24455,6 +24471,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/execute_native_metered_gas_row.test.js": "12f2b5a544062d85",
         "test/unit/protocol_changes/file_multipart_row.test.js": "2810fd21a0a8863a",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
@@ -24638,8 +24655,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 692,
-      "titleCount": 7243,
+      "fileCount": 694,
+      "titleCount": 7252,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24707,6 +24724,7 @@
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "4251f6c732dd7817",
+        "test/unit/actions/execute/native_metered_gas_gate.test.js": "1e4fc89f17abfed5",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/execute/state_value_astral_escape.test.js": "095d5bf80793c514",
@@ -25074,7 +25092,7 @@
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "ee89b27c2210a19c",
         "test/unit/fees/fee_quote.test/fee_destination_sentinel.test.js": "5a194095ec3e3e45",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
-        "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
+        "test/unit/fees/fee_quote.test/static_quotes.test.js": "e80653d78dba60cb",
         "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
         "test/unit/fees/guard_gas_chain_gate.test.js": "0aa5897f5f625a79",
         "test/unit/fees/guard_gas_disclosure.test/source_tree_scan.test.js": "16ac75c939bbe4ef",
@@ -25228,6 +25246,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/execute_native_metered_gas_row.test.js": "12f2b5a544062d85",
         "test/unit/protocol_changes/file_multipart_row.test.js": "2810fd21a0a8863a",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
@@ -25336,8 +25355,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1293,
-      "titleCount": 13013,
+      "fileCount": 1295,
+      "titleCount": 13022,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25566,6 +25585,7 @@
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "4251f6c732dd7817",
+        "test/unit/actions/execute/native_metered_gas_gate.test.js": "1e4fc89f17abfed5",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/execute/state_value_astral_escape.test.js": "eb8b9afa8687c40b",
@@ -26231,7 +26251,7 @@
         "test/unit/fees/fee_quote.test/fee_destination_sentinel.test.js": "5a194095ec3e3e45",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
-        "test/unit/fees/fee_quote.test/static_quotes.test.js": "67bef1526f62d2e4",
+        "test/unit/fees/fee_quote.test/static_quotes.test.js": "e80653d78dba60cb",
         "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
         "test/unit/fees/gas_mint_network_gate.test.js": "bd9b18d570905037",
         "test/unit/fees/guard_gas_chain_gate.test.js": "0aa5897f5f625a79",
@@ -26452,6 +26472,7 @@
         "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "896700647b9b4d31",
         "test/unit/protocol_changes/custody_guard_row.test.js": "b2eaaa7288f724de",
         "test/unit/protocol_changes/exact_integer_wire_regtest_switch.test.js": "8ab62ec19ab03a3c",
+        "test/unit/protocol_changes/execute_native_metered_gas_row.test.js": "12f2b5a544062d85",
         "test/unit/protocol_changes/file_multipart_row.test.js": "2810fd21a0a8863a",
         "test/unit/protocol_changes/indexer_rows/consensus_bound_indexer_rows.test.js": "6d4320fffe6e67ab",
         "test/unit/protocol_changes/indexer_rows/same_token_offer_refusal_row.test.js": "ee9f70429f252c94",
