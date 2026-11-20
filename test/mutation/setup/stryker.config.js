@@ -10,6 +10,13 @@
 
 'use strict';
 
+const path = require('node:path');
+
+const mocha12Compat = path.join(__dirname, 'mocha_12_compat.cjs');
+require(mocha12Compat);
+// Every Stryker worker discovers plugins, not only the workers that run tests.
+process.env.NODE_OPTIONS = `${process.env.NODE_OPTIONS || ''} --require=${mocha12Compat}`.trim();
+
 module.exports = {
     mutate: [
         'src/utility/fees.js',

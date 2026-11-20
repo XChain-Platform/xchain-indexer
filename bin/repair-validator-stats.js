@@ -40,7 +40,7 @@ const path     = require('path');
 
 // Before the local requires: src/config.js captures the environment once at
 // module load, so .env must already be in process.env when it is first required.
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const config   = require('../src/config.js');
 const Database = require('../src/db');

@@ -18,7 +18,8 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 
 const {
-    splitChain, words, shardCount, shardJobs, dealShards, partitionError, shardArgs, collectMain, runShards, exitOf,
+    splitChain, words, shardCount, shardJobs, dealShards, partitionError, shardArgs, collectMain, runShards, childEnv,
+    exitOf,
 } = require('../../../bin/ci_shard.js');
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
@@ -125,6 +126,12 @@ describe('bin/ci_shard: options and runs', function(){
         assert.strictEqual(shardJobs({}, 8, 8 * GiB), 4);
         assert.strictEqual(shardJobs({ CI_SHARD_JOBS: '2' }, 4, GiB / 2), 2);
         assert.strictEqual(shardJobs({ CI_SHARD_JOBS: '8' }, 3, GiB / 2), 3);
+    });
+
+    it('runs package bins with the parent Node runtime ahead of the inherited PATH', function(){
+        const env = childEnv('/repo', { PATH: '/system/bin', KEEP: 'yes' }, '/runtime/bin/node');
+        assert.strictEqual(env.PATH, ['/repo/node_modules/.bin', '/runtime/bin', '/system/bin'].join(path.delimiter));
+        assert.strictEqual(env.KEEP, 'yes');
     });
 
     it('fails the run when any shard fails or dies on a signal, and prints every shard', async function(){

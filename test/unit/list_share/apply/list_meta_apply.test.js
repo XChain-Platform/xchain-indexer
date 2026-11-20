@@ -38,10 +38,10 @@ require('../parts/list_share_inject_meta.test.js');
 require('../../actions/list_wire/list_store_meta.test.js');
 require('../../actions/contract/list.test/list_rename_no_head.test.js');
 
-const vectors = require(path.resolve(
-    __dirname,
-    '../../../../../xchain-documentation/protocol/test-vectors/list_share.json'
-));
+const DOCS_DIR = process.env.XCHAIN_DOCS_DIR || path.resolve(
+    __dirname, '../../../../../xchain-documentation'
+);
+const vectors = require(path.join(DOCS_DIR, 'protocol/test-vectors/list_share.json'));
 
 function canonicalRow(vector){
     const row = { ...vector, finalizing_view: vector.view };

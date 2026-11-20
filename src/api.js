@@ -26,7 +26,7 @@ const dotenv        = require('dotenv');
 // Parse in .env config data BEFORE any local require. src/config.js captures the
 // environment once at module load, and XChainIndexer below loads it, so a later
 // dotenv.config() would leave every .env-supplied setting at its default.
-dotenv.config();
+dotenv.config({ quiet: true });
 const express       = require('express');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');

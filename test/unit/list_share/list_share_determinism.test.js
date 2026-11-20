@@ -14,10 +14,10 @@ const assert = require('assert');
 const path = require('path');
 const H = require('./helpers/apply_harness.js');
 
-const vectors = require(path.resolve(
-    __dirname,
-    '../../../../xchain-documentation/protocol/test-vectors/list_share.json'
-));
+const DOCS_DIR = process.env.XCHAIN_DOCS_DIR || path.resolve(
+    __dirname, '../../../../xchain-documentation'
+);
+const vectors = require(path.join(DOCS_DIR, 'protocol/test-vectors/list_share.json'));
 const versions = vectors.canonicals;
 const byBytes = (a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
 

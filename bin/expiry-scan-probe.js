@@ -50,7 +50,7 @@ function parseArgs(argv){
 
 // Open the indexer DB through the standard Database class, as the indexer itself does.
 function openIndexerDb(){
-    require('dotenv').config();
+    require('dotenv').config({ quiet: true });
     // Required after dotenv: src/config.js captures the environment once at load.
     const config   = require('../src/config.js');
     const Database = require('../src/db');

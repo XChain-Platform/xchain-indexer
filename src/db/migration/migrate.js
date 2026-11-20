@@ -41,7 +41,7 @@
 const fs       = require('fs');
 const path     = require('path');
 const dotenv   = require('dotenv');
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const Database = require('..');
 const config   = require('../../config.js');
