@@ -25,6 +25,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const Database = require('../../../src/db');
+const { SYNC_SHAREABLE_DECLARED_TABLES } = require('../../../src/db/database/schema/shared_tables.js');
 
 const SQL_DIR = path.join(__dirname, '..', '..', '..', 'src', 'sql');
 
@@ -94,5 +95,22 @@ describe('startup drift detection sees whole live tables no SQL source declares 
         assert.ok(live.length > 0, 'fixture assumption: the sync service declares tables');
         const { store } = await bootWithLiveTables(live);
         assert.deepStrictEqual([...store.keys()], [], 'add the table to the infrastructure set');
+    });
+
+    it('keeps every shared sync definition schema-equivalent and classified', function () {
+        const syncSql = path.join(__dirname, '..', '..', '..', '..', 'xchain-sync', 'src', 'sql');
+        if(!fs.existsSync(syncSql)) return this.skip();
+        const indexerFiles = new Set(fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql')));
+        const overlap = fs.readdirSync(syncSql).filter(file => indexerFiles.has(file)).sort();
+        assert.deepStrictEqual(overlap.map(file => file.slice(0, -4)),
+            SYNC_SHAREABLE_DECLARED_TABLES.slice().sort());
+        const executableSql = raw => raw.split('\n')
+            .map(line => line.replace(/--.*$/, '').trim())
+            .filter(Boolean)
+            .join(' ');
+        for(const file of overlap)
+            assert.strictEqual(executableSql(fs.readFileSync(path.join(syncSql, file), 'utf8')),
+                executableSql(fs.readFileSync(path.join(SQL_DIR, file), 'utf8')),
+                file + ' has different executable SQL across services');
     });
 });

@@ -998,12 +998,9 @@ class AnchorRecovery {
     }
 
     async writeBatch(archive, report, network, anchorTxid, rewards){
-        // Parity carve-out (documented): unlike cross_chain_matches/calls below,
-        // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
-        // cannot carry one (hub ids are hub-local; every hub persists these rows
-        // independently), so the table is a NATURAL-KEY mirror on uq_cap_snap and
-        // hub_db_sync strips wire ids + bootstraps it from since_id=0.
-        // Local AUTO_INCREMENT numbering here is therefore harmless by design.
+        // Archived ids are hub-local provenance, so recovery never binds them into
+        // mirror primary keys. Each table lands on its natural key under a local
+        // AUTO_INCREMENT surrogate, matching hub_db_sync and the modular writers.
         for(let s of (archive.capability_snapshots || [])){
             await this.db.doQuery(
                 'INSERT IGNORE INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source) VALUES (?, ?, ?, ?, ?)',
@@ -1058,15 +1055,9 @@ class AnchorRecovery {
                         [m.status, anchorTxid, m.match_id]);
                 }
             } else {
-                // Rebuild under the ORIGINAL hub-assigned id as provenance only.
-                // Settlement order is (snapshot_block, match_id), so replay does
-                // not depend on this value; keeping it preserves archive
-                // byte-parity. Archives published before the field was added carry
-                // no id; those rows fall back to AUTO_INCREMENT.
-                let hasId = Number.isFinite(Number(m.id)) && Number(m.id) > 0;
-                let idCol  = hasId ? 'id, ' : '';
-                let idMark = hasId ? '?, ' : '';
-                let idVal  = hasId ? [Number(m.id)] : [];
+                // The archived id is per-hub provenance and is never bound. Rows
+                // land on uq_match_id under a local surrogate id, matching the live
+                // mirror and preventing collisions when archive leadership rotates.
                 // finalizing_view rides the archive (MATCH_KEYS) and feeds the EQUIV
                 // signing canonical (matchCanonical) exactly as for calls below.
                 // Dropping it lands view>0 matches at view 0 and forks re-verification.
@@ -1076,12 +1067,12 @@ class AnchorRecovery {
                 // dropping finalizing_view. Pre-royalty archives carry no key → null.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_matches
-                        (${idCol}match_id, snapshot_block, network,
+                        (match_id, snapshot_block, network,
                          a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr, a_payout_legs,
                          b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr, b_payout_legs,
                          effective_time, validator_signatures, status, finalizing_view, anchor_txid)
-                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [...idVal, m.match_id, Number(m.snapshot_block), m.network,
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [m.match_id, Number(m.snapshot_block), m.network,
                      m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr, (m.a_payout_legs != null ? String(m.a_payout_legs) : null),
                      m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr, (m.b_payout_legs != null ? String(m.b_payout_legs) : null),
                      Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0, anchorTxid]);
@@ -1212,9 +1203,9 @@ class AnchorRecovery {
                         [c.status, c.call_id, c.phase]);
                 }
             } else {
-                // Rebuild under the ORIGINAL hub-assigned id as provenance only.
-                // Injection order is (snapshot_block, call_id), so replay does not
-                // depend on this value; keeping it preserves archive byte-parity.
+                // The archived id is per-hub provenance and is never bound. Rows
+                // land on (call_id, phase) under a local surrogate id, matching the
+                // live mirror and preventing cross-leader primary-key collisions.
                 // finalizing_view is signed into the EQUIV canonical (the equivocation header):
                 // the indexer rebuilds the XCALL signing canonical from this column
                 // to re-verify the hub's 2f+1 sigs. Omitting it lets the NOT NULL
@@ -1224,13 +1215,13 @@ class AnchorRecovery {
                 // the archive (CALL_KEYS) and the verifier already trusts it.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_calls
-                        (id, call_id, phase, snapshot_block, network,
+                        (call_id, phase, snapshot_block, network,
                          source_chain, source_action_index, source_contract_index,
                          target_chain, target_contract_index, method, params_json,
                          gas_limit, cross_hops, effective_time, status, result_status,
                          return_payload_b64, validator_signatures, finalizing_view)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [Number(c.id), c.call_id, c.phase, Number(c.snapshot_block), c.network,
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [c.call_id, c.phase, Number(c.snapshot_block), c.network,
                      c.source_chain, Number(c.source_action_index), Number(c.source_contract_index),
                      c.target_chain, Number(c.target_contract_index), c.method, c.params_json,
                      Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.status,

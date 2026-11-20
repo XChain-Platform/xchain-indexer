@@ -35,6 +35,8 @@ const stakeWeightCollation = require('../../consensus/gates/stake_weight_collati
 const { getLogger } = require('../../observability/index.js');
 const { recordShapeDrift } = require('../shared.js');
 const { isTableDefinitionFile, tableNameOf } = require('./schema/table_files.js');
+const { SYNC_SHAREABLE_DECLARED_TABLES } = require('./schema/shared_tables.js');
+const syncShareableDeclaredTables = new Set(SYNC_SHAREABLE_DECLARED_TABLES);
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -180,10 +182,13 @@ module.exports = {
         let tableFiles = files.filter(isTableDefinitionFile);
         let exists     = await declaredTableExistence(this, db, tableFiles);
         if(!exists) return false;
-        // Fresh install (no declared table yet): seed the ledger FIRST, atomically. A kill or a
-        // failed CREATE after the seed leaves a complete ledger, and every table still missing is
-        // built from src/sql at this release's shape on the next boot, so the two cannot disagree.
-        if(tableFiles.length > 0 && ![...exists.values()].some(Boolean))
+        // A sibling sync service may have created its schema-equivalent shared tables first.
+        // The install is still fresh until an indexer-exclusive declared table exists.
+        let indexerTableExists = [...exists.entries()].some(([declaredFile, present]) =>
+            present && !syncShareableDeclaredTables.has(tableNameOf(declaredFile)));
+        // Seed the ledger before creating the first indexer-exclusive table. A failed CREATE
+        // then leaves the full ledger beside tables built from this release's definitions.
+        if(tableFiles.length > 0 && !indexerTableExists)
             await this.recordFreshSchemaMigrations(db);
         // Loop through SQL files
         for (file of tableFiles){

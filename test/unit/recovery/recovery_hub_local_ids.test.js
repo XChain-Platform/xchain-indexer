@@ -23,9 +23,11 @@
 
 const assert = require('assert');
 
+const AnchorRecovery  = require('../../../bin/recovery.js');
 const checkpointPrice = require('../../../bin/recovery/checkpoint_price.js');
 const bridgePolicy    = require('../../../bin/recovery/bridge_policy.js');
 const listShare       = require('../../../bin/recovery/list_share.js');
+const { rawMatch, rawCall } = require('../../fixtures/anchor-archive.js');
 
 // Two archive rows that share a hub id and differ in every natural key.
 function pair(make) {
@@ -91,4 +93,28 @@ describe('recovery never binds an archived hub id into a mirror key @regression 
             assert.strictEqual(report[counter], 0);
         });
     }
+
+    it('matches and calls sharing an archived id land on their natural keys', async function () {
+        const db = recordingDb(false);
+        const recovery = new AnchorRecovery(db, { log: () => {}, util: {} });
+        const report = { bridges: 0, policies: 0, checkpoints: 0, prices: 0, tombstones: 0,
+                         lists: 0, snapshots: 0, matches: 0, calls: 0 };
+        const archive = {
+            matches: pair(n => rawMatch('match-' + n)),
+            calls: pair(n => rawCall('call-' + n, 'dispatch'))
+        };
+
+        await recovery.writeBatch(archive, report, 'regtest', null, []);
+
+        const inserts = db.inserts.filter(insert => /cross_chain_(matches|calls)/.test(insert.sql));
+        assert.strictEqual(inserts.length, 4);
+        assert.strictEqual(report.matches, 2);
+        assert.strictEqual(report.calls, 2);
+        for(const insert of inserts) {
+            const columns = insertColumns(insert.sql);
+            assert.ok(!columns.includes('id'), 'the hub id is not a bound column');
+            assert.strictEqual(columns.length, insert.params.length);
+            assert.ok(!insert.params.includes(500), 'the archived hub id is not a bind value');
+        }
+    });
 });

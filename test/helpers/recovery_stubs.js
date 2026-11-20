@@ -187,9 +187,9 @@ function callRows(calls, sql, params) {
     }
     if (sql.startsWith('INSERT INTO cross_chain_calls')) {
         // finalizing_view is the last bound value (after validator_signatures).
-        calls.push({ id: params[0], call_id: params[1], phase: params[2],
-                     effective_time: params[14], status: params[15],
-                     validator_signatures: params[18], finalizing_view: params[params.length - 1] });
+        calls.push({ id: calls.length + 1, call_id: params[0], phase: params[1],
+                     effective_time: params[13], status: params[14],
+                     validator_signatures: params[17], finalizing_view: params[params.length - 1] });
         return [];
     }
     return undefined;

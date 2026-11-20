@@ -71,10 +71,7 @@ async function verifyMatchQuorum(m, verdict){
         return false;
     }
 
-    let sigs;
-    try { sigs = JSON.parse(m.validator_signatures || '[]'); }
-    catch(_) { sigs = []; }
-
+    let sigs = parseSignatureList(m.validator_signatures);
     let canonical = this.canonical(m);
     let validSigners = collectValidSigners(validators, sigs, canonical);
     let quorumMet = weighted
@@ -121,6 +118,16 @@ function collectValidSigners(validators, sigs, canonical){
     return validSigners;
 }
 
+// A mirrored signature column is untrusted row data. Invalid JSON, a JSON value
+// other than an array, and non-object entries all mean zero usable signatures.
+function parseSignatureList(text){
+    let sigs;
+    try { sigs = JSON.parse(text || '[]'); }
+    catch(_){ return []; }
+    if(!Array.isArray(sigs)) return [];
+    return sigs.filter(s => s && typeof s === 'object');
+}
+
 /**
  * The quorum rule over an already-built canonical and the locked cross_chain snapshot at
  * snapshotBlock: stake-weighted above STAKE_WEIGHTED_QUORUM, else the legacy 2f+1 count.
@@ -136,12 +143,7 @@ async function verifyCanonicalQuorum(indexerDb, canonical, signaturesJson, snaps
     let N = (validators && validators.length) ? validators.length : 0;
     if(N === 0) return { met: false, snapshotAbsent: true };
 
-    let sigs;
-    try { sigs = JSON.parse(signaturesJson || '[]'); }
-    catch(_) { sigs = []; }
-    if(!Array.isArray(sigs)) sigs = [];
-
-    let validSigners = collectValidSigners(validators, sigs.filter(s => s && typeof s === 'object'), canonical);
+    let validSigners = collectValidSigners(validators, parseSignatureList(signaturesJson), canonical);
     let met = weighted
         ? swq.meetsStakeThreshold(validators, validSigners)
         : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
@@ -150,5 +152,7 @@ async function verifyCanonicalQuorum(indexerDb, canonical, signaturesJson, snaps
 
 module.exports = {
     verifyMatchQuorum,
-    verifyCanonicalQuorum
+    verifyCanonicalQuorum,
+    collectValidSigners,
+    parseSignatureList
 };

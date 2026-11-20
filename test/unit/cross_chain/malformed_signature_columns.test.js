@@ -23,15 +23,18 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const crypto = require('crypto');
 
-const { verifyCanonicalQuorum } = require('../../../src/actions/cross_settle/quorum.js');
+const { verifyMatchQuorum, verifyCanonicalQuorum } = require('../../../src/actions/cross_settle/quorum.js');
+const { verifyDispatchQuorum } = require('../../../src/actions/xexec/dispatch_quorum.js');
+const Xcall = require('../../../src/actions/xcall/index.js');
 
 const PUBKEY = 'b'.repeat(64);
 
 // A single-validator snapshot, served for both the weighted and the count read so the test
 // does not depend on which side of the quorum gate the row's height falls.
-function snapshotDb(){
-    let validators = [{ pubkey: PUBKEY, source_id: 1, stake: '1' }];
+function snapshotDb(pubkey = PUBKEY){
+    let validators = [{ pubkey, source: 'validator-1', weight: '1' }];
     return {
         getValidatorsByCapability:  async () => validators,
         getStakeWeightsByCapability: async () => validators
@@ -48,5 +51,71 @@ describe('canonical quorum signature shape guard @regression @tier1', function (
             assert.strictEqual(q.met, false);
             assert.strictEqual(q.snapshotAbsent, false);
         });
+
+        it('match quorum reads the column ' + text + ' as no signers without throwing', async function () {
+            let verdict = {};
+            let met = await verifyMatchQuorum.call({
+                indexerDb: snapshotDb(),
+                canonical: () => 'canonical'
+            }, {
+                snapshot_block: 1,
+                network: 'regtest',
+                match_id: 'ab'.repeat(32),
+                validator_signatures: text
+            }, verdict);
+            assert.strictEqual(met, false);
+            assert.notStrictEqual(verdict.snapshotAbsent, true);
+        });
+
+        it('dispatch quorum reads the column ' + text + ' as no signers without throwing', async function () {
+            let q = await verifyDispatchQuorum.call({
+                indexerDb: snapshotDb(),
+                canonical: () => 'canonical'
+            }, {
+                snapshot_block: 1,
+                network: 'regtest',
+                validator_signatures: text
+            });
+            assert.strictEqual(q.synced, true);
+            assert.strictEqual(q.quorumMet, false);
+            assert.deepStrictEqual(q.validSigners, []);
+        });
+
+        it('result quorum reads the column ' + text + ' as no signers without throwing', async function () {
+            let q = await Xcall.prototype.verifyResultQuorum.call({
+                indexerDb: snapshotDb(),
+                resultCanonical: () => 'canonical'
+            }, {
+                snapshot_block: 1,
+                network: 'regtest',
+                validator_signatures: text
+            });
+            assert.strictEqual(q.synced, true);
+            assert.strictEqual(q.quorumMet, false);
+            assert.deepStrictEqual(q.validSigners, []);
+        });
     }
+
+    it('preserves a valid one-validator quorum in all four verifiers', async function () {
+        const canonical = 'canonical';
+        const pair = crypto.generateKeyPairSync('ed25519');
+        const pubkey = pair.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex');
+        const sig = crypto.sign(null, Buffer.from(canonical), pair.privateKey).toString('hex');
+        const validatorSignatures = JSON.stringify([{ pubkey, sig }]);
+        const db = snapshotDb(pubkey);
+        const row = { snapshot_block: 1, network: 'regtest', match_id: 'ab'.repeat(32), validator_signatures: validatorSignatures };
+
+        const canonicalResult = await verifyCanonicalQuorum(db, canonical, validatorSignatures, 1, 'regtest');
+        assert.strictEqual(canonicalResult.met, true);
+        assert.strictEqual(await verifyMatchQuorum.call({ indexerDb: db, canonical: () => canonical }, row, {}), true);
+        const dispatch = await verifyDispatchQuorum.call({ indexerDb: db, canonical: () => canonical }, row);
+        assert.strictEqual(dispatch.quorumMet, true);
+        assert.deepStrictEqual(dispatch.validSigners, [pubkey]);
+        const result = await Xcall.prototype.verifyResultQuorum.call({
+            indexerDb: db,
+            resultCanonical: () => canonical
+        }, row);
+        assert.strictEqual(result.quorumMet, true);
+        assert.deepStrictEqual(result.validSigners, [pubkey]);
+    });
 });

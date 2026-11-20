@@ -186,8 +186,11 @@ describe('JSON-RPC fee family @regression @tier1', function () {
             assert.deepStrictEqual(await rpc[name]({ action: 42 }), { error: 'action is required' });
         const notReady = buildFeesRpc({ indexer: fakeIndexer({ actions: null }), ENABLE_DRYRUN: true });
         for (const name of ['feequote', 'preflight', 'feequotedryrun'])
-            assert.deepStrictEqual(await notReady[name]({ action: 'SEND' }), { error: 'indexer not ready' });
-        assert.deepStrictEqual(await notReady.feeschedule(), { error: 'indexer not ready' });
+            assert.deepStrictEqual(await notReady[name]({ action: 'SEND' }),
+                { error: 'indexer not ready', code: 'INDEXER_NOT_READY', retryable: true });
+        assert.deepStrictEqual(await notReady.feeschedule(),
+            { error: 'indexer not ready', code: 'INDEXER_NOT_READY', retryable: true });
+        assert.deepStrictEqual(await notReady.feequote({}), { error: 'action is required' });
         assert.ok(actions.computeFeeQuote.notCalled && actions.computePreflight.notCalled);
     });
 
@@ -197,9 +200,12 @@ describe('JSON-RPC fee family @regression @tier1', function () {
         const actions = { computeFeeQuote: sinon.stub().rejects(boom), computePreflight: sinon.stub().rejects(boom),
                           getFeeSchedule: sinon.stub().rejects(boom), computeFeeQuoteDryRun: sinon.stub().rejects(boom) };
         const rpc = buildFeesRpc({ indexer: indexerWithActions(actions), ENABLE_DRYRUN: true });
-        assert.deepStrictEqual(await rpc.feequote({ action: 'SEND' }), { error: 'failed to compute fee quote' });
-        assert.deepStrictEqual(await rpc.preflight({ action: 'SEND' }), { error: 'failed to compute pre-flight' });
-        assert.deepStrictEqual(await rpc.feeschedule(), { error: 'failed to fetch fee schedule' });
+        assert.deepStrictEqual(await rpc.feequote({ action: 'SEND' }),
+            { error: 'failed to compute fee quote', code: 'INDEXER_INTERNAL' });
+        assert.deepStrictEqual(await rpc.preflight({ action: 'SEND' }),
+            { error: 'failed to compute pre-flight', code: 'INDEXER_INTERNAL' });
+        assert.deepStrictEqual(await rpc.feeschedule(),
+            { error: 'failed to fetch fee schedule', code: 'INDEXER_INTERNAL' });
         assert.deepStrictEqual(await rpc.feequotedryrun({ action: 'SEND' }), { error: 'dry-run failed: vm cap' });
     });
 
@@ -260,14 +266,14 @@ describe('JSON-RPC fee family: oraclefeequote @regression @tier1', function () {
                 { error: 'oracleAddress, giveTick and fiatCode are required' });
             const noUtil = buildFeesRpc({ indexer: fakeIndexer({ util: null }), ENABLE_DRYRUN: false });
             assert.deepStrictEqual(await noUtil.oraclefeequote({ oracleAddress: 'D1', giveTick: 'T', fiatCode: 'USD' }),
-                { error: 'indexer not ready' });
+                { error: 'indexer not ready', code: 'INDEXER_NOT_READY', retryable: true });
             const empty = buildFeesRpc({ indexer: indexerWithActions({}, util, { getLatestBlockIndex: async () => 0, getBlockTime: async () => false }),
                                          ENABLE_DRYRUN: false });
             assert.deepStrictEqual(await empty.oraclefeequote({ oracleAddress: 'D1', giveTick: 'T', fiatCode: 'USD' }),
-                { error: 'no indexed block to quote against' });
+                { error: 'no indexed block to quote against', code: 'INDEXER_NOT_READY', retryable: true });
             util.quoteOracleFee.rejects(new Error('gone'));
             assert.deepStrictEqual(await rpc.oraclefeequote({ oracleAddress: 'D1', giveTick: 'T', fiatCode: 'USD' }),
-                { error: 'failed to compute oracle fee quote' });
+                { error: 'failed to compute oracle fee quote', code: 'INDEXER_INTERNAL' });
         });
     });
 });

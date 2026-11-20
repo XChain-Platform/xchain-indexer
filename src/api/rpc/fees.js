@@ -31,6 +31,14 @@ const QUOTE_PARAMS_MAX_BYTES = 390000;
 const FEE_MODE_MAX_LENGTH = 16;
 const FEE_OUTPUT_MAX_LENGTH = 32;
 
+function indexerNotReady(message){
+    return { error: message, code: 'INDEXER_NOT_READY', retryable: true };
+}
+
+function indexerInternal(message){
+    return { error: message, code: 'INDEXER_INTERNAL' };
+}
+
 function invalidQuoteParams(params){
     let primitive = value => value == null || ['string', 'number', 'boolean'].includes(typeof value);
     if(!primitive(params) && !(Array.isArray(params) && params.every(primitive)))
@@ -113,14 +121,14 @@ function feeQuoteRpc({ indexer }){
             let parsedFeeOutput = feeOutput(feeOutputSats);
             if(parsedFeeOutput.error) return parsedFeeOutput;
             if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             try {
                 return await indexer.actions.computeFeeQuote({
                     action, params, source: parsedSource.value, feeOutputSats: parsedFeeOutput.value
                 });
             } catch (err) {
                 getLogger().error('feequote error:', err);
-                return { error: 'failed to compute fee quote' };
+                return indexerInternal('failed to compute fee quote');
             }
         },
 
@@ -129,12 +137,12 @@ function feeQuoteRpc({ indexer }){
         // feequote. Public read (surfaced to wallets/SDK via the explorer proxy).
         async feeschedule(){
             if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             try {
                 return await indexer.actions.getFeeSchedule();
             } catch (err) {
                 getLogger().error('feeschedule error:', err);
-                return { error: 'failed to fetch fee schedule' };
+                return indexerInternal('failed to fetch fee schedule');
             }
         },
     };
@@ -195,7 +203,7 @@ function oracleFeeQuoteRpc({ indexer }){
             if(parsedResult.error) return parsedResult;
             let parsed = parsedResult.value;
             if(!indexer.indexerDb || !indexer.util)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             // oracle_prices is utf8mb3, so a key holding a character above U+FFFF names no
             // oracle row: answer what an unknown ASCII key gets, without the bind that would
             // throw errno 1267 (Illegal mix of collations). The consensus readers stay as is.
@@ -210,7 +218,7 @@ function oracleFeeQuoteRpc({ indexer }){
                     ts = Number(await db.getBlockTime(tip)) || 0;
                 }
                 if(!Number.isFinite(ts) || ts <= 0)
-                    return { error: 'no indexed block to quote against' };
+                    return indexerNotReady('no indexed block to quote against');
                 let quote = await indexer.util.quoteOracleFee(ts, {
                     ORACLE_ADDRESS: parsed.oracleAddress,
                     GIVE_COIN:      parsed.giveCoin || indexer.config['COIN'],
@@ -238,7 +246,7 @@ function oracleFeeQuoteRpc({ indexer }){
                 };
             } catch (err) {
                 getLogger().error('oraclefeequote error:', err);
-                return { error: 'failed to compute oracle fee quote' };
+                return indexerInternal('failed to compute oracle fee quote');
             }
         },
     };
@@ -271,14 +279,14 @@ function preflightRpc({ indexer }){
             });
             if(parsedMode.error) return parsedMode;
             if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             try {
                 return await indexer.actions.computePreflight({
                     action, params, source: parsedSource.value, feeMode: parsedMode.value
                 });
             } catch (err) {
                 getLogger().error('preflight error:', err);
-                return { error: 'failed to compute pre-flight' };
+                return indexerInternal('failed to compute pre-flight');
             }
         },
 
@@ -297,7 +305,7 @@ function preflightRpc({ indexer }){
             let parsedSource = quoteSource(source);
             if(parsedSource.error) return parsedSource;
             if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             try {
                 return await indexer.actions.computeFeeQuoteDryRun({
                     action, params, source: parsedSource.value, feeOutputs
