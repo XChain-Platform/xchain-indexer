@@ -2351,6 +2351,11 @@
       "nextBarrierHold / barrierHoldMs @regression @tier1 starts a hold when a block is deferred behind a barrier",
       "nextBarrierHold / barrierHoldMs @regression @tier1 the notified flag survives a retry so a crossing is announced once"
     ],
+    "20e50aa12daec125": [
+      "mirrored checkpoint superseder reader @regression @tier1 fails closed when the consensus reader is absent",
+      "mirrored checkpoint superseder reader @regression @tier1 queries every later superseding marker without candidate-page filters",
+      "mirrored checkpoint superseder reader @regression @tier1 rejects a marker outside the eight-row candidate page"
+    ],
     "2100aec35b3f146e": [
       "AIRDROP zero ledger-leg activation @regression @tier1 keeps positive payer and recipient rows above activation",
       "AIRDROP zero ledger-leg activation @regression @tier1 keeps zero payer and recipient rows while regtest is unarmed",
@@ -3335,6 +3340,11 @@
       "Issue handler @regression @tier1 lock immutability explicit LOCK_MAX_SUPPLY=0 on an uncapped token (no MAX_SUPPLY) is a valid no-op lock",
       "Issue handler @regression @tier1 re-issuance / ownership re-issuance by non-owner \u2192 invalid",
       "Issue handler @regression @tier1 re-issuance / ownership re-issuance by owner \u2192 valid"
+    ],
+    "2bf8b51176e6e198": [
+      "decoder REORG_HALT during catch-up @regression @tier1 control: a probe fault keeps the last known state and catch-up continues",
+      "decoder REORG_HALT during catch-up @regression @tier1 control: reaches the tip and probes only on cadence when no halt lands",
+      "decoder REORG_HALT during catch-up @regression @tier1 stops on the next cadence probe and makes readiness fail closed"
     ],
     "2bf9fdbc116b80d0": [
       "merkle stakes-root + block-leaf golden vectors (#4751) @regression @tier1 blockMerkleLeaves cross-kind ordering (consensus-critical, leaf index defines proof position) emits ledger (credit, debit, escrow) -> actions -> contract sub-tables in the frozen order",
@@ -4402,6 +4412,11 @@
       "config.readEnvNow @regression returns the NEW value on a second call, so nothing is cached at load",
       "config.readEnvNow @regression returns undefined for a variable that is unset or has been deleted"
     ],
+    "37a73b7bc5d27658": [
+      "retained state subtree root coverage @regression @tier1 filters null shadow slots without dropping a live shadow root",
+      "retained state subtree root coverage @regression @tier1 keeps every committed and shadow root column in the reclaim union",
+      "retained state subtree root coverage @regression @tier1 keeps the orphan metric union in parity with the reclaim union"
+    ],
     "3863f168f47cce2b": [
       "Utility.logAmount() @regression does not invent a zero for a field an invalid action never supplied",
       "Utility.logAmount() @regression handles the smallest 18-decimal amounts the protocol allows",
@@ -5312,6 +5327,11 @@
       "createValidatorReward call-site census @regression @tier1 keys round_qualifier through rewardRoundQualifier at both anchor-reward writers",
       "createValidatorReward call-site census @regression @tier1 matches the known set of call sites",
       "createValidatorReward call-site census @regression @tier1 names rollcall_publish as a derive_block_index writer"
+    ],
+    "42bbb8c866663d20": [
+      "price time barrier health clear floor @regression @tier1 reports no clock floor after mirror admission activates",
+      "price time barrier health clear floor @regression @tier1 reports no future wait after the block timestamp has passed",
+      "price time barrier health clear floor @regression @tier1 reports the block timestamp while that timestamp is still in the future"
     ],
     "42d2e6ea86973412": [
       "destroys leg ordinal @regression a re-parse rewrites a leg's values without moving it on the wire",
@@ -11273,6 +11293,18 @@
       "CROSS_SETTLE per-block cap flag day @regression @tier1 the pass honours the gate gate OFF: drains the full effective backlog, the legacy pass byte for byte",
       "CROSS_SETTLE per-block cap flag day @regression @tier1 the pass honours the gate gate ON: settles the capped prefix and asks the db for exactly the protocol cap"
     ],
+    "85c0b615951b7499": [
+      "fresh schema detection tolerates sync-created indexer tables @regression @tier1 does not seed when an indexer-only declared table already exists",
+      "fresh schema detection tolerates sync-created indexer tables @regression @tier1 seeds the migration ledger when only shared tables already exist",
+      "schema creation lock and stale snapshot handling @regression @tier1 creates nothing when the migration lock cannot be acquired",
+      "schema creation lock and stale snapshot handling @regression @tier1 does not take the migration lock when every declared table is present",
+      "schema creation lock and stale snapshot handling @regression @tier1 fails loudly when CREATE and information_schema disagree",
+      "schema creation lock and stale snapshot handling @regression @tier1 holds the migration lock across the second snapshot and create loop",
+      "schema creation lock and stale snapshot handling @regression @tier1 reconciles a table that appears while waiting for the lock",
+      "schema creation lock and stale snapshot handling @regression @tier1 reconciles after CREATE reports that a racing peer created the table",
+      "schema creation lock and stale snapshot handling @regression @tier1 releases the migration lock when table creation fails",
+      "schema creation lock and stale snapshot handling @regression @tier1 seeds under the outer lock without acquiring a second lock"
+    ],
     "85e3f0663abbdf76": [
       "Integration: SLASH mid-cooldown must burn the bond once (real DB + real VM) @regression @tier1 burns the bond EXACTLY ONCE: slash event == bond (not 2\u00d7), single unstakes debit",
       "Integration: SLASH mid-cooldown must burn the bond once (real DB + real VM) @regression @tier1 re-deriving from a clean DB yields the IDENTICAL hash chain (determinism = no fork)",
@@ -12169,6 +12201,13 @@
       "integration launcher: each block runs production's pass sequence rolls the block back and rethrows when a pass throws, with the cache already closed",
       "integration launcher: each block runs production's pass sequence runs without a VM runtime, as production does",
       "integration launcher: each block runs production's pass sequence seeds gas after the settlement group and before the cross-chain group"
+    ],
+    "9066cb88d17359f3": [
+      "capability snapshot judge failure policy @regression @tier1 holds a proof-gated row when the pre-proof mirror read throws",
+      "capability snapshot judge failure policy @regression @tier1 holds when the proof-gate decision itself throws",
+      "capability snapshot judge failure policy @regression @tier1 keeps legacy apply-on-throw behavior off the proof-gated path",
+      "capability snapshot judge failure policy @regression @tier1 never releases a retained hold through an apply-on-throw fallback",
+      "capability snapshot judge failure policy @regression @tier1 requires proof only for a mirror-resolved capability at an active height"
     ],
     "90ad908fbf1ec561": [
       "UtxoTracker call() unavailable tagging @regression @tier1 does NOT tag a JSON-RPC error answer",
@@ -13604,6 +13643,13 @@
       "protocol_changes VM lint nesting-depth row is active on regtest at genesis, unarmed on mainnet and armed on each testnet chain",
       "protocol_changes VM lint nesting-depth row registers the per-chain height map"
     ],
+    "a03766e6d8a3c0b4": [
+      "refused DEPLOY carrier text storage @regression @tier1 clips an over-width hash to the CHAR(64) column",
+      "refused DEPLOY carrier text storage @regression @tier1 keeps refused text that already fits byte-identical",
+      "refused DEPLOY carrier text storage @regression @tier1 keeps valid carrier text byte-identical",
+      "refused DEPLOY carrier text storage @regression @tier1 maps a four-byte hash character for the utf8mb3 column",
+      "refused DEPLOY carrier text storage @regression @tier1 stores placeholders for missing required text fields"
+    ],
     "a047f1b5c097c4d9": [
       "balance delta application modes @regression @tier1 falls back to a re-sum when no block delta collector is active",
       "balance delta application modes @regression @tier1 off re-sums ledger history and leaves the collected delta available",
@@ -14454,27 +14500,6 @@
       "migration executable-residue pin: the guard bites @regression @tier1 an added statement is a residue violation, even with a rebaseline",
       "migration executable-residue pin: the guard bites @regression @tier1 an untouched file passes"
     ],
-    "acbbdc2bcfa94eca": [
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getAppliedPolicySnapshot rejects on a mirror fault rather than resolving no policy",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getCapabilitySnapshotCount rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getCapabilitySnapshotValidators rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getCapabilitySnapshotWeights rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEarlierFinalizedPolicySnapshots rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEarliestValidAnchorCheckpoint rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEffectiveUndispatchedCalls rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEffectiveUnprocessedCallResults rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEffectiveUnsettledMatches rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getFinalizedBridgeTransfersForChain rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getFinalizedPolicySnapshots rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getListSnapshotHeads rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getListSnapshotsAfter rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredAttestationResponses rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredAttestationResponses still short-circuits an empty id list without a query",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredStateCheckpointCandidates rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredStateCheckpointCandidatesAfterAnchor rejects rather than resolving an empty consensus input",
-      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 isPubkeyInCapabilitySnapshot rejects rather than resolving an empty consensus input"
-    ],
     "ace5f36204b02c5a": [
       "Dispenser action handler @regression @tier2 Format 0 \u2013 Create Dispenser EXPIRATION before BLOCK_TIME returns invalid",
       "Dispenser action handler @regression @tier2 Format 0 \u2013 Create Dispenser EXPIRATION equal to BLOCK_TIME returns invalid",
@@ -14894,6 +14919,12 @@
       "repair-validator-stats drift guard @regression both files define an expiredReqs SQL query (sanity check)",
       "repair-validator-stats drift guard @regression expired-request predicate structure matches between repair script and rollback recompute",
       "repair-validator-stats drift guard @regression fulfilled-count query structure is consistent across both files"
+    ],
+    "b2ce81ada1b73cf2": [
+      "createTable retry ownership @regression @tier1 does not DROP after CREATE itself fails transiently",
+      "createTable retry ownership @regression @tier1 does not issue the definition DROP on the first attempt",
+      "createTable retry ownership @regression @tier1 does not retry or DROP when CREATE reports an existing table",
+      "createTable retry ownership @regression @tier1 drops and rebuilds only after this call created a partial table"
     ],
     "b2d8bfb13750e3b1": [
       "Block-processing watchdog (withTimeout) @regression @tier1 defaults the label to \"operation\" when none is given",
@@ -15510,10 +15541,6 @@
       "Rollback delegations deactivation sweep @regression @tier3 issues exactly one bare-table delegations re-NULL sweep",
       "Rollback delegations deactivation sweep @regression @tier3 keys the threshold at block_index + activationDelay, not at block_index",
       "Rollback delegations deactivation sweep @regression @tier3 runs before the orphaned delegations rows are deleted"
-    ],
-    "bc7a0865ea61e7d6": [
-      "fresh schema detection tolerates sync-created indexer tables @regression @tier1 does not seed when an indexer-only declared table already exists",
-      "fresh schema detection tolerates sync-created indexer tables @regression @tier1 seeds the migration ledger when only shared tables already exist"
     ],
     "bc90c2ca64f06fcb": [
       "oracle sync barrier grace @regression @tier1 does not keep waiting through the former 600 second margin",
@@ -18936,6 +18963,28 @@
       "getRawBlockTime() missing decoder row (#9597) does not cache a missing decoder row: the re-parse after a re-insert reads the real time",
       "protocolTimeForStoredBlock() fail-loud fault handling rethrows an infrastructure fault and re-reads the stored block on retry"
     ],
+    "e85a2f1b95ca842c": [
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getAppliedPolicySnapshot rejects on a mirror fault rather than resolving no policy",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getCapabilitySnapshotCount rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getCapabilitySnapshotValidators rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getCapabilitySnapshotWeights rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEarlierFinalizedPolicySnapshots rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEarliestValidAnchorCheckpoint rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEarliestValidAnchorCheckpointAfterAnchor rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEffectiveUndispatchedCalls rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEffectiveUnprocessedCallResults rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getEffectiveUnsettledMatches rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getFinalizedBridgeTransfersForChain rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getFinalizedPolicySnapshots rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getListSnapshotHeads rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getListSnapshotsAfter rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredAttestationResponses rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredAttestationResponses still short-circuits an empty id list without a query",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredCheckpointSuperseders rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredStateCheckpointCandidates rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 getMirroredStateCheckpointCandidatesAfterAnchor rejects rather than resolving an empty consensus input",
+      "hub-mirrored consensus reads fail loudly on a DB fault @regression @tier1 isPubkeyInCapabilitySnapshot rejects rather than resolving an empty consensus input"
+    ],
     "e8f3158d242019f6": [
       "HubClient retractBridgeRange() calls _call with pushbridgereorg and correct payload",
       "HubClient retractBridgeRange() carries the reorg api key, exactly as retractMatchRange does",
@@ -21301,8 +21350,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1698,
-      "titleCount": 16501,
+      "fileCount": 1705,
+      "titleCount": 16536,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -22078,6 +22127,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_checkpoint_check/escrow_address.test.js": "2220f4f88a6e9538",
         "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
+        "test/unit/consensus/bridge_proof_client/checkpoint_superseder_reader.test.js": "20e50aa12daec125",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "4b0dce3d31f20943",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/bridge_settle/sub_gate_deferral.test.js": "fa4bd1452ca551bd",
@@ -22273,7 +22323,7 @@
         "test/unit/db/db_list_bulk_writes.test.js": "83afe667cf1b13d5",
         "test/unit/db/db_mapping_null_skip.test.js": "b4b4e9e256db55d0",
         "test/unit/db/db_migrations_ledger_datetime.test.js": "854ebc44f7fae694",
-        "test/unit/db/db_mirror_strict_consensus_reads.test.js": "acbbdc2bcfa94eca",
+        "test/unit/db/db_mirror_strict_consensus_reads.test.js": "e85a2f1b95ca842c",
         "test/unit/db/db_orderby_determinism.test.js": "0a5e98f2d0503af2",
         "test/unit/db/db_protocol_time_for_stored_block.test.js": "fe59884c0c3fc5ec",
         "test/unit/db/db_prototype_install.test.js": "9d17bb7008bd3ae6",
@@ -22306,6 +22356,7 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/deploys/refused_deploy_chunk_text.test.js": "a03766e6d8a3c0b4",
         "test/unit/db/events/reorg_cursor_guards.test.js": "d18641680b374c5c",
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
@@ -22409,6 +22460,7 @@
         "test/unit/db/stakes/votes_append_only.test.js": "27e6dea0edfed7ae",
         "test/unit/db/stakes/votes_split_exact.test.js": "ebfbb476ed9bd920",
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
+        "test/unit/db/state_tree/retained_shadow_roots.test.js": "37a73b7bc5d27658",
         "test/unit/db/subtree/node_store_rows.test.js": "e0826acdcf60989c",
         "test/unit/db/subtree/orphan_stats_reads.test.js": "84a5bb8715a5c817",
         "test/unit/db/swaps/swap_dispenser_u64_exact_read.test.js": "48062911c2f01161",
@@ -22509,6 +22561,7 @@
         "test/unit/hub/hub_db_sync/capability_proof/canonical_height.test.js": "4fd540ec5889ab0a",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
+        "test/unit/hub/hub_db_sync/capability_proof/judge_failure_hold.test.js": "9066cb88d17359f3",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_proof/retry_after.test.js": "d37decb95f3187b2",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
@@ -22679,7 +22732,8 @@
         "test/unit/migration/migration_runner.test/v017_renames.test.js": "bd472a94ee891986",
         "test/unit/migration/pending_hub_pushes_widen/precondition.test.js": "d422884a7614668a",
         "test/unit/migration/preconditions/superseded_manual_modify.test.js": "400c889e4d29c14c",
-        "test/unit/migration/schema_bootstrap_race.test/index.test.js": "bc7a0865ea61e7d6",
+        "test/unit/migration/schema_bootstrap_race.test/create_table_retry.test.js": "b2ce81ada1b73cf2",
+        "test/unit/migration/schema_bootstrap_race.test/index.test.js": "85c0b615951b7499",
         "test/unit/migration/schema_drift_column_order.test.js": "7ea4c8c89c5481c5",
         "test/unit/migration/schema_drift_column_order_report.test.js": "4f418157d1912e88",
         "test/unit/migration/schema_retirements.test.js": "d815c99115a1d97e",
@@ -22981,6 +23035,7 @@
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "ac15b22fd9195f0f",
+        "test/unit/xchain_indexer/decoder_halt_mid_catchup.test.js": "2bf8b51176e6e198",
         "test/unit/xchain_indexer/indexer_poll_heartbeat.test.js": "9fd449fa1c41ad11",
         "test/unit/xchain_indexer/lost_block_transaction_commit.test.js": "6ed3fc9fc259ac99",
         "test/unit/xchain_indexer/mirror_admission_legacy_progress.test.js": "4ee376dc5f1c5cb0",
@@ -22996,6 +23051,7 @@
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/is_train_activation_halt.test.js": "67e9ad621c10ee25",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health.test/price_time_clear_floor.test.js": "42bbb8c866663d20",
         "test/unit/xchain_indexer/stall_health.test/reorg_rollback_window.test.js": "77aaf409029b39bb",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
@@ -23386,8 +23442,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1299,
-      "titleCount": 13040,
+      "fileCount": 1306,
+      "titleCount": 13075,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24005,6 +24061,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
+        "test/unit/consensus/bridge_proof_client/checkpoint_superseder_reader.test.js": "20e50aa12daec125",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "4b0dce3d31f20943",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "73bc28c46ff62005",
@@ -24139,7 +24196,7 @@
         "test/unit/db/db_getlist_determinism.test.js": "1f83e7fb228abe16",
         "test/unit/db/db_integer_field_range.test.js": "6396f4abe83e6c0e",
         "test/unit/db/db_mapping_null_skip.test.js": "b4b4e9e256db55d0",
-        "test/unit/db/db_mirror_strict_consensus_reads.test.js": "acbbdc2bcfa94eca",
+        "test/unit/db/db_mirror_strict_consensus_reads.test.js": "e85a2f1b95ca842c",
         "test/unit/db/db_orderby_determinism.test.js": "0a5e98f2d0503af2",
         "test/unit/db/db_prototype_install.test.js": "9d17bb7008bd3ae6",
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
@@ -24170,6 +24227,7 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/deploys/refused_deploy_chunk_text.test.js": "a03766e6d8a3c0b4",
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/file_multipart_uncapped_schema.test.js": "3214566db1869d1d",
@@ -24254,6 +24312,7 @@
         "test/unit/db/stakes/votes_append_only.test.js": "27e6dea0edfed7ae",
         "test/unit/db/stakes/votes_split_exact.test.js": "ebfbb476ed9bd920",
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
+        "test/unit/db/state_tree/retained_shadow_roots.test.js": "37a73b7bc5d27658",
         "test/unit/db/text_width/refused_row_fit.test.js": "25b6b3bd26326a47",
         "test/unit/db/text_width/valid_width_reject.test.js": "e39a6b23e37adff0",
         "test/unit/db/tickers/ticker_lookup_order.test.js": "9051d7fc84e9b1d6",
@@ -24325,6 +24384,7 @@
         "test/unit/hub/hub_db_sync/capability_proof/canonical_height.test.js": "4fd540ec5889ab0a",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
+        "test/unit/hub/hub_db_sync/capability_proof/judge_failure_hold.test.js": "9066cb88d17359f3",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
@@ -24440,7 +24500,8 @@
         "test/unit/migration/migration_runner.test/v017_renames.test.js": "bd472a94ee891986",
         "test/unit/migration/pending_hub_pushes_widen/precondition.test.js": "d422884a7614668a",
         "test/unit/migration/preconditions/superseded_manual_modify.test.js": "400c889e4d29c14c",
-        "test/unit/migration/schema_bootstrap_race.test/index.test.js": "bc7a0865ea61e7d6",
+        "test/unit/migration/schema_bootstrap_race.test/create_table_retry.test.js": "b2ce81ada1b73cf2",
+        "test/unit/migration/schema_bootstrap_race.test/index.test.js": "85c0b615951b7499",
         "test/unit/migration/schema_drift_column_order.test.js": "7ea4c8c89c5481c5",
         "test/unit/migration/schema_drift_column_order_report.test.js": "4f418157d1912e88",
         "test/unit/migration/schema_retirements.test.js": "d815c99115a1d97e",
@@ -24679,6 +24740,7 @@
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "ac15b22fd9195f0f",
+        "test/unit/xchain_indexer/decoder_halt_mid_catchup.test.js": "2bf8b51176e6e198",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
@@ -24686,13 +24748,14 @@
         "test/unit/xchain_indexer/stall_health.test/bridge_proof_class.test.js": "af37b63e044b059e",
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health.test/price_time_clear_floor.test.js": "42bbb8c866663d20",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
       }
     },
     "test:regression:fast": {
-      "fileCount": 697,
-      "titleCount": 7263,
+      "fileCount": 704,
+      "titleCount": 7298,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24910,6 +24973,7 @@
         "test/unit/consensus/batch_root_discriminator_gate.test.js": "cfac4f7733abc10d",
         "test/unit/consensus/bigint_surface_strip_matches_vm.test.js": "22b82a85f1d56a65",
         "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
+        "test/unit/consensus/bridge_proof_client/checkpoint_superseder_reader.test.js": "20e50aa12daec125",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "4b0dce3d31f20943",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "73bc28c46ff62005",
@@ -25011,7 +25075,7 @@
         "test/unit/db/db_getlist_determinism.test.js": "1f83e7fb228abe16",
         "test/unit/db/db_integer_field_range.test.js": "6396f4abe83e6c0e",
         "test/unit/db/db_mapping_null_skip.test.js": "b4b4e9e256db55d0",
-        "test/unit/db/db_mirror_strict_consensus_reads.test.js": "acbbdc2bcfa94eca",
+        "test/unit/db/db_mirror_strict_consensus_reads.test.js": "e85a2f1b95ca842c",
         "test/unit/db/db_orderby_determinism.test.js": "0a5e98f2d0503af2",
         "test/unit/db/db_prototype_install.test.js": "9d17bb7008bd3ae6",
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
@@ -25039,6 +25103,7 @@
         "test/unit/db/db_sanity_check_null_tick.test.js": "12da3a56447a42df",
         "test/unit/db/db_session_sql_mode_pin.test.js": "c91642ba2d913def",
         "test/unit/db/db_session_timezone_utc.test.js": "3a25c746f0ad7a91",
+        "test/unit/db/deploys/refused_deploy_chunk_text.test.js": "a03766e6d8a3c0b4",
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/file_multipart_uncapped_schema.test.js": "3214566db1869d1d",
@@ -25109,6 +25174,7 @@
         "test/unit/db/stakes/votes_append_only.test.js": "27e6dea0edfed7ae",
         "test/unit/db/stakes/votes_split_exact.test.js": "ebfbb476ed9bd920",
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
+        "test/unit/db/state_tree/retained_shadow_roots.test.js": "37a73b7bc5d27658",
         "test/unit/db/tokens/supply_refresh_once_per_block.test.js": "1a278c22b8f80e7c",
         "test/unit/db/tokens/supply_representation.test.js": "45ad95775a4ffa85",
         "test/unit/db/utf8mb3_address_lookup.test.js": "36192deae8b7f079",
@@ -25163,6 +25229,7 @@
         "test/unit/hub/hub_db_sync/capability_proof/canonical_height.test.js": "4fd540ec5889ab0a",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
+        "test/unit/hub/hub_db_sync/capability_proof/judge_failure_hold.test.js": "9066cb88d17359f3",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js": "7e58f34f86e67cdc",
         "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js": "8fb5fef2c360a8e9",
@@ -25247,7 +25314,8 @@
         "test/unit/migration/migration_runner.test/v017_renames.test.js": "bd472a94ee891986",
         "test/unit/migration/pending_hub_pushes_widen/precondition.test.js": "d422884a7614668a",
         "test/unit/migration/preconditions/superseded_manual_modify.test.js": "400c889e4d29c14c",
-        "test/unit/migration/schema_bootstrap_race.test/index.test.js": "bc7a0865ea61e7d6",
+        "test/unit/migration/schema_bootstrap_race.test/create_table_retry.test.js": "b2ce81ada1b73cf2",
+        "test/unit/migration/schema_bootstrap_race.test/index.test.js": "85c0b615951b7499",
         "test/unit/migration/schema_retirements.test.js": "d815c99115a1d97e",
         "test/unit/migration/sql_schema_parse_coverage.test.js": "f17d696401843c06",
         "test/unit/price/db_max_batch_block_time.test.js": "3d123bd6ea062c1b",
@@ -25386,16 +25454,18 @@
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "ac15b22fd9195f0f",
+        "test/unit/xchain_indexer/decoder_halt_mid_catchup.test.js": "2bf8b51176e6e198",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/stall_health.test/bridge_proof_class.test.js": "af37b63e044b059e",
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
-        "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192"
+        "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health.test/price_time_clear_floor.test.js": "42bbb8c866663d20"
       }
     },
     "test:regression:full": {
-      "fileCount": 1299,
-      "titleCount": 13040,
+      "fileCount": 1306,
+      "titleCount": 13075,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -26013,6 +26083,7 @@
         "test/unit/consensus/blockhash_conformance_twin.test/02_hash_call_binding.test.js": "04160d90b9ae6282",
         "test/unit/consensus/blockhash_conformance_twin.test/03_preimage_shape.test.js": "2a534d4fa3e38313",
         "test/unit/consensus/bridge_proof_client/checkpoint_section_pick_baseline.test.js": "78d02846d4627582",
+        "test/unit/consensus/bridge_proof_client/checkpoint_superseder_reader.test.js": "20e50aa12daec125",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_pick.test.js": "4b0dce3d31f20943",
         "test/unit/consensus/bridge_proof_client/checkpoint_v3_section_reads.test.js": "9d1c25cb28fab947",
         "test/unit/consensus/capability_snapshot_proof/below_gate.test.js": "73bc28c46ff62005",
@@ -26147,7 +26218,7 @@
         "test/unit/db/db_getlist_determinism.test.js": "1f83e7fb228abe16",
         "test/unit/db/db_integer_field_range.test.js": "6396f4abe83e6c0e",
         "test/unit/db/db_mapping_null_skip.test.js": "b4b4e9e256db55d0",
-        "test/unit/db/db_mirror_strict_consensus_reads.test.js": "acbbdc2bcfa94eca",
+        "test/unit/db/db_mirror_strict_consensus_reads.test.js": "e85a2f1b95ca842c",
         "test/unit/db/db_orderby_determinism.test.js": "0a5e98f2d0503af2",
         "test/unit/db/db_prototype_install.test.js": "9d17bb7008bd3ae6",
         "test/unit/db/db_queries.test.js": "180f72514f20efa8",
@@ -26178,6 +26249,7 @@
         "test/unit/db/db_table_parameterized_identifiers.test.js": "42f0d570ec801310",
         "test/unit/db/db_ticker_exact.test.js": "f8aba0f29edf15ac",
         "test/unit/db/db_ticker_id_allocation.test.js": "de4c1c4eb850aa9e",
+        "test/unit/db/deploys/refused_deploy_chunk_text.test.js": "a03766e6d8a3c0b4",
         "test/unit/db/events/retroactive_go.test.js": "74966a599042da53",
         "test/unit/db/events/retroactive_replay_marker.test.js": "fedd8c98879ad2e0",
         "test/unit/db/file_multipart_uncapped_schema.test.js": "3214566db1869d1d",
@@ -26262,6 +26334,7 @@
         "test/unit/db/stakes/votes_append_only.test.js": "27e6dea0edfed7ae",
         "test/unit/db/stakes/votes_split_exact.test.js": "ebfbb476ed9bd920",
         "test/unit/db/stakes/votes_tally_invariants.test.js": "4c28c93dcf05bde1",
+        "test/unit/db/state_tree/retained_shadow_roots.test.js": "37a73b7bc5d27658",
         "test/unit/db/text_width/refused_row_fit.test.js": "25b6b3bd26326a47",
         "test/unit/db/text_width/valid_width_reject.test.js": "e39a6b23e37adff0",
         "test/unit/db/tickers/ticker_lookup_order.test.js": "9051d7fc84e9b1d6",
@@ -26333,6 +26406,7 @@
         "test/unit/hub/hub_db_sync/capability_proof/canonical_height.test.js": "4fd540ec5889ab0a",
         "test/unit/hub/hub_db_sync/capability_proof/held_read.test.js": "352024da6f65f91c",
         "test/unit/hub/hub_db_sync/capability_proof/hold.test.js": "41d8ab629c2e46fe",
+        "test/unit/hub/hub_db_sync/capability_proof/judge_failure_hold.test.js": "9066cb88d17359f3",
         "test/unit/hub/hub_db_sync/capability_proof/mirrored_skip.test.js": "9905578f0abd08aa",
         "test/unit/hub/hub_db_sync/capability_snapshot_stake_memo.test.js": "b94434c87d719100",
         "test/unit/hub/hub_db_sync/chain_id_purge_retry.test.js": "b968b2a96f3d5ffc",
@@ -26448,7 +26522,8 @@
         "test/unit/migration/migration_runner.test/v017_renames.test.js": "bd472a94ee891986",
         "test/unit/migration/pending_hub_pushes_widen/precondition.test.js": "d422884a7614668a",
         "test/unit/migration/preconditions/superseded_manual_modify.test.js": "400c889e4d29c14c",
-        "test/unit/migration/schema_bootstrap_race.test/index.test.js": "bc7a0865ea61e7d6",
+        "test/unit/migration/schema_bootstrap_race.test/create_table_retry.test.js": "b2ce81ada1b73cf2",
+        "test/unit/migration/schema_bootstrap_race.test/index.test.js": "85c0b615951b7499",
         "test/unit/migration/schema_drift_column_order.test.js": "7ea4c8c89c5481c5",
         "test/unit/migration/schema_drift_column_order_report.test.js": "4f418157d1912e88",
         "test/unit/migration/schema_retirements.test.js": "d815c99115a1d97e",
@@ -26687,6 +26762,7 @@
         "test/unit/xchain_indexer/bridge_proof_fault_note.test.js": "9f0a9ff75d332065",
         "test/unit/xchain_indexer/db_watchdog_fence.test.js": "9b17c5feeb828337",
         "test/unit/xchain_indexer/decoder_halt_gate.test.js": "ac15b22fd9195f0f",
+        "test/unit/xchain_indexer/decoder_halt_mid_catchup.test.js": "2bf8b51176e6e198",
         "test/unit/xchain_indexer/mirrored_row_rejection.test.js": "0318b82ac3ee5657",
         "test/unit/xchain_indexer/poll_early_decide_rule_watermark.test.js": "a3fbad53cad92755",
         "test/unit/xchain_indexer/resolve_btc_chain_id_midchain.test.js": "f8d27657ca37a414",
@@ -26694,6 +26770,7 @@
         "test/unit/xchain_indexer/stall_health.test/bridge_proof_class.test.js": "af37b63e044b059e",
         "test/unit/xchain_indexer/stall_health.test/capability_proof_class.test.js": "a0cb65e41608df24",
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
+        "test/unit/xchain_indexer/stall_health.test/price_time_clear_floor.test.js": "42bbb8c866663d20",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
         "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
       }
