@@ -395,6 +395,17 @@ module.exports = {
             [chain, network, atOrAfterBlock]);
     },
 
+    // Every mirrored marker that can supersede this checkpoint. This is deliberately
+    // uncapped and independent of state_root because a marker can sit outside the candidate
+    // page. Strict failure prevents a mirror fault from narrowing the refusal set to empty.
+    async getMirroredCheckpointSuperseders(chain, network, checkpointSeq, blockIndex){
+        return await this.mirrorDb().doQueryStrict(
+            `SELECT chain, network, checkpoint_seq, supersedes_from FROM state_checkpoints
+             WHERE chain = ? AND network = ? AND checkpoint_seq > ?
+               AND supersedes_from IS NOT NULL AND supersedes_from <= ?`,
+            [chain, network, checkpointSeq, blockIndex]);
+    },
+
     // The same two reads on the BTC anchor axis, for a DOGE- or LTC-origin escrow checkpoint.
     ...require('./checkpoint_anchor_axis.js'),
 

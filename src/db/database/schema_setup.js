@@ -36,27 +36,15 @@ const { getLogger } = require('../../observability/index.js');
 const { recordShapeDrift } = require('../shared.js');
 const { isTableDefinitionFile, tableNameOf } = require('./schema/table_files.js');
 const { SYNC_SHAREABLE_DECLARED_TABLES } = require('./schema/shared_tables.js');
+const {
+    acquireSchemaCreateLock,
+    declaredTableExistence,
+    verifyDeclaredTable,
+} = require('./schema/create_safety.js');
 const syncShareableDeclaredTables = new Set(SYNC_SHAREABLE_DECLARED_TABLES);
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
-
-// Whether each declared table (one src/sql file each) already exists, read before verifyTables
-// creates any. Null when a read failed, after util.throwError has reported which table.
-async function declaredTableExistence(self, db, tableFiles){
-    let exists = new Map();
-    for(const file of tableFiles){
-        let table = tableNameOf(file);
-        try {
-            let results = await db.query("SELECT * FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",[self.dbName, table]);
-            exists.set(file, results.length > 0);
-        } catch(e){
-            self.util.throwError('Error while trying to verify ' + table + ' table exists!');
-            return null;
-        }
-    }
-    return exists;
-}
 
 // Tables an indexer DB holds with no src/sql definition, each owned by named code, so the
 // undeclared-table check below reports drift rather than the services sharing this DB.
@@ -166,7 +154,6 @@ module.exports = {
     async verifyTables(){
         let dir   = path.join(__dirname, '..', '..', 'sql');
         let files = fs.readdirSync(dir);
-        let file  = null;
         let db    = await this.getConnection();
         // One summary line instead of a per-table pair; error paths below still
         // name the table, so a failure stays attributable.
@@ -180,49 +167,44 @@ module.exports = {
         // Read which declared tables exist before creating any, so a fresh install is known
         // up front rather than inferred from a create loop that may not finish.
         let tableFiles = files.filter(isTableDefinitionFile);
-        let exists     = await declaredTableExistence(this, db, tableFiles);
-        if(!exists) return false;
-        // A sibling sync service may have created its schema-equivalent shared tables first.
-        // The install is still fresh until an indexer-exclusive declared table exists.
-        let indexerTableExists = [...exists.entries()].some(([declaredFile, present]) =>
-            present && !syncShareableDeclaredTables.has(tableNameOf(declaredFile)));
-        // Seed the ledger before creating the first indexer-exclusive table. A failed CREATE
-        // then leaves the full ledger beside tables built from this release's definitions.
-        if(tableFiles.length > 0 && !indexerTableExists)
-            await this.recordFreshSchemaMigrations(db);
-        // Loop through SQL files
-        for (file of tableFiles){
-            let table   = tableNameOf(file);
-            checked++;
-            try {
-                if(exists.get(file)){
-                    // Existing table - reconcile column nullability against the
-                    // SQL source. Catches schemas that were updated upstream but
-                    // never migrated on stacks created from an older release.
-                    await this.alterTableForDrift(file, db);
-                    // Also reconcile declared indexes. A UNIQUE index added to the
-                    // SQL source AFTER a table was first created (e.g. balances'
-                    // addr_tick on 2026-05-29) is otherwise never applied, which
-                    // silently degrades updateAddressBalance's INSERT ... ON DUPLICATE
-                    // KEY UPDATE to a plain INSERT and accumulates duplicate rows.
-                    await this.reconcileTableIndexes(file, db);
-                } else {
-                    await this.createTable(file);
-                    created++;
-                }
-            } catch(e){
-                this.util.throwError('Error while trying to verify ' + table + ' table exists!');
-                return false;
+        let exists = null;
+        let lockName = null;
+        try {
+            exists = await declaredTableExistence(this, db, tableFiles);
+            if(!exists) return false;
+            if([...exists.values()].some(present => !present)){
+                lockName = await acquireSchemaCreateLock(this, db);
+                exists = await declaredTableExistence(this, db, tableFiles);
+                if(!exists) return false;
             }
+            // A sibling sync service may have created its schema-equivalent shared tables first.
+            // The install is still fresh until an indexer-exclusive declared table exists.
+            const indexerTableExists = [...exists.entries()].some(([declaredFile, present]) =>
+                present && !syncShareableDeclaredTables.has(tableNameOf(declaredFile)));
+            if(tableFiles.length > 0 && !indexerTableExists)
+                await this.recordFreshSchemaMigrations(db, { lockHeld: true });
+            for(const file of tableFiles){
+                checked++;
+                try {
+                    if(await verifyDeclaredTable(this, file, db, exists.get(file))) created++;
+                } catch(error){
+                    this.util.throwError(new Error('Error while trying to verify ' + tableNameOf(file) +
+                        ' table exists: ' + error.message));
+                }
+            }
+            await recordUndeclaredTables(this, db, tableFiles);
+        } finally {
+            if(lockName){
+                try { await db.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+            }
+            await db.release();
         }
-        await recordUndeclaredTables(this, db, tableFiles);
-        await db.release();
         getLogger().info('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
         getLogger().info(this.schemaShapeSummary());
         return true;
     },
 
-    async recordFreshSchemaMigrations(db){
+    async recordFreshSchemaMigrations(db, options = {}){
         const dir = path.join(__dirname, '..', '..', 'sql', 'migrations');
         let files = [];
         try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }
@@ -231,14 +213,15 @@ module.exports = {
 
         // Ledger DDL commits implicitly, so it must run before the transaction opens.
         await this.ensureMigrationsLedger(db);
-        // Same lock the migration runner takes, so a seed never interleaves with a peer's seed
-        // or migrate run. Refusing is safe: no declared table exists yet, so a restart reseeds.
         const lockName = 'xchain_migrate_' + this.dbName;
-        const got = await db.query('SELECT GET_LOCK(?, 30) AS l', [lockName]);
-        if(!got || !got[0] || String(got[0].l) !== '1')
-            throw new Error('recordFreshSchemaMigrations: could not acquire lock ' + lockName +
-                ' (another process is seeding or migrating this database). No table has been created ' +
-                'yet, so restarting this process seeds the ledger cleanly.');
+        const ownsLock = options.lockHeld !== true;
+        if(ownsLock){
+            const got = await db.query('SELECT GET_LOCK(?, 30) AS l', [lockName]);
+            if(!got || !got[0] || String(got[0].l) !== '1')
+                throw new Error('recordFreshSchemaMigrations: could not acquire lock ' + lockName +
+                    ' (another process is seeding or migrating this database). No table has been created ' +
+                    'yet, so restarting this process seeds the ledger cleanly.');
+        }
         try {
             // One transaction: the ledger holds every committed file or none, never a prefix.
             // A row a racing peer already committed is kept as it stands, never a duplicate-key throw.
@@ -259,7 +242,9 @@ module.exports = {
                 throw err;
             }
         } finally {
-            try { await db.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+            if(ownsLock){
+                try { await db.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+            }
         }
         getLogger().info('Fresh install: recorded ' + files.length + ' migration(s) in schema_migrations before creating tables.');
     },

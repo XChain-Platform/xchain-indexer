@@ -35,11 +35,11 @@ module.exports = {
     // The wall-clock instant at which a time-keyed hub-sync barrier can FIRST be
     // satisfied for a block, or null when that cannot be determined. Every such barrier has
     // the same escape hatch (`streamWatermark >= blockTime + grace`), and the watermark only
-    // advances as real time does, so a block stamped in the FUTURE cannot clear before
-    // blockTime + grace no matter how healthy the mirror is. Their other satisfaction case
-    // (the mirror already holds a row at/past blockTime) cannot fire early either, because
-    // rows effective at a future instant do not exist yet. Returns null when sync is off or
-    // the inputs are not finite, which leaves the caller's verdict exactly as it was before.
+    // advances as real time does, so that escape cannot clear before blockTime + grace.
+    // A content-based satisfaction case may instead open from blockTime onward. Callers with
+    // a content case and a long grace must report that earlier floor separately, as the price
+    // barrier does, or a later fallback would suppress the hold for real mirror lag. Returns
+    // null when sync is off or the inputs are not finite.
     //
     // Above the mirror-admission activation the barriers are keyed on the hub's per-table
     // height watermark, which can open them at any instant, so no first instant exists (the

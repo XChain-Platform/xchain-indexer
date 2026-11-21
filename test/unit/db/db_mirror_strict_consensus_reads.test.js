@@ -86,6 +86,7 @@ describe('hub-mirrored consensus reads fail loudly on a DB fault @regression @ti
         ['getListSnapshotsAfter',           db => db.getListSnapshotsAfter('regtest', 'DOGE', 41, 1)],
         // The two bridge checkpoint sources: an empty answer from one would shift the pick.
         ['getMirroredStateCheckpointCandidates', db => db.getMirroredStateCheckpointCandidates('BTC', 'regtest', 1210)],
+        ['getMirroredCheckpointSuperseders', db => db.getMirroredCheckpointSuperseders('BTC', 'regtest', 5, 1210)],
         ['getEarliestValidAnchorCheckpoint',     db => db.getEarliestValidAnchorCheckpoint(0, 'BTC', 'regtest', 1210)],
         // Their BTC-anchor-axis twins, read for a DOGE- or LTC-origin transfer.
         ['getMirroredStateCheckpointCandidatesAfterAnchor', db => db.getMirroredStateCheckpointCandidatesAfterAnchor('DOGE', 'regtest', 1210)],

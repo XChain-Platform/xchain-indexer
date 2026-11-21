@@ -34,6 +34,24 @@ const { getLogger } = require('../../observability/index.js');
 const { opensBackslashEscape } = require('../shared.js');
 const { tableNameOf } = require('./schema/table_files.js');
 
+function tableStatement(pattern, table){
+    const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('^' + pattern + '\\s+`?' + escaped + '`?\\s*$', 'i');
+}
+
+function isOwnTableDrop(query, table){
+    return tableStatement('DROP\\s+TABLE\\s+IF\\s+EXISTS', table).test(query);
+}
+
+function isOwnTableCreate(query, table){
+    return tableStatement('CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?', table)
+        .test(query.replace(/\s*\([\s\S]*$/, ''));
+}
+
+function isTableExistsError(error){
+    return error && (Number(error.errno) === 1050 || error.code === 'ER_TABLE_EXISTS_ERROR');
+}
+
 module.exports = {
 
     // Handle creating database tables.
@@ -44,7 +62,9 @@ module.exports = {
     // (observed on LTC regtest: `dispensers` ended up missing after a transient
     // MariaDB hiccup during init, fatal-looped the indexer on every block).
     // Retries the whole file with exponential backoff so transient DB issues
-    // don't leave half-built schema.
+    // don't leave half-built schema. The definition's own DROP is skipped until
+    // this call has successfully created the table, so a stale existence check
+    // cannot drop a table created by another process.
     // Remove SQL line comments while respecting quoted strings, so a ';'
     // appearing inside comment prose is never mistaken for a statement
     // terminator. Single/double-quote and backtick spans are preserved verbatim
@@ -155,12 +175,16 @@ module.exports = {
 
         const MAX_ATTEMPTS = 5;
         let lastErr = null;
+        let createdByThisCall = false;
         for(let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++){
             let db = null;
             try {
                 db = await this.getConnection();
                 for(const query of queries){
+                    if(isOwnTableDrop(query, table) && !createdByThisCall) continue;
                     await db.query(query);
+                    if(isOwnTableDrop(query, table)) createdByThisCall = false;
+                    if(isOwnTableCreate(query, table)) createdByThisCall = true;
                 }
                 await db.release();
                 return;
@@ -169,6 +193,7 @@ module.exports = {
                 if(db){
                     try { await db.release(); } catch (_){}
                 }
+                if(isTableExistsError(err)) throw err;
                 if(attempt >= MAX_ATTEMPTS) break;
                 const backoffMs = Math.min(30000, 500 * Math.pow(2, attempt - 1));
                 getLogger().info('Error creating ' + table + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): ', err, '. Retrying in ' + backoffMs + 'ms...');

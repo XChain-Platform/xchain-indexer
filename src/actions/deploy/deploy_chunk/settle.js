@@ -47,7 +47,8 @@ async function recordCarrier(carrier, data, slice){
     // the DEPLOY assembler reads only VALID rows). A CHUNK_INDEX or TOTAL_CHUNKS that does
     // not fit its INT UNSIGNED column was refused in validateChunkFormat; the row keeps
     // that refusal under the placeholder 0, since both columns are NOT NULL and an
-    // unrepresentable bind fails the INSERT and halts the block.
+    // unrepresentable bind fails the INSERT and halts the block. The writer similarly
+    // fits refused text fields to their required SQL columns.
     await carrier.indexerDb.recordDeployChunk({
         ACTION_INDEX : data['ACTION_INDEX'],
         SOURCE       : data['SOURCE'],

@@ -25,6 +25,7 @@
 const { assert, fs, path, Database, modeOf } = require('./migration_runner.test/helpers/migration_fixtures.js');
 const crypto = require('crypto');
 const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./migration_runner.test/helpers/migration_fixtures.js');
+const { verifyFreshSchema } = require('./helpers/fresh_schema_fixture.js');
 
 
 describe('Database._migrationMode() @regression @tier1', function () {
@@ -213,42 +214,6 @@ async function seedFreshSchemaMigrations(options = {}) {
 const indexOfMigrationCall = (calls, re) => calls.findIndex(c => re.test(c.sql));
 const lastIndexOfMigrationCall = (calls, re) => calls.map(c => c.sql).findLastIndex(sql => re.test(sql));
 
-async function verifyFreshSchema(existingTable, options = {}) {
-    const created = [];
-    const order = [];
-    let recorded = 0;
-    const connection = {
-        async query(sql, params) {
-            if(/information_schema\.tables/i.test(sql))
-                return params[1] === existingTable ? [{}] : [];
-            throw new Error('unexpected statement: ' + sql);
-        },
-        async release() {},
-    };
-    const db = {
-        dbName: 'fake_indexer',
-        util: { throwError(message) { throw new Error(message); } },
-        getConnection: async () => connection,
-        createTable: async file => {
-            if(options.failCreateAt === created.length + 1) throw new Error('create failed');
-            created.push(file);
-            order.push('create');
-        },
-        alterTableForDrift: async () => {},
-        reconcileTableIndexes: async () => {},
-        recordFreshSchemaMigrations: async conn => {
-            assert.strictEqual(conn, connection);
-            recorded++;
-            order.push('seed');
-        },
-        schemaShapeSummary: () => 'Schema shape: test fixture.',
-        verifyTables: Database.prototype.verifyTables,
-    };
-    let error = null;
-    try { await db.verifyTables(); } catch(e){ error = e; }
-    return { created, recorded, order, error };
-}
-
 function registerFreshSchemaLedgerRecordingTest() {
     it('records every committed migration with its checksum, mode and database timestamp', async function () {
         const { calls, ensured, error } = await seedFreshSchemaMigrations();
@@ -356,7 +321,7 @@ function registerFreshSchemaVerificationTests() {
 
     it('seeds BEFORE the first table is created, so an interrupted create loop keeps a full ledger', async function () {
         const fresh = await verifyFreshSchema(null);
-        assert.strictEqual(fresh.order[0], 'seed');
+        assert.ok(fresh.order.indexOf('seed') < fresh.order.indexOf('create'));
         assert.strictEqual(fresh.order.filter(step => step === 'seed').length, 1);
 
         const partial = await verifyFreshSchema(null, { failCreateAt: 3 });

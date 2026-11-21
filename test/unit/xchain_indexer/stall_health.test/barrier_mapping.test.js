@@ -89,11 +89,13 @@ function graceWiring() {
         // takes the block height too (row 5): null above the admission activation,
         // the clock form below it, so it is height-aware like the mirrored members.
         const direct = /\bdirectCallBarrierClearsAt\(blockTime,\s*blockToParse\)/.test(expr);
+        const content = /\bpriceTimeClearsAt\(blockTime,\s*blockToParse\)/.test(expr);
         let field = null, kind = 'null';
         if (height)      { field = height[1]; kind = 'height-aware'; }
         else if (anchor) { field = anchor[1]; kind = 'bound-aware'; }
         else if (plain)  { field = plain[1];  kind = 'clock'; }
         else if (direct) { field = 'directCallGraceS'; kind = 'height-aware'; }
+        else if (content){ kind = 'content-floor'; }
         pairs.push([reason, field, kind]);
     }
     return pairs;
@@ -123,7 +125,7 @@ const EXPECTED = [
     // An unreadable decoder block time: a host fault that clears when the row is readable.
     ['decoder_block_time_unavailable',  null,                          'null'],
     ['price_sync_barrier',              null,                          'null'],          // height case can clear early
-    ['price_sync_barrier',              'priceWatermarkGraceS',        'height-aware'],
+    ['price_sync_barrier',              null,                          'content-floor'],
     ['price_landing_barrier',           null,                          'null'],          // clears on other chains' landed time
     ['oracle_sync_barrier',             'oracleWatermarkGraceS',       'height-aware'],
     ['match_sync_barrier',              'matchWatermarkGraceS',        'height-aware'],
@@ -181,13 +183,15 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         // 'future_block_wait', keeps nextBarrierHold() at null and makes the 900 s ceiling
         // unreachable on exactly the barrier whose stall is now remediable.
         const reKeyed = EXPECTED.filter(e => e[2] === 'height-aware' || e[2] === 'bound-aware');
-        assert.strictEqual(reKeyed.length, 9,
-            'nine EXPECTED entries are re-keyed onto a height (height-aware or bound-aware); ' +
+        assert.strictEqual(reKeyed.length, 8,
+            'eight generic EXPECTED entries are re-keyed onto a height; ' +
             'a change here means a barrier gained or lost its height keying');
         assert.ok(/\bbarrierClearsAtHeightAware\(blockTime, graceField, blockHeight\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the height-aware helper must return null while the admission consumer is armed');
         assert.ok(/\banchorBarrierClearsAt\(blockTime, horizonBound, blockHeight, graceField\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the anchor barrier\'s bound-aware helper must return null while the admission consumer is armed');
+        assert.ok(/\bpriceTimeClearsAt\(blockTime, blockHeight,[\s\S]{0,200}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
+            'the price content-floor helper must return null while admission is armed');
     });
 });
 describe('barrier stallClearsAt grace-field mapping @regression', function () {

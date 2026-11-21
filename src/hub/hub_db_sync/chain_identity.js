@@ -303,8 +303,8 @@ module.exports = {
     //   - A row whose key the mirror already holds is not judged again (verdict 'mirrored',
     //     see judgeUnmirroredCapabilityRow): INSERT IGNORE would not write it.
     //   - Every other non-refusal (unreached block, unconfigured capability, truncated
-    //     set, a judge that threw, no authoritative db wired) applies the row. An
-    //     unjudgeable row must never become a permanent mirror hole.
+    //     set, no authoritative db wired) applies the row. A judge failure applies only
+    //     off the proof-gated path; gated rows and retained holds fail closed to 'held'.
     async refuseUnprovenCapabilitySnapshot(row, options) {
         let rowKey = capabilitySnapshotKey(row);
         if (this._capabilityProofRetryApproved.delete(rowKey)) return false;
@@ -317,10 +317,21 @@ module.exports = {
                 ? options.fetchProof : this.fetchCapabilitySnapshotProof.bind(this);
             verdict = await this.judgeUnmirroredCapabilityRow(db, row, fetchProof);
         } catch (e) {
-            // A failed re-derivation is not evidence of a forgery.
-            getLogger().warn('HubDbSync: capability_snapshots re-derivation failed, applying row unchecked: ' +
-                (e && e.message ? e.message : e));
-            return false;
+            let hold = !!(options && options.retainHold);
+            if (!hold && typeof db.capabilitySnapshotProofRequired === 'function') {
+                try { hold = db.capabilitySnapshotProofRequired(row); }
+                catch (gateError) { hold = true; }
+            }
+            let message = e && e.message ? e.message : e;
+            if (hold) {
+                verdict = { verdict: 'held', reason: 'capability proof judge failed: ' + message };
+                getLogger().warn('HubDbSync: capability_snapshots proof judge failed, holding row: ' + message);
+            } else {
+                // A failed BTC re-derivation is not evidence of a forgery.
+                getLogger().warn('HubDbSync: capability_snapshots re-derivation failed, applying row unchecked: ' +
+                    message);
+                return false;
+            }
         }
         if (options) {
             options.verdict = verdict && verdict.verdict;

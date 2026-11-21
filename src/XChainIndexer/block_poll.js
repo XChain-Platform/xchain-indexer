@@ -54,7 +54,8 @@ module.exports = {
                                     ? await indexerReorgView.getLastProcessedReorgWitness() : null;
         let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId, cursorWitness);
         // Keep the decoder-halt flag current on every poll (loud on transition, then
-        // periodic). pollDecoderOnce reads it to stop advancing while the halt stands.
+        // periodic). Long catch-up loops also re-probe it on the reorg-check cadence.
+        // pollDecoderOnce reads it to stop advancing while the halt stands.
         await this.checkDecoderReorgHalt();
 
         // Get last processed block from Indexer and Decoder databases
@@ -330,8 +331,21 @@ module.exports = {
         let midCursorWitness = (lastProcessedReorgId != null)
                                 ? await indexerReorgView.getLastProcessedReorgWitness() : null;
         let midReorgs = await this.decoderDb.getReorgsSince(lastProcessedReorgId, midCursorWitness);
-        if(midReorgs.length === 0) return false;
-        getLogger().info('Detected a decoder reorg mid-catch-up; breaking to handle it before block ' + (Number(lastIndexerBlock) + 1));
+        if(midReorgs.length > 0){
+            getLogger().info('Detected a decoder reorg mid-catch-up; breaking to handle it before block ' +
+                (Number(lastIndexerBlock) + 1));
+            return true;
+        }
+        return await this.decoderHaltLandedMidCatchUp(lastIndexerBlock, REORG_RECHECK_BLOCKS);
+    },
+
+    // getReorgsSince cannot see REORG_HALT rows, and a halt can land without a
+    // matching REORG event. Re-probe it on the same bounded catch-up cadence.
+    async decoderHaltLandedMidCatchUp(lastIndexerBlock, REORG_RECHECK_BLOCKS){
+        if((Number(lastIndexerBlock) % REORG_RECHECK_BLOCKS) !== 0) return false;
+        if((await this.checkDecoderReorgHalt()) !== true) return false;
+        getLogger().info('Detected a decoder REORG_HALT mid-catch-up; breaking before block ' +
+            (Number(lastIndexerBlock) + 1));
         return true;
     }
 };

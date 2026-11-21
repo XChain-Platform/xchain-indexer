@@ -58,9 +58,18 @@ function warnFirstUseSetOnce(db, key){
     getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
 }
 
+function capabilitySnapshotProofRequired(db, row){
+    if(!row) return false;
+    let block = canonicalBlockHeight(row.snapshot_block);
+    if(block === null) return false;
+    let capability = row.capability == null ? '' : String(row.capability);
+    return usesCapabilitySnapshot(db.config, capability) &&
+        gateRegistry.activeAt(CAPABILITY_SNAPSHOT_PROOF_ACTIVATION,
+            db.config['NETWORK'], 'BTC', block, 0);
+}
+
 async function judgeMirrorResolvedRow(db, row, capability, opts){
-    if(!gateRegistry.activeAt(CAPABILITY_SNAPSHOT_PROOF_ACTIVATION,
-        db.config['NETWORK'], 'BTC', row.snapshot_block, 0))
+    if(!capabilitySnapshotProofRequired(db, row))
         return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
     let firstUseSetKey = null;
     let suppliedObserver = opts && opts.noteFirstUseSet;
@@ -82,6 +91,10 @@ async function judgeMirrorResolvedRow(db, row, capability, opts){
 }
 
 module.exports = {
+
+    capabilitySnapshotProofRequired(row){
+        return capabilitySnapshotProofRequired(this, row);
+    },
 
     // Source-keyed all-staker weights at `blockIndex` - the STAKE_WEIGHTED_QUORUM
     // counterpart of getActiveValidators (the config-change PBFT's whole-federation

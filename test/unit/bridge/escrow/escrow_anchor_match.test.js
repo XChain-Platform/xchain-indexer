@@ -61,6 +61,12 @@ const BTC_CPS = [
 
 // Apply the WHERE ranges and ORDER BY the SQL names to `rows`, the way MariaDB would.
 function applySql(sql, args, rows){
+    if(/checkpoint_seq\s*>\s*\?/.test(sql)){
+        const [chain, network, seq, bound] = args;
+        return rows.filter(r => r.chain === chain && r.network === network &&
+            r.supersedes_from != null && Number(r.checkpoint_seq) > Number(seq) &&
+            Number(r.supersedes_from) <= Number(bound));
+    }
     const where = /\bWHERE\b([\s\S]*?)\bORDER\s+BY\b/i.exec(sql)[1];
     const order = /\bORDER\s+BY\b([\s\S]*?)\bLIMIT\b/i.exec(sql)[1];
     const limit = Number(/\bLIMIT\s+(\d+)/i.exec(sql)[1]);
@@ -92,7 +98,8 @@ function selectorCtx(anchorRows, mirrorRows, extra){
         mirrorDb: () => ({ doQueryStrict: async (sql, args) => { calls.push(sql); return applySql(sql, args, mirrorRows); } }),
     };
     for(const m of ['getEarliestValidAnchorCheckpoint', 'getMirroredStateCheckpointCandidates',
-                    'getEarliestValidAnchorCheckpointAfterAnchor', 'getMirroredStateCheckpointCandidatesAfterAnchor'])
+                    'getMirroredCheckpointSuperseders', 'getEarliestValidAnchorCheckpointAfterAnchor',
+                    'getMirroredStateCheckpointCandidatesAfterAnchor'])
         db[m] = anchorsMixin[m].bind(db);
     const ctx = Object.assign({ indexerDb: db, coin: 'BTC', network: NET, blockIndex: 157500 }, extra || {});
     return { ctx, calls };

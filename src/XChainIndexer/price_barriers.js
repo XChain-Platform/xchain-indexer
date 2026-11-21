@@ -156,17 +156,28 @@ module.exports = {
                 // Same defer semantics as the height barrier above.
                 getLogger().warn('Deferring block ' + blockToParse + ' (price time-sync): ', err);
                 this.stallReason = 'price_sync_barrier';
-                // This barrier waits on WALL CLOCK. It is satisfied once a
-                // round at/past blockTime is mirrored, or the hub's stream watermark
-                // passes blockTime + grace; both advance only as real time does. Record
-                // that instant so a future-stamped block is not reported as a wedge
-                // while the wait is expected and self-clearing.
-                this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'priceWatermarkGraceS', blockToParse);
+                // Mirrored content can satisfy this barrier from blockTime onward. Report
+                // that floor only while it is still in the future; the later stream-grace
+                // escape is not a floor and must not suppress a hold for real mirror lag.
+                this.stallClearsAt = this.priceTimeClearsAt(blockTime, blockToParse);
                 this.capabilityProofBarrierSkipped = false;
                 return true;
             }
         }
         return false;
+    },
+
+    // Health-only earliest clear instant for the clock-era price content barrier. Above
+    // mirror admission a height watermark can clear it at any instant. Below admission,
+    // mirrored content cannot exist before blockTime, but can arrive at any instant after
+    // it, so a past timestamp has no future floor and a genuine stall must accrue a hold.
+    priceTimeClearsAt(blockTime, blockHeight, now = Date.now()){
+        if(typeof this.mirrorAdmissionActiveAt === 'function' &&
+           this.mirrorAdmissionActiveAt(blockHeight)) return null;
+        blockTime = Number(blockTime);
+        if(!this.hubDbSync || !Number.isFinite(blockTime)) return null;
+        const clearsAtMs = blockTime * 1000;
+        return clearsAtMs > now ? clearsAtMs : null;
     },
 
     // Price-landing barrier: once price_fee_batch_landed_activation is armed, getLatestPrice
