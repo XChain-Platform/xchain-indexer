@@ -22,6 +22,8 @@ const { assembleStateRoot } = require('../../../src/state_commitment/state_root.
 const BALANCES_ROOT = '11'.repeat(32);
 const STAKES_ROOT = '22'.repeat(32);
 const CONTRACT_ROOT = '33'.repeat(32);
+// The repair tool's pre-check reassembles the STORED row, never the rebuilt root.
+const STORED_ASSEMBLY = 'SC.assembleStateRoot(String(before.balances_root), String(before.stakes_root), extras)';
 
 function committedRow(extras){
     return {
@@ -33,14 +35,20 @@ function committedRow(extras){
     };
 }
 
+// What the repair tool hands the guard: the row reassembled from its own stored parts.
+function rowError(row){
+    return Target.committedRowError(row,
+        assembleStateRoot(String(row.balances_root), String(row.stakes_root), Target.storedExtras(row)));
+}
+
 describe('repair balances root target guard', function(){
     it('accepts an omitted or matching expected tip', function(){
         assert.strictEqual(Target.requestedTipError(null, 20), null);
         assert.strictEqual(Target.requestedTipError(20, 20), null);
         const base = committedRow(null);
         const extended = committedRow({ contract_state_root: CONTRACT_ROOT });
-        assert.strictEqual(Target.committedRowError(base), null);
-        assert.strictEqual(Target.committedRowError(extended), null);
+        assert.strictEqual(rowError(base), null);
+        assert.strictEqual(rowError(extended), null);
         assert.strictEqual(Target.storedExtras(base), null);
         assert.deepStrictEqual(Target.storedExtras(extended), { contract_state_root: CONTRACT_ROOT });
     });
@@ -50,10 +58,10 @@ describe('repair balances root target guard', function(){
         assert.match(Target.requestedTipError(21, 20), /current tip 20.*above/);
         const dropped = committedRow({ contract_state_root: CONTRACT_ROOT });
         dropped.contract_state_root = null;
-        assert.match(Target.committedRowError(dropped), /does not reassemble/);
+        assert.match(rowError(dropped), /does not reassemble/);
         const tampered = committedRow(null);
         tampered.state_root = '44'.repeat(32);
-        assert.match(Target.committedRowError(tampered), /does not reassemble/);
+        assert.match(rowError(tampered), /does not reassemble/);
     });
 
     it('refuses apply before database access unless the indexer is stopped', function(){
@@ -78,6 +86,7 @@ describe('repair balances root target guard', function(){
         const targetCheck = script.indexOf('Target.requestedTipError(');
         const committedCheck = script.indexOf('Target.committedRowError(');
         const rebuild = script.indexOf('SC.buildFullBalancesRoot(');
+        const storedAssembly = script.indexOf(STORED_ASSEMBLY);
         const begin = script.indexOf('await db.beginTransaction()');
         const lockedTip = script.indexOf('await tipRow(true)', begin);
         const update = script.indexOf('UPDATE state_tree_roots SET balances_root=?, state_root=?', lockedTip);
@@ -85,6 +94,7 @@ describe('repair balances root target guard', function(){
         const stateConditional = script.indexOf('AND balances_root=? AND state_root=?', update);
         assert.ok(targetCheck > 0 && committedCheck > targetCheck && committedCheck < rebuild,
             'the expected-tip and committed-row refusals must run before the full-ledger rebuild');
+        assert.ok(storedAssembly > committedCheck && storedAssembly < rebuild, 'the refusal must reassemble the stored row');
         assert.ok(begin > rebuild && lockedTip > begin && update > lockedTip && conditional > update,
             'the real tip must be locked before a balances-root-conditional update inside the transaction');
         assert.ok(stateConditional > update, 'the conditional update must bind the checked state_root');

@@ -135,7 +135,11 @@ function parseArgs(){
         console.error('refusing: ' + targetError);
         process.exit(2);
     }
-    const committedError = Target.committedRowError(before);
+    // The same stored extras feed both this pre-check and the repaired root, so a
+    // slot the row commits but does not carry is refused here instead of dropped.
+    const extras = Target.storedExtras(before);
+    const committedError = Target.committedRowError(before,
+        SC.assembleStateRoot(String(before.balances_root), String(before.stakes_root), extras));
     if(committedError){
         console.error('refusing: ' + committedError);
         if(db.close) await db.close();
@@ -166,7 +170,6 @@ function parseArgs(){
     // from the STORED column rather than re-running the gate is the same choice
     // the explorer makes: the row already carries the arming decision for its own
     // height, and a second copy of the activation map could only drift from it.
-    const extras = Target.storedExtras(before);
     const stateRoot = SC.assembleStateRoot(rebuilt, before.stakes_root, extras);
     console.log('# committed state_root    ' + before.state_root);
     console.log('# rebuilt   state_root    ' + stateRoot);

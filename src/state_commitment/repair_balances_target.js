@@ -12,9 +12,9 @@
 
 'use strict';
 
-const { assembleStateRoot } = require('./state_root.js');
 const { RESERVED_SUBTREES } = require('../consensus/gates/state_subtree_gate.js');
 
+// Every reserved sub-root the stored row carries a value for, or null for a v1 row.
 function storedExtras(row){
     const extras = {};
     for(const name of RESERVED_SUBTREES)
@@ -22,9 +22,10 @@ function storedExtras(row){
     return Object.keys(extras).length === 0 ? null : extras;
 }
 
-function committedRowError(row){
-    const reassembled = assembleStateRoot(
-        String(row.balances_root), String(row.stakes_root), storedExtras(row));
+// The caller reassembles the committed row from its own stored parts and hands the
+// result in: state roots are assembled only through the orchestrator module, so this
+// file compares and never assembles.
+function committedRowError(row, reassembled){
     const stored = String(row.state_root);
     if(reassembled === stored) return null;
     return 'committed state_root at ' + row.block_index +
