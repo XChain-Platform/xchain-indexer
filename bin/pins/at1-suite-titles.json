@@ -9872,6 +9872,11 @@
       "Programmable policy layer: Phase D royalty/fee split @regression total bps over the maxTakeBps cap \u2192 NO split (fail-closed)",
       "Programmable policy layer: Phase D royalty/fee split @regression zero / null proceeds \u2192 single (zero) credit, no split"
     ],
+    "740346fb9a561bbb": [
+      "EXECUTE fee history @regression @tier1 does not record a fee for a refused or system-injected execution",
+      "EXECUTE fee history @regression @tier1 records a native-paid metered fee and its execution payment mode",
+      "EXECUTE fee history @regression @tier1 records the billed ledger fee without adding a second debit"
+    ],
     "7413c1c4c27e27e9": [
       "vm.execute network options @tier1 matches the pinned set of VM entry points",
       "vm.execute network options @tier1 passes config NETWORK through every VM options object"
@@ -21296,8 +21301,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1697,
-      "titleCount": 16498,
+      "fileCount": 1698,
+      "titleCount": 16501,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21514,6 +21519,7 @@
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "4251f6c732dd7817",
+        "test/unit/actions/execute/fee_record.test.js": "740346fb9a561bbb",
         "test/unit/actions/execute/native_metered_gas_gate.test.js": "1e4fc89f17abfed5",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
@@ -23380,8 +23386,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1298,
-      "titleCount": 13037,
+      "fileCount": 1299,
+      "titleCount": 13040,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23610,6 +23616,7 @@
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "4251f6c732dd7817",
+        "test/unit/actions/execute/fee_record.test.js": "740346fb9a561bbb",
         "test/unit/actions/execute/native_metered_gas_gate.test.js": "1e4fc89f17abfed5",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
@@ -24684,8 +24691,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 696,
-      "titleCount": 7260,
+      "fileCount": 697,
+      "titleCount": 7263,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24753,6 +24760,7 @@
         "test/unit/actions/execute.test/slash_window_wiring.test.js": "c6a7f94ec5896597",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "4251f6c732dd7817",
+        "test/unit/actions/execute/fee_record.test.js": "740346fb9a561bbb",
         "test/unit/actions/execute/native_metered_gas_gate.test.js": "1e4fc89f17abfed5",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
@@ -25386,8 +25394,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1298,
-      "titleCount": 13037,
+      "fileCount": 1299,
+      "titleCount": 13040,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25616,6 +25624,7 @@
         "test/unit/actions/execute.test/vm_execution.test.js": "8317fd5e6c11fbf8",
         "test/unit/actions/execute/emission_amount_format_gate.test.js": "0af7143389e278e9",
         "test/unit/actions/execute/fee_capped_at_held_gas.test.js": "4251f6c732dd7817",
+        "test/unit/actions/execute/fee_record.test.js": "740346fb9a561bbb",
         "test/unit/actions/execute/native_metered_gas_gate.test.js": "1e4fc89f17abfed5",
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
