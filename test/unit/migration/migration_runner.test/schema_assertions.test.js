@@ -221,8 +221,16 @@ describe('runMigrations() list-share-tables assertion @regression @tier1', funct
 // are invoked as Database.prototype.X.call(this).
 describe('runMigrations() calls every registered startup assertion @regression @tier1', function () {
     it('invokes each Database.STARTUP_ASSERTED_MIGRATIONS assertion exactly once', async function () {
-        const names = Database.STARTUP_ASSERTED_MIGRATIONS.map((m) => m.assertion)
-            .concat(['assertPubkeyColumnIsUncompressedWide', 'assertStakeWeightOrderingCollation']);
+        const source = require('fs').readFileSync(
+            path.join(__dirname, '..', '..', '..', '..', 'src', 'db', 'database', 'schema_setup.js'), 'utf8');
+        const body = source.match(/async runMigrations\(opts = \{\}\)\{([\s\S]*?)\n    \},/)[1];
+        const called = [...body.matchAll(/\b(assert[A-Z][A-Za-z0-9]+)\b/g)].map((m) => m[1]);
+        const registered = new Set(Database.STARTUP_ASSERTED_MIGRATIONS.map((m) => m.assertion));
+        // This checks definition-declared collations and has no operator-gated migration.
+        const exemptions = new Set(['assertStakeWeightOrderingCollation']);
+        assert.deepStrictEqual([...new Set(called)].filter((n) => !registered.has(n) && !exemptions.has(n)), [],
+            'runMigrations() calls an unregistered startup assertion');
+        const names = [...new Set(called)];
         const calls = {};
         const saved = {};
         for (const n of names) {

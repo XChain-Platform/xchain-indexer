@@ -86,8 +86,22 @@ class AddressRetry {
         return this.deliveries.settleLiveDelivery(rowId, address);
     }
 
-    // The live-delivery facade of a running queue, or null when there is no queue (early
-    // boot, test doubles); a null facade means the caller keeps the plain delete on success.
+    // True when an early caller has no queue yet but the selector still has multiple
+    // candidate hubs that must receive a durable push once the queue starts.
+    static needsDeferredFanout(indexer){
+        let selector = indexer && (indexer.hubSelector || indexer.selector);
+        if(!selector) return false;
+        let status = typeof selector.status === 'function' ? selector.status() : selector;
+        if(!status || status.pinned === true || status.mode === 'pinned') return false;
+        let candidates = Array.isArray(status.candidates) ? status.candidates : selector.candidates;
+        if(!Array.isArray(candidates)) return false;
+        let addresses = candidates.map(candidate => typeof candidate === 'string' ? candidate : candidate && candidate.address)
+            .filter(address => typeof address === 'string' && address.length > 0);
+        return new Set(addresses).size > 1;
+    }
+
+    // The live-delivery facade of a running queue, or null when there is no queue.
+    // Early callers use needsDeferredFanout before deciding whether a row is complete.
     static liveFacade(queue){
         let facade = queue && queue.hubPushDeliveries;
         return facade && typeof facade.settleLiveDelivery === 'function' ? facade : null;

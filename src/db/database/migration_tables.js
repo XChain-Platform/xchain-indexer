@@ -21,6 +21,11 @@
  ********************************************************************/
 
 const { MIGRATION_CHECKSUM_REBASELINES } = require('../migration/checksum_rebaselines.js');
+const utf8mb4Columns = require('../../chain/utf8mb4_columns.js');
+
+const MANUAL_UTF8MB4_RAW_FIELD_COLUMNS = utf8mb4Columns.forMode('manual');
+const MANUAL_UTF8MB4_COLUMN_PAIRS_SQL = MANUAL_UTF8MB4_RAW_FIELD_COLUMNS
+    .map(entry => "('" + entry.table + "', '" + entry.column + "')").join(', ');
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
 // applies a migration (see migrationPreconditionSkip). Each entry is a parameterised
@@ -79,6 +84,31 @@ const MIGRATION_PRECONDITIONS = {
             if(Number.isNaN(len)) return null;
             if(len >= 130) return 'pubkeys.pubkey is already ' + len + ' characters wide, so there is no narrow column to widen.';
             return null;
+        }
+    },
+    // The manual half of the raw-wire utf8mb4 widen is a startup precondition.
+    // A database created from current table definitions, or one widened by an earlier
+    // operator run, already has every manual registry column in the exact shape the file
+    // writes: its registered type, utf8mb4_general_ci and NOT NULL. Baseline only that
+    // complete shape, the same one xchain-node's deploy fact requires, so the indexer
+    // never records a file the deploy guard would still call missing. Missing, unreadable,
+    // narrow or otherwise drifted columns keep the file pending, fail-closed.
+    '2026-09-02-utf8mb4-raw-wire-fields-not-null.sql': {
+        sql: 'SELECT TABLE_NAME AS tbl, COLUMN_NAME AS col, COLUMN_TYPE AS type, CHARACTER_SET_NAME AS charset, ' +
+             'COLLATION_NAME AS coll, IS_NULLABLE AS nullable FROM information_schema.columns ' +
+             'WHERE table_schema = ? AND (table_name, column_name) IN (' + MANUAL_UTF8MB4_COLUMN_PAIRS_SQL + ')',
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows)) return null;
+            const text = (value) => String(value == null ? '' : value).toLowerCase();
+            const live = new Map(rows.map(row => [text(row && row.tbl) + '.' + text(row && row.col), row || {}]));
+            const allDeclared = MANUAL_UTF8MB4_RAW_FIELD_COLUMNS.every(entry => {
+                const row = live.get((entry.table + '.' + entry.column).toLowerCase());
+                return Boolean(row) && text(row.type) === entry.type.toLowerCase() &&
+                    text(row.charset) === 'utf8mb4' && text(row.coll) === 'utf8mb4_general_ci' &&
+                    text(row.nullable) === (entry.tail === 'NOT NULL' ? 'no' : 'yes');
+            });
+            if(!allDeclared) return null;
+            return 'all manual raw-wire columns already have their declared utf8mb4 NOT NULL shape, so there is nothing to widen.';
         }
     },
     // Adds validator_rewards.derive_block_index (+ its index) and

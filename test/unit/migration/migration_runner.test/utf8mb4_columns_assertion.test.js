@@ -68,7 +68,8 @@ describe('runMigrations() registered utf8mb4-column assertion @regression @tier1
         await assert.rejects(
             () => db.assertRegisteredUtf8mb4ColumnsStayWide(),
             (error) => /contracts\.code \(utf8mb3\)/.test(error.message) &&
-                /messages\.coin \(utf8\)/.test(error.message)
+                /messages\.coin \(utf8\)/.test(error.message) &&
+                /--file 2026-09-02-utf8mb4-raw-wire-fields-not-null\.sql/.test(error.message)
         );
     });
 
@@ -97,5 +98,51 @@ describe('runMigrations() registered utf8mb4-column assertion @regression @tier1
 
         assert.strictEqual(result.lockSkipped, true);
         assert.ok(calls.some((call) => /SELECT table_name, column_name, character_set_name/i.test(call.sql)));
+    });
+});
+
+describe('runMigrations() registered utf8mb4-column assertion @regression @tier1', function () {
+    it('keeps the generic remedy when only an auto-widen column drifts', async function () {
+        const rows = registeredRows();
+        rows.find((row) => row.table_name === 'messages' && row.column_name === 'coin')
+            .character_set_name = 'utf8mb3';
+        const { db } = makeDb(rows);
+
+        await assert.rejects(
+            () => db.assertRegisteredUtf8mb4ColumnsStayWide(),
+            (error) => /Restore the registered charset/.test(error.message) &&
+                !/2026-09-02-utf8mb4-raw-wire-fields-not-null/.test(error.message)
+        );
+    });
+
+    it('baselines the manual migration only when every manual registry column is wide', function () {
+        const file = '2026-09-02-utf8mb4-raw-wire-fields-not-null.sql';
+        const pre = Database.MIGRATION_PRECONDITIONS[file];
+        const rows = utf8mb4Columns.forMode('manual').map((entry) => ({
+            tbl: entry.table, col: entry.column, type: entry.type.toLowerCase(),
+            charset: 'utf8mb4', coll: 'utf8mb4_general_ci', nullable: 'NO',
+        }));
+        assert.match(pre.skipWhen(rows), /already have their declared utf8mb4 NOT NULL shape/);
+        for (const drift of [{ charset: 'utf8mb3' }, { coll: 'utf8mb4_bin' }, { nullable: 'YES' },
+            { type: 'varchar(100)' }, { charset: null }]) {
+            assert.strictEqual(pre.skipWhen(rows.map((row, i) => i === rows.length - 1 ? { ...row, ...drift } : row)),
+                null, JSON.stringify(drift));
+        }
+        assert.strictEqual(pre.skipWhen(rows.slice(1)), null);
+        assert.strictEqual(pre.skipWhen([]), null);
+        assert.match(pre.sql, /\(table_name, column_name\) IN \(/);
+        assert.strictEqual((pre.sql.match(/\?/g) || []).length, 1, 'binds only the database name');
+        const raw = require('fs').readFileSync(require('path').join(
+            __dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations', file), 'utf8');
+        const hash = require('crypto').createHash('sha256').update(raw).digest('hex');
+        const rebaseline = Database.MIGRATION_CHECKSUM_REBASELINES[file];
+        assert.strictEqual(rebaseline.from,
+            '08f543fd5439280e9ffd4d7396b05b33880b6b9b07240a43d273e7110267d4e6');
+        assert.strictEqual(rebaseline.to, hash);
+        const statements = Database.prototype.splitSqlStatements.call({
+            stripSqlLineComments: Database.prototype.stripSqlLineComments
+        }, raw);
+        assert.strictEqual(statements.length, 11);
+        assert.ok(statements.every((statement) => /^ALTER TABLE/i.test(statement.trim())));
     });
 });

@@ -81,7 +81,7 @@ module.exports = {
     // bit set where a from-genesis replay holds 0. Only that direction exists: a surviving
     // lock already set the bit, so the re-derive only ever clears it.
     async rederiveTokenBridged(){
-        await rederiveSql.rederiveTokenBridged(this.indexerDb);
+        this.recordSweepStats([await rederiveSql.rederiveTokenBridged(this.indexerDb)]);
     },
 
     // Re-derive order_matches.status for COINPay matches, AFTER the dataTables
@@ -118,7 +118,7 @@ module.exports = {
     // (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
     // source and replica derive the same match statuses.
     async rederiveCoinpayMatchStatus(){
-        await rederiveSql.rederiveCoinpayMatchStatus(this.indexerDb);
+        this.recordSweepStats(await rederiveSql.rederiveCoinpayMatchStatus(this.indexerDb));
     },
 
 };

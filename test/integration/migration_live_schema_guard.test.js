@@ -122,7 +122,7 @@ const CASES = [
     shape('both list share tables present', LISTS, true, LIST_TABLES.map(simpleTable)),
     shape('only one list share table present', LISTS, false, simpleTable('list_snapshots')),
     shape('no list share tables', LISTS, false),
-].concat(require('./migration_live_schema_guard.test/helpers/memo_cases.js'));
+].concat(require('./migration_live_schema_guard.test/helpers/memo_cases.js'), require('./migration_live_schema_guard.test/helpers/utf8mb4_cases.js').cases);
 const QUALIFIED = REWARD_TABLE(", round_qualifier VARCHAR(20) NOT NULL DEFAULT '', " +
                                'UNIQUE KEY reward_unique (round_id, validator, round_qualifier)');
 const UTF8 = ' ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci';
@@ -166,7 +166,7 @@ const ASSERTIONS = [
         'CREATE TABLE index_addresses (address VARCHAR(120) NOT NULL PRIMARY KEY)' + UTF8,
         'CREATE TABLE index_pubkeys (pubkey CHAR(64) NOT NULL PRIMARY KEY)' + UTF8),
     assertion('ordering tables absent', 'assertStakeWeightOrderingCollation'),
-];
+].concat(require('./migration_live_schema_guard.test/helpers/utf8mb4_cases.js').assertions);
 const SETTLED = BRIDGE_TABLES.concat(LIST_TABLES).map(simpleTable);
 const NARROW_TICK = 'CREATE TABLE oracle_prices (id INT NOT NULL PRIMARY KEY, tick VARCHAR(100) NOT NULL)';
 const AUTO_COLUMN = 'CREATE TABLE guard_probe (value BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY)';

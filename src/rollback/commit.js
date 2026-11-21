@@ -92,7 +92,8 @@ module.exports = {
     // (pre-commit) old generation + orphaned rows, stamped with the old generation the fence
     // covers, or (post-commit) new generation + rows already gone - never orphans + new generation.
     // Retraction rows written ahead inside the transaction (HUB-RETRACT-2); the post-commit block
-    // attempts immediate live delivery and drops each on success, else leaves it for HubPushQueue.
+    // attempts immediate live delivery. It drops a completed single-hub row, but preserves rows
+    // that still need queue fanout or whose immediate delivery failed.
     // Both the bump and the write-ahead commit atomically with the rollback's deletes, and
     // bumpPushGeneration routes through the open transaction connection (doQuery), so a failure
     // throws into runRollbackTransaction's catch and rolls every delete back.
@@ -260,15 +261,14 @@ module.exports = {
                     // row carries, so a queued retry cannot diverge from what was tried here.
                     attest_batch_retraction: (client, last, payload) => client.retractAttestBatch(coin, payload),
                 };
-                // A success settles the row rather than dropping it: with an unpinned hub set the
-                // other candidates still need the (closed-range) retraction from the queue.
                 let live = AddressRetry.liveFacade(queue);
+                let needsDeferredFanout = !live && AddressRetry.needsDeferredFanout(this.indexer);
                 for(let r of stagedRetractions){
                     let target = live ? live.liveDeliveryTarget(this.hubClient) : { client: this.hubClient, address: null };
                     try {
                         await liveByType[r.pushType](target.client, null, r.payload);
                         if(live) await live.settleLiveDelivery(r.id, target.address);
-                        else await this.indexerDb.markHubPushDelivered(r.id);
+                        else if(!needsDeferredFanout) await this.indexerDb.markHubPushDelivered(r.id);
                     } catch(err) {
                         // Live delivery failed; the durable (closed-range) write-ahead row stays for
                         // HubPushQueue to retry with backoff. A dropped retraction would otherwise

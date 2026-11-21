@@ -622,10 +622,15 @@ async function main() {
     console.log(`tip state_hash:                ${identity.tip.state_hash}`);
 }
 
+function refusalLine(error) {
+    const message = error && error.message ? error.message : String(error);
+    return `consensus-identity: ${String(message).split(/\r?\n/, 1)[0]}`;
+}
+
 if (require.main === module) {
     main().catch((e) => {
         // Shared with the hub copy: exit 2 and one prefixed stderr line.
-        console.error(`consensus-identity: ${e.message}`);
+        console.error(refusalLine(e));
         process.exitCode = 2;
     });
 }
@@ -638,6 +643,7 @@ module.exports = {
     compareIdentity,
     selectedPinBlock,
     armingEnv,
+    refusalLine,
     INDEXER_ONLY_ARMING,
     REPO_ROOT,
 };

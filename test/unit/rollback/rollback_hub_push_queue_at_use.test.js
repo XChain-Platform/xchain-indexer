@@ -68,4 +68,29 @@ describe('Rollback hub-push queue resolved at use @regression @tier3', function 
         assert.ok(hubClient.retractPriceRange.calledOnce, 'live price retraction attempted');
         assert.deepStrictEqual(order, ['retract']);
     });
+
+    it('keeps successful retraction rows for unpinned hub fanout when no queue is attached', async function () {
+        const hubClient = {
+            enabled: true,
+            retractPriceRange: sinon.stub().resolves(),
+            retractXcallRange: sinon.stub().resolves(),
+            retractMatchRange: sinon.stub().resolves(),
+            retractBridgeRange: sinon.stub().resolves()
+        };
+        const idx = createMockIndexer({ hubClient });
+        idx.hubSelector = { status: () => ({ current: 'a', candidates: ['a', 'b', 'c'], pinned: false }) };
+        idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
+        delete idx.hubPushQueue;
+        const rb = new Rollback(idx);
+        idx.util.resetLists();
+        idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
+        idx.indexerDb.doQuery.resolves([]);
+
+        await assert.doesNotReject(() => rb.rollback(100));
+
+        assert.strictEqual(idx.indexerDb.enqueueHubPushTx.callCount, 4, 'all four retractions are durable');
+        assert.ok(hubClient.retractPriceRange.calledOnce, 'the current hub is fenced immediately');
+        assert.ok(idx.indexerDb.markHubPushDelivered.notCalled,
+            'rows remain for the queue to deliver to the other candidate hubs');
+    });
 });

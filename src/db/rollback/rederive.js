@@ -102,7 +102,7 @@ module.exports = {
     // Clear the bridged bit of every token left with no applied XBRIDGE v3 lock: the same
     // predicate getTokenInfo derives BRIDGED from, read over the surviving xbridges rows.
     async rederiveTokenBridged(db){
-        await db.doQuery(`UPDATE tokens SET bridged=0
+        return timedSweep(db, 'token_bridged', `UPDATE tokens SET bridged=0
                           WHERE bridged=1 AND NOT EXISTS (
                               SELECT 1 FROM xbridges x INNER JOIN index_statuses s ON (s.id=x.status_id)
                               WHERE x.tick_id=tokens.tick_id AND x.version=3 AND s.status='valid')`, []);
@@ -124,8 +124,9 @@ module.exports = {
                AND status_id=(SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1)
                AND action_index IN (SELECT cs.coinpay_action_index FROM coinpay_statuses cs INNER JOIN index_statuses si ON si.id=cs.status_id WHERE si.status='fulfilled' AND cs.coinpay_action_index IS NOT NULL)`;
         //</COINPAY-MATCH-REDERIVE-SQL>
-        await db.doQuery(coinpayMatchDemoteSql, []);
-        await db.doQuery(coinpayMatchPromoteSql, []);
+        const demote = await timedSweep(db, 'coinpay_match_demote', coinpayMatchDemoteSql, []);
+        const promote = await timedSweep(db, 'coinpay_match_promote', coinpayMatchPromoteSql, []);
+        return [demote, promote];
     },
 
 };

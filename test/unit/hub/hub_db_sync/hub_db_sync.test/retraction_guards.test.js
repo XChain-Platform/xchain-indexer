@@ -215,6 +215,86 @@ describe('HubDbSync applyRetraction receive-side guards @regression @tier1', fun
         await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'DOGE', from_action_index: 10, retraction_generation: 1 });
         assert.strictEqual(deletes(calls).length, 3, 'independent keys must not shadow each other');
     });
+
+    it('owes and starts a price re-page when its own-chain fence is refused', async function () {
+        const { sync, calls } = makeApply(async () => 6);
+        sync._bootstrapDrained = true;
+        sync.markRepageOwed = sinon.stub();
+        sync.bootstrapTable = sinon.stub().resolves(9);
+        await sync.applyRetraction({ table: 'price_snapshots', source_chain: 'BTC',
+            from_action_index: 10, retraction_generation: 6 });
+        assert.strictEqual(deletes(calls).length, 0, 'the untrusted delete stays refused');
+        assert.deepStrictEqual(sync.markRepageOwed.firstCall.args[0], ['price_snapshots']);
+        assert.ok(sync.bootstrapTable.calledOnceWithExactly('price_snapshots'));
+    });
+
+    it('owes a price re-page when the own-generation read fails', async function () {
+        const { sync, calls } = makeApply(async () => { throw new Error('db down'); });
+        sync._bootstrapDrained = true;
+        sync.markRepageOwed = sinon.stub();
+        sync.bootstrapTable = sinon.stub().resolves(9);
+        await sync.applyRetraction({ table: 'price_snapshots', source_chain: 'BTC',
+            from_action_index: 10, retraction_generation: 1 });
+        assert.strictEqual(deletes(calls).length, 0);
+        assert.ok(sync.markRepageOwed.calledOnceWithExactly(['price_snapshots']));
+        assert.ok(sync.bootstrapTable.calledOnceWithExactly('price_snapshots'));
+    });
+
+    it('does not re-page another table whose own-chain fence is refused', async function () {
+        const { sync } = makeApply(async () => 6);
+        sync.markRepageOwed = sinon.stub();
+        sync.bootstrapTable = sinon.stub().resolves(9);
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC',
+            from_action_index: 10, retraction_generation: 6 });
+        assert.ok(sync.markRepageOwed.notCalled);
+        assert.ok(sync.bootstrapTable.notCalled);
+    });
+
+    it('applies an accepted price retraction without starting a re-page', async function () {
+        const { sync, calls } = makeApply(async () => 6);
+        sync.markRepageOwed = sinon.stub();
+        sync.bootstrapTable = sinon.stub().resolves(9);
+        await sync.applyRetraction({ table: 'price_snapshots', source_chain: 'BTC',
+            from_action_index: 10, retraction_generation: 5 });
+        assert.strictEqual(deletes(calls).length, 1);
+        assert.ok(sync.markRepageOwed.notCalled);
+        assert.ok(sync.bootstrapTable.notCalled);
+    });
+
+    it('coalesces price drains while preserving every refused re-page mark', async function () {
+        const { sync } = makeApply(async () => 6);
+        sync._bootstrapDrained = true;
+        let finish;
+        sync.markRepageOwed = sinon.stub();
+        sync.bootstrapTable = sinon.stub().returns(new Promise(resolve => { finish = resolve; }));
+        const event = { table: 'price_snapshots', source_chain: 'BTC',
+            from_action_index: 10, retraction_generation: 6 };
+        await sync.applyRetraction(event);
+        await sync.applyRetraction(event);
+        assert.strictEqual(sync.markRepageOwed.callCount, 2, 'each refusal records fresh debt');
+        assert.strictEqual(sync.bootstrapTable.callCount, 1, 'only one drain runs at a time');
+        finish(9);
+        await sync._refusedPriceRetractionRepage;
+    });
+
+    it('keeps refusal fail-closed when its background price drain rejects', async function () {
+        const { sync, calls } = makeApply(async () => 6);
+        sync._bootstrapDrained = true;
+        sync.markRepageOwed = sinon.stub();
+        sync.bootstrapTable = sinon.stub().rejects(new Error('hub unavailable'));
+        await sync.applyRetraction({ table: 'price_snapshots', source_chain: 'BTC',
+            from_action_index: 10, retraction_generation: 6 });
+        assert.strictEqual(deletes(calls).length, 0);
+    });
+
+    it('refuses cleanly when the vendored consumer has no re-page hooks', async function () {
+        const { sync, calls } = makeApply(async () => 6);
+        sync.markRepageOwed = null;
+        sync.bootstrapTable = null;
+        await sync.applyRetraction({ table: 'price_snapshots', source_chain: 'BTC',
+            from_action_index: 10, retraction_generation: 6 });
+        assert.strictEqual(deletes(calls).length, 0);
+    });
 });
 
 describe('HubDbSync applyRetraction receive-side guards @regression @tier1', function () {

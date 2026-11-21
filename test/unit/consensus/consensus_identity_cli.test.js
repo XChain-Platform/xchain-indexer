@@ -120,6 +120,10 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.status, 2, res.stdout + res.stderr);
         assert.strictEqual(res.stdout, '');
         assert.ok(res.stderr.includes(KEY), res.stderr);
+        const { refusalLine } = require(BIN);
+        assert.strictEqual(refusalLine(new Error("Cannot find module 'x'\nRequire stack:\n- child.js")),
+            "consensus-identity: Cannot find module 'x'");
+        assert.strictEqual(refusalLine('plain refusal'), 'consensus-identity: plain refusal');
     });
 });
 
