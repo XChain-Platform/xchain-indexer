@@ -46,6 +46,7 @@ function makeHandler({ active, mode, paid }){
             getTokenInfo: async () => ({ TICK_ID }),
             getAddressBalances: async () => ({ [TICK_ID]: '100' }),
             createContractExecution: async () => {},
+            createFeeRecord: async () => {},
             updateBalances: async () => {},
             updateTokens: async () => {},
         },

@@ -228,11 +228,10 @@ module.exports = {
         let error_message = data['ERROR_MESSAGE'];
         let emitted_count = data['EMITTED_COUNT'] || 0;
         let block_index  = data['BLOCK_INDEX'];
-        // Deferred chunked-DEPLOY fields (DEPLOY_DEFERRED_ASSEMBLY): the pending
-        // assembler this constructor row consumed (NULL for inline and self-completed
-        // deploys, and for every non-DEPLOY execution) and the fee mode a DEPLOY
-        // constructor row's base fee was paid in (1 native, 2 XCHAIN; NULL before the
-        // flag day and for non-DEPLOY rows). Neither enters a block-hash preimage.
+        // Deferred chunked-DEPLOY fields: the pending assembler this constructor row
+        // consumed (NULL for inline and self-completed deploys, and for every non-DEPLOY
+        // execution), plus the mode a DEPLOY constructor or EXECUTE paid its fee in
+        // (1 native, 2 XCHAIN). Neither enters a block-hash preimage.
         let assembler_action_index = this.util.isNull(data['ASSEMBLER_ACTION_INDEX']) ? null : data['ASSEMBLER_ACTION_INDEX'];
         let fee_payment_mode = this.util.isNull(data['FEE_PAYMENT_MODE']) ? null : data['FEE_PAYMENT_MODE'];
         let query  = "SELECT action_index FROM contract_executions WHERE action_index=? LIMIT 1";

@@ -43,15 +43,17 @@ function handler(held, network){
     util.getAddressesList = () => ({});
     util.addAddressTicker = () => {};
     const executions = [];
+    const feeRecords = [];
     let reads = 0;
     return {
-        debits, executions, reads: () => reads,
+        debits, executions, feeRecords, reads: () => reads,
         util,
         config: { GAS_PRICE: '0.00001', NETWORK: network || 'regtest', COIN: 'BTC' },
         mapper: { createMappings: async () => {} },
         indexerDb: {
             getAddressBalances: async () => { reads++; return held; },
             createContractExecution: async (row) => { executions.push(row); },
+            createFeeRecord: async (row) => { feeRecords.push(row); },
             updateBalances: async () => {},
             updateTokens: async () => {},
         },
@@ -93,6 +95,8 @@ describe('EXECUTE fee cap gate @regression @tier1', function(){
             CONTRACT_ACTION_INDEX: 2, DRY_RUN: true };
         const { h, c, debit } = await debitFor({ [TICK_ID]: '0.02' }, { data });
         assert.strictEqual(debit, '0.02', 'metered 10 XCHAIN, held 0.02');
+        assert.strictEqual(h.util.bcstr(h.feeRecords[0].AMOUNT), debit,
+            'fee history records the capped bill, not the uncapped meter');
         assert.strictEqual(c.data.PROBE_SETTLED_GAS_FEE, debit, 'probe reports the exact capped debit');
         assert.strictEqual(c.data.STATUS, 'out_of_resource', 'the outcome stands');
         assert.strictEqual(h.executions[0].GAS_USED, 1000000, 'the record keeps the metered gas');

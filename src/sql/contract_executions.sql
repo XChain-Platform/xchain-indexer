@@ -26,7 +26,7 @@ CREATE TABLE contract_executions (
     emitted_count       INT UNSIGNED NOT NULL DEFAULT 0,
     block_index         BIGINT UNSIGNED NOT NULL,
     assembler_action_index BIGINT UNSIGNED,             -- deferred chunked DEPLOY: the pending assembler this constructor row consumed; NULL for inline and self-completed deploys
-    fee_payment_mode    TINYINT UNSIGNED                 -- DEPLOY constructor rows from DEPLOY_DEFERRED_ASSEMBLY on: 1 native, 2 XCHAIN (read at the completing carrier)
+    fee_payment_mode    TINYINT UNSIGNED                 -- DEPLOY constructors and EXECUTEs: 1 native, 2 XCHAIN
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index           ON contract_executions (action_index);
