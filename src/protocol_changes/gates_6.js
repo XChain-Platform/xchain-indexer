@@ -95,7 +95,7 @@ addGate('airdrop_native_fee_tally_activation.AIRDROP_NATIVE_FEE_TALLY_ACTIVATION
 // Testnet is armed at a past height, which is safe only if every row mirrored at or above it before the roll verifies against its snapshot checkpoint.
 addGate('capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 161790,
+    'BTC:testnet': 162658,
     testnet: UNARMED,
     regtest: 0,
 });
