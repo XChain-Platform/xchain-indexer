@@ -123,6 +123,30 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
                 [['valid:SEND', null], [null, null]]);
             assert.strictEqual(data['STATUS'], 'valid', 'top-level verdict must remain the batch verdict');
         });
+
+        it('runs quote EXECUTE after prior state and captures both staged fees', async function () {
+            let deposited = false;
+            actionsCtx.processAction = sinon.stub().callsFake(async (action, params, data) => {
+                if(action === 'DEPOSIT') deposited = true;
+                if(action === 'EXECUTE'){
+                    assert.strictEqual(deposited, true, 'EXECUTE did not see DEPOSIT state');
+                    data['PROBE_SETTLED_GAS_FEE'] = '7.00000000';
+                }
+                data['STATUS'] = 'valid';
+            });
+            indexer.indexerDb.getFeeRecord = sinon.stub().resolves({ amount: '1.00000000' });
+            handler = new Batch(actionsCtx);
+            const data = createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE,
+                FEE_PROBE: true, GUARD_INERT: true, DRY_RUN: true, BATCH_FEE_QUOTE: true,
+                TX_DATA: 'BATCH|0|DEPOSIT|0|JDOG|1|7;EXECUTE|0|7|claim' });
+            await handler.parse(['0'], data, null);
+            assert.deepStrictEqual(actionsCtx.processAction.getCalls().map(c => c.args[0]),
+                ['DEPOSIT', 'EXECUTE']);
+            assert.deepStrictEqual(data['PROBE_BATCH_FEES'], [
+                { action: 'DEPOSIT', xchainFee: '1.00000000' },
+                { action: 'EXECUTE', xchainFee: '7.00000000' }
+            ]);
+        });
     });
 });
 

@@ -65,7 +65,7 @@ async function rollbackPreservingError(db, cause, context){
 // or fee either way. Not stamped tip+1: isEnabled reads that block's time, which does not exist yet.
 // `rawData` (optional) is the caller's literal wire, used as-is in place of the rebuilt string.
 function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeFeeDestination,
-                                      blockIndex, blockTime, guardInert, feeProbe, rawData }){
+                                      blockIndex, blockTime, guardInert, feeProbe, batchFeeQuote, rawData }){
     let txOutputs = Array.isArray(feeOutputs) ? feeOutputs : [];
     if(txOutputs.length === 0 && probeFeeDestination)
         // Decimal coin units (decoder-shaped outputs); 21M coin exceeds any fee band.
@@ -105,7 +105,11 @@ function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeF
         // to compute. Set by the two public read-only surfaces (computeFeeQuote,
         // computePreflight) and never by feequotedryrun, whose whole purpose is to
         // reproduce what a real broadcast would do with the outputs it was handed.
-        fee_probe:     feeProbe === true
+        fee_probe:     feeProbe === true,
+        // Narrow marker for computeFeeQuote's mandatory-native BATCH run. It lets the
+        // batch dispatch EXECUTE for in-order pricing while the ordinary public preflight
+        // continues to refuse every VM-reaching sub-command.
+        batch_fee_quote: batchFeeQuote === true
     };
 }
 
@@ -190,6 +194,8 @@ async function readDryRunVerdict(actions, resultData, verdict){
         verdict.settledGasFee = String(resultData['PROBE_SETTLED_GAS_FEE']);
     if(resultData && Array.isArray(resultData['PROBE_SUB_VERDICTS']))
         verdict.subCommands = resultData['PROBE_SUB_VERDICTS'];
+    if(resultData && Array.isArray(resultData['PROBE_BATCH_FEES']))
+        verdict.batchFees = resultData['PROBE_BATCH_FEES'].slice();
     if(resultData && resultData['PROBE_ORACLE_FEES'] &&
        typeof resultData['PROBE_ORACLE_FEES'] === 'object' &&
        Object.keys(resultData['PROBE_ORACLE_FEES']).length > 0)
@@ -237,7 +243,8 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
         oracleFeesOwed:   verdict.oracleFeesOwed,
         nativeFeeOwed:    verdict.nativeFeeOwed,
         coinPaymentsOwed: verdict.coinPaymentsOwed,
-        nativeFeeLegs:    verdict.nativeFeeLegs || null
+        nativeFeeLegs:    verdict.nativeFeeLegs || null,
+        batchFees:        verdict.batchFees || null
     };
 }
 

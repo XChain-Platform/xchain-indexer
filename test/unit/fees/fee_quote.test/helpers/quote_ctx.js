@@ -70,6 +70,7 @@ function makeCtx(util, indexerDb, { dryRun, base64CodeEra = true, actions = Acti
         decodeDeployCodeBytes:  actions.prototype.decodeDeployCodeBytes,
         staticProtocolFee:      actions.prototype.staticProtocolFee,
         staticFeeQuote:         actions.prototype.staticFeeQuote,
+        batchProbeForbiddenSubAction: actions.prototype.batchProbeForbiddenSubAction,
         dryRunAction: async (args) => {
             calls.dryRuns++;
             calls.dryRunArgs = args;

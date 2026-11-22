@@ -45,11 +45,10 @@ const FEE_QUOTE_DENYLIST = new Set(['DEPLOY', 'EXECUTE', 'XEXEC', 'BATCH']);
 // funds, code compiles), so the quote reports `valid: null` and `validated: false` rather than
 // claiming a verdict it did not compute.
 //
-// XEXEC and BATCH stay fee-unquotable: XEXEC is system-injected from the cross-chain mirror
-// (never wallet-broadcast, so there is no caller to quote for), and a BATCH's fee is the sum of
-// its sub-actions' state-dependent fees, which cannot be priced without running them. Quoting a
-// BATCH from a partial schedule would under-size the output, which is the same funds-burning
-// direction this closes.
+// XEXEC stays fee-unquotable because it is system-injected from the cross-chain mirror and is
+// never wallet-broadcast. BATCH stays in this denylist so ordinary classification remains
+// fail-closed; computeFeeQuote has a mandatory-native exception that prices one sequential
+// dry-run of the literal wire rather than adding independently estimated legs.
 //
 // Served on the PRICING path (computeFeeQuote) only, never on validity-first computePreflight,
 // which carries no pricing fields by design; callers reach it via the SDK's getFeeQuote.

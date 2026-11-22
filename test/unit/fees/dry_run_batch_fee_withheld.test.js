@@ -91,6 +91,18 @@ describe('a BATCH dry-run withholds the single fee figure @regression @tier1', f
         assert.strictEqual(r.xchainFee, null, '"0" would tell a confirm screen the batch is free');
     });
 
+    it('returns the sequential fee collector without inventing one batch fee row', async function () {
+        let record = Object.assign(batchRecord(), { PROBE_BATCH_FEES: [
+            { action: 'DEPOSIT', xchainFee: '1.00000000' },
+            { action: 'EXECUTE', xchainFee: '2.00000000' }
+        ] });
+        let { ctx, calls } = makeCtx({ record });
+        let r = await ctx.dryRunAction.call(ctx, RUN);
+        assert.deepStrictEqual(r.batchFees, record.PROBE_BATCH_FEES);
+        assert.strictEqual(r.xchainFee, null);
+        assert.deepStrictEqual(calls.feeReads, []);
+    });
+
     it('still reads the fee row of a non-batch action', async function () {
         let { ctx, calls } = makeCtx({ record: { ACTION: 'SEND', STATUS: 'valid', ACTION_INDEX: 5 } });
         let r = await ctx.dryRunAction.call(ctx, { action: 'SEND', params: ['0', 'J', '1', 'a'], source: 's', timeoutMs: 300000 });

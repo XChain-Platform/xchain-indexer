@@ -52,6 +52,7 @@ function seedProbeCollectors(data){
     if(collect){
         data['PROBE_SUB_VERDICTS'] = [];
         data['PROBE_ORACLE_FEES']  = {};
+        if(data['BATCH_FEE_QUOTE'] === true) data['PROBE_BATCH_FEES'] = [];
     }
     return collect;
 }
@@ -88,4 +89,24 @@ function recordSubVerdict(data, action, batchPosition, matchSnapshot){
     data['PROBE_SUB_VERDICTS'].push(row);
 }
 
-module.exports = { seedProbeCollectors, recordSubVerdict };
+// Capture the fee each sub-command actually staged after it has run against the state left by
+// its predecessors. EXECUTE discloses its settled metered fee directly; ordinary handlers use
+// their common fees row. A missing row means that command charged nothing on this run.
+async function recordSubFee(data, action){
+    if(!Array.isArray(data['PROBE_BATCH_FEES'])) return;
+    if(action === 'AIRDROP' && Array.isArray(data['PROBE_NATIVE_FEE_LEGS'])){
+        data['PROBE_BATCH_FEES'].push({ action: action,
+            xchainFees: data['PROBE_NATIVE_FEE_LEGS'].slice() });
+        return;
+    }
+    let amount = null;
+    if(action === 'EXECUTE' && Object.prototype.hasOwnProperty.call(data, 'PROBE_SETTLED_GAS_FEE'))
+        amount = data['PROBE_SETTLED_GAS_FEE'];
+    else if(data['ACTION_INDEX'] !== null && data['ACTION_INDEX'] !== undefined){
+        let record = await this.indexerDb.getFeeRecord(data['ACTION_INDEX']);
+        if(record) amount = record.amount;
+    }
+    data['PROBE_BATCH_FEES'].push({ action: action, xchainFee: String(amount == null ? '0' : amount) });
+}
+
+module.exports = { seedProbeCollectors, recordSubVerdict, recordSubFee };

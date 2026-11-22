@@ -103,7 +103,8 @@ module.exports = {
     // Price an XCHAIN-denominated fee in the native coin via current oracle prices, and
     // (optionally) judge a proposed fee-output amount against the same lower-bound rule the
     // on-chain validator enforces (judgeFeeOutput). `nativeFeeLegs` (optional) is the dry run's
-    // per-leg AIRDROP fee disclosure. Pure pricing, shared by computeFeeQuote and
+    // ordered charged-leg disclosure for an AIRDROP or mandatory-native BATCH. Pure pricing,
+    // shared by computeFeeQuote and
     // computeFeeQuoteDryRun; extends and returns `base`.
     async priceFeeQuote(base, xchainFeeRaw, feeOutputSats, nativeFeeLegs){
         let coin         = this.config['COIN'];

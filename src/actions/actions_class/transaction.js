@@ -81,6 +81,9 @@ function buildActionData(tx, action, format, coin, isGenesis){
     // dry_run_support.js syntheticDryRunTx). Sourced from tx.fee_probe, which only the public
     // feequote/preflight synthetic tx carries; ALWAYS false for real decoded transactions.
     data['FEE_PROBE']        = tx.fee_probe === true;
+    // computeFeeQuote's mandatory-native BATCH run may dispatch EXECUTE so its price is
+    // observed after earlier sub-commands. No decoded transaction carries this marker.
+    if(tx.batch_fee_quote === true) data['BATCH_FEE_QUOTE'] = true;
     // Read-only disclosure marker. Synthetic dry-runs set it; decoded
     // transactions do not. It never changes handler validation or settlement.
     if(tx.dry_run === true) data['DRY_RUN'] = true;

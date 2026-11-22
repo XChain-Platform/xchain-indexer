@@ -207,11 +207,9 @@ function preflightGateAnswer(actions, base, action, params, feeClass){
     // FEE_QUOTE_DENYLIST: the batch still cannot carry anything that reaches the VM, so
     // the unauthenticated compute primitive the denylist exists to close stays closed.
     //
-    // computeFeeQuote deliberately still refuses BATCH. Its refusal has an INDEPENDENT
-    // reason this does not answer (a batch's native fee is the SUM of its sub-actions'
-    // state-dependent fees, and a partial quote UNDER-SIZES the output, which burns the
-    // payer's miner fee on a guaranteed-invalid transaction). Validity and pricing are
-    // separate questions and only the validity one is closed here.
+    // computeFeeQuote prices a mandatory-native BATCH through a separate in-order dry-run of
+    // its literal wire. This validity surface keeps the stricter no-VM rule, so an EXECUTE
+    // remains refused here even though the pricing surface may run it under its bounded quote.
     if(action === 'BATCH'){
         let forbidden = actions.batchProbeForbiddenSubAction(params);
         if(forbidden)

@@ -201,10 +201,10 @@ describe('native coin fee quote @regression @tier1', function () {
                 assert.strictEqual(q.requiredFeeSats, undefined);
             });
 
-            it('BATCH/XEXEC refusal on a native-only chain does not advise the XCHAIN lane', async function () {
+            it('XEXEC refusal on a native-only chain does not advise the XCHAIN lane', async function () {
                 let util = makeUtil('DOGE', FEE_DEST);
                 let { ctx } = makeCtx(util, makeDb({ prices: BTC_PRICES }));
-                let q = await ctx.computeFeeQuote.call(ctx, { action: 'BATCH', params: ['0', 'SEND|0|FOO|1|dest'], source: 'src' });
+                let q = await ctx.computeFeeQuote.call(ctx, { action: 'XEXEC', params: ['0', 'x'], source: 'src' });
                 assert.strictEqual(q.supported, false);
                 assert.ok(!/pay the fee in XCHAIN/.test(q.error), 'DOGE has no XCHAIN fee lane: ' + q.error);
                 assert.ok(/DOGE/.test(q.error), q.error);

@@ -51,6 +51,35 @@ function executeQuoteGas(actions, xchainFee){
     return Math.min(EXECUTE_GAS_CEILING, Math.max(baseGas, withMargin));
 }
 
+// Convert one sequential BATCH run's staged fees into the same quote inputs used by ordinary
+// actions. EXECUTE follows its standalone rule: base schedule fee below the gate, observed
+// metered gas plus the safety margin at and above it.
+async function priceBatchFeeQuote(actions, base, run, feeOutputSats){
+    let legs = [], total = actions.util.bcnum(0), meteredExecute = false;
+    for(let leg of run.batchFees){
+        let fees = Array.isArray(leg.xchainFees) ? leg.xchainFees : [leg.xchainFee || '0'];
+        for(let rawFee of fees){
+            let fee = actions.util.bcnum(rawFee);
+            if(leg.action === 'EXECUTE'){
+                meteredExecute = executeNativeMeteredGasActive(actions, run.blockIndex);
+                let gas = meteredExecute ? executeQuoteGas(actions, fee)
+                    : actions.util.vmGasCost(actions.config['GAS_SCHEDULE'] || {}, 'EXECUTE', 0);
+                fee = actions.util.bcmul(gas, actions.config['GAS_PRICE'], 8);
+            }
+            legs.push(actions.util.bcformat(fee, 8));
+            total = actions.util.bcadd(total, fee, 8);
+        }
+    }
+    // requiredFeeSats keeps the ordinary recommendation (the expected amount, never below the
+    // in-order floor), so an oracle move between quote and broadcast still clears the band;
+    // minAcceptable carries the exact floor the batch handler enforces.
+    let quote = await actions.priceFeeQuote(base, total, feeOutputSats, legs);
+    if(meteredExecute)
+        quote.gasSafetyMarginPercent = EXECUTE_QUOTE_GAS_SAFETY_MARGIN_PERCENT;
+    quote.note = 'BATCH fee is priced from one in-order dry-run of the caller\'s literal wire.';
+    return quote;
+}
+
 // How long a public read-only dry-run waits for the block-processing transaction mutex before
 // giving up. The default is deliberately well under the explorer's own 5s hop cap,
 // because the whole point is that the indexer's structured "busy, retryable" answer wins the
@@ -99,12 +128,13 @@ function isTxLockBusy(e){
 // Returns dryRunOutcome's { blockIndex, blockTime, status, error, xchainFee, guardGasFee, sourceFeeBalance,
 // subCommands, legs, oracleFeesOwed, nativeFeeOwed, coinPaymentsOwed, nativeFeeLegs }: xchainFee is the
 // staged fee ('0' for a valid zero-fee action, null for a withheld BATCH sum or none staged); the
-// last six are probe disclosures, else null (nativeFeeLegs: each tallied AIRDROP leg's own fee).
-async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, feeBalanceTick, rawData }){
+// trailing fields are probe disclosures, else null (nativeFeeLegs: each tallied AIRDROP leg's fee;
+// batchFees: each BATCH sub-command's staged fee after it runs in sequence).
+async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestination, timeoutMs, acquireTimeoutMs, label, guardInert, feeProbe, batchFeeQuote, feeBalanceTick, rawData }){
     let dryRunError = null, sourceFeeBalance = null;
     // Seed BATCH subcommand and multi-leg SEND disclosures: subCommands, legs and
     // the three owed totals stay null for other actions and decoded transactions.
-    let verdict = { status: null, feeRecord: null, guardGasFee: null, subCommands: null, legs: null,
+    let verdict = { status: null, feeRecord: null, guardGasFee: null, subCommands: null, legs: null, batchFees: null,
                     oracleFeesOwed: null, nativeFeeOwed: null, coinPaymentsOwed: null };
     // beginTransaction acquires the db transaction mutex (serializes against block processing
     // and reorgs); the finally guarantees rollback + lock release even on a handler throw.
@@ -120,7 +150,7 @@ async function dryRunAction({ action, params, source, feeOutputs, probeFeeDestin
         blockIndex = await this.indexerDb.getLatestBlockIndex();
         blockTime  = await this.indexerDb.getBlockTime(blockIndex);
         syntheticTx = syntheticDryRunTx(this, { action, params, source, feeOutputs, probeFeeDestination,
-                                                blockIndex, blockTime, guardInert, feeProbe, rawData });
+                                                blockIndex, blockTime, guardInert, feeProbe, batchFeeQuote, rawData });
         admitted = launchGateAdmits(this, syntheticTx);
     } catch(e){
         await rollbackPreservingError(this.indexerDb, e, 'Fee quote pre-read');
@@ -250,7 +280,8 @@ async function mainnetLaunchRefusal(actions, base, action, params, source, known
 // retired) and no supported-subset restriction. The VM/compound actions in
 // FEE_QUOTE_DENYLIST normally never reach the engine here. DEPLOY and legacy EXECUTE get a
 // schedule-priced, verdict-free quote; activated native-metered EXECUTE uses the bounded dry
-// run below, while XEXEC/BATCH stay unquotable. Never persists.
+// run below. XEXEC stays unquotable. On mandatory-native chains BATCH uses one bounded run of
+// its literal wire and prices the fees each sub-command staged in sequence. Never persists.
 //
 // Guardrails for a public endpoint: quotes serialize against the block loop on the db
 // transaction mutex, so each is time-boxed (INDEXER_FEEQUOTE_TIMEOUT_MS, default 10s,
@@ -260,7 +291,9 @@ async function mainnetLaunchRefusal(actions, base, action, params, source, known
 // `feeOutputSats` (optional) is the proposed output value in satoshis.
 async function computeFeeQuote(policy, { action, params, source, feeOutputSats }){
     let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
+    let rawAction = action, rawParams = params;
     ({ action, params } = normalizeQuoteRequest(this.actionAliases, action, params));
+    let rawData = batchRequestWire(action, rawAction, rawParams);
     let base = feeQuoteBase(this, action, feeDestination);
 
     // Native-coin fees are off unless a real FEE_DESTINATION is configured.
@@ -268,6 +301,7 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
         return Object.assign(base, { supported: false, valid: false, error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
     let tipBlockIndex = action === 'EXECUTE' ? await this.indexerDb.getLatestBlockIndex() : null;
     let meteredExecuteQuote = action === 'EXECUTE' && executeNativeMeteredGasActive(this, tipBlockIndex);
+    let batchNativeQuote = action === 'BATCH' && this.nativeFeeMandatory();
 
     // Single classification path (classifyFeeQuoteAction) shared with the conformance test;
     // it re-applies the same trim/uppercase/de-alias normalization (idempotent on the already
@@ -277,10 +311,18 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
         let launchRefusal = await mainnetLaunchRefusal(this, base, action, params, source, tipBlockIndex);
         if(launchRefusal) return launchRefusal;
     }
-    if(feeClass === 'denied' && !meteredExecuteQuote)
+    if(feeClass === 'denied' && !meteredExecuteQuote && !batchNativeQuote)
         return await this.staticFeeQuote(base, action, params, feeOutputSats);
     if(feeClass === 'exempt')
         return exemptFeeQuote(base, action);
+    if(batchNativeQuote){
+        let forbidden = this.batchProbeForbiddenSubAction(params, true);
+        if(forbidden)
+            return Object.assign(base, { supported: false, denied: true, valid: false,
+                deniedSubAction: forbidden,
+                error: 'native fee quote not supported for BATCH with a ' + forbidden +
+                       ' sub-command (the public quote cannot safely run it)' });
+    }
 
     let maxPending = parseInt(policy.CONFIG_ENV.INDEXER_FEEQUOTE_MAX_PENDING, 10) || 8;
     if((this._feeQuotePending || 0) >= maxPending)
@@ -293,7 +335,7 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     let run;
     try {
         run = await this.dryRunAction({
-            action, params, source,
+            action, params, source, rawData,
             probeFeeDestination: feeDestination,
             timeoutMs: timeoutMs,
             acquireTimeoutMs: acquireMs,
@@ -302,7 +344,8 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
             // here (see invokeController). feequotedryrun deliberately omits this.
             guardInert: true,
             // No transaction exists yet, so output-matching fee checks are unanswerable.
-            feeProbe: true
+            feeProbe: true,
+            batchFeeQuote: batchNativeQuote
         });
     } catch(e){
         // Block processing still holds the transaction mutex. The admission cap
@@ -327,6 +370,19 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     // only the base would run out of gas and lose the fee.
     if(isIncompleteDryRun(run))
         return feeQuoteNoVerdict(base, run);
+    if(batchNativeQuote && Array.isArray(run.subCommands)){
+        let refused = run.subCommands.find((sub) => sub && sub.refused);
+        if(refused)
+            return Object.assign(base, { supported: false, denied: true, valid: false,
+                deniedSubAction: refused.action,
+                error: 'native fee quote not supported for BATCH with a ' + refused.action +
+                       ' sub-command (' + refused.refused + ')' });
+    }
+    if(batchNativeQuote && run.status === 'valid' &&
+       (!Array.isArray(run.batchFees) ||
+        (Array.isArray(run.subCommands) && run.batchFees.length !== run.subCommands.length)))
+        return feeQuoteNoVerdict(base, Object.assign({}, run,
+            { error: run.error || 'batch fee read-back did not finish' }));
 
     base.blockIndex = run.blockIndex;
     base.blockTime  = run.blockTime;
@@ -335,7 +391,9 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
 
     let verdictQuote = dryRunVerdictQuote(this, base, run, action);
     let quote;
-    if(!verdictQuote && meteredExecuteQuote){
+    if(!verdictQuote && batchNativeQuote){
+        quote = await priceBatchFeeQuote(this, base, run, feeOutputSats);
+    } else if(!verdictQuote && meteredExecuteQuote){
         base.estimatedGasCost = this.util.bcfloor(this.util.bcdiv(
             run.xchainFee, this.config['GAS_PRICE'], 18));
         base.gasSafetyMarginPercent = EXECUTE_QUOTE_GAS_SAFETY_MARGIN_PERCENT;
@@ -368,13 +426,14 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
 // sub-action costs the node one string scan rather than a transaction. It is NOT the
 // load-bearing guard: batch/index.js dispatchSubCommands re-checks each dispatched name (see
 // isBatchProbeForbiddenSubAction).
-function batchProbeForbiddenSubAction(policy, params){
+function batchProbeForbiddenSubAction(policy, params, allowExecute){
     let format   = this.util.getFormatVersion(params[0]);
     let commands = ['BATCH'].concat(params).join('|').split(';');
     commands[0]  = commands[0].replace('BATCH|' + format + '|', '');
     for(let command of commands){
         let name = String(command).split('|')[0];
-        if(policy.isBatchProbeForbiddenSubAction(name))
+        if(policy.isBatchProbeForbiddenSubAction(name) &&
+           !(allowExecute === true && String(name).trim().toUpperCase() === 'EXECUTE'))
             return String(name).trim().toUpperCase();
     }
     return null;
@@ -482,7 +541,9 @@ function quoteSurfaceMethods(policy){
             return staticFeeQuote.call(this, policy, base, action, params, feeOutputSats);
         },
         computeFeeQuote(request){ return computeFeeQuote.call(this, policy, request); },
-        batchProbeForbiddenSubAction(params){ return batchProbeForbiddenSubAction.call(this, policy, params); },
+        batchProbeForbiddenSubAction(params, allowExecute){
+            return batchProbeForbiddenSubAction.call(this, policy, params, allowExecute);
+        },
         computePreflight(request){ return computePreflight.call(this, policy, request); }
     };
 }

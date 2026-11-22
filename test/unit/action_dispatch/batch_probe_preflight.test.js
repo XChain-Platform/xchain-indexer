@@ -204,7 +204,7 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             }
         });
 
-        it('computeFeeQuote still refuses BATCH: this door answers validity, never pricing', async function () {
+        it('BTC computeFeeQuote still refuses BATCH because native payment is optional', async function () {
             // The fee-quote refusal has its own reason - a batch's native fee is the SUM of its
             // sub-actions' state-dependent fees, and a partial quote UNDER-SIZES the output.
             // Opening the validity door must not open the funds-burning one.

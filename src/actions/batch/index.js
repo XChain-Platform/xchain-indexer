@@ -183,7 +183,9 @@ async function dispatchSubCommands(commands, data, error, normalize, collect){
         batchPosition++;
         let { action, params } = await prepareSubCommand.call(this, command, data, baseKeys, normalize, batchPosition);
 
-        // STRUCTURAL VM REFUSAL on the public pre-flight path (spec row 46). This is
+        // STRUCTURAL VM REFUSAL on the public pre-flight path (spec row 46). The one
+        // exception is computeFeeQuote's bounded mandatory-native BATCH run, which dispatches
+        // EXECUTE so its state-dependent fee can be observed after earlier sub-commands. This is
         // what lets BATCH be pre-flighted at all without lifting it out of
         // FEE_QUOTE_DENYLIST: the batch runs for real here, minus the commit, while
         // holding the block-loop transaction mutex, so dispatching a sub-command that
@@ -196,7 +198,8 @@ async function dispatchSubCommands(commands, data, error, normalize, collect){
         // batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
         // but only this one is impossible to spell around, because there is no further
         // transformation between the check and the call.
-        if(data['GUARD_INERT'] === true && this.actions.isBatchProbeForbiddenSubAction(action)){
+        let quoteExecute = data['BATCH_FEE_QUOTE'] === true && action === 'EXECUTE';
+        if(data['GUARD_INERT'] === true && this.actions.isBatchProbeForbiddenSubAction(action) && !quoteExecute){
             if(collect) data['PROBE_SUB_VERDICTS'].push({
                     position: batchPosition,
                     action:   action,
@@ -221,6 +224,7 @@ async function dispatchSubCommands(commands, data, error, normalize, collect){
         await this.actions.processAction(action, params, data, error);
 
         if(collect){
+            await probe.recordSubFee.call(this, data, action);
             probe.recordSubVerdict.call(this, data, action, batchPosition, this.actions._primaryVerdict);
             // Restore, so no sub-command's snapshot is left to answer for the batch itself.
             this.actions._primaryVerdict = outerPrimary;
