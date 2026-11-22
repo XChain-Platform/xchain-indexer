@@ -129,6 +129,9 @@
 // this ordinal; the pin advances only because it must track the package version.
 // 0.27.6 -> 0.27.7 is an indexer-only patch train that registers nothing new on
 // this ordinal; the pin advances only because it must track the package version.
-const CONSENSUS_VERSION = '0.28.0';
+// 0.28.0 -> 0.28.1 is a patch train that moves one BTC testnet height
+// (CAPABILITY_SNAPSHOT_PROOF_ACTIVATION 162658 to 162900) and registers nothing new on
+// this ordinal; the pin advances only because it must track the package version.
+const CONSENSUS_VERSION = '0.28.1';
 
 module.exports = { CONSENSUS_VERSION };
