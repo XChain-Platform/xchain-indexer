@@ -5011,6 +5011,22 @@
       "XCALL mirror reads default to the protocol cap @regression @tier1 unprocessed results on one DB bind XCALL_MAX_CALLS_PER_BLOCK as the LIMIT for limit NaN",
       "XCALL mirror reads default to the protocol cap @regression @tier1 unprocessed results on one DB bind XCALL_MAX_CALLS_PER_BLOCK as the LIMIT for limit undefined"
     ],
+    "40cce3c81f3211cb": [
+      "migration live-schema MODIFY guard: named charset and collation @regression @tier1 leaves a case-insensitive column to the charset default whatever the server version names it",
+      "migration live-schema MODIFY guard: named charset and collation @regression @tier1 passes a restated collation and a widen that keeps the collation and changes only the charset",
+      "migration live-schema MODIFY guard: named charset and collation @regression @tier1 refuses a MODIFY that names the charset but lets a binary collation fall to its default",
+      "migration live-schema MODIFY guard: named charset and collation @regression @tier1 refuses an explicit COLLATE that coarsens or otherwise changes the live collation",
+      "migration live-schema MODIFY guard: omitted charset and collation @regression @tier1 passes when the column already carries the table default or the MODIFY names its charset",
+      "migration live-schema MODIFY guard: omitted charset and collation @regression @tier1 refuses a charset-less text MODIFY that drops a column collation",
+      "migration live-schema MODIFY guard: omitted charset and collation @regression @tier1 refuses a charset-less text MODIFY that falls back to a different table charset",
+      "migration live-schema MODIFY guard: type changes @regression @tier1 fails closed on an incomplete restated type argument list",
+      "migration live-schema MODIFY guard: type changes @regression @tier1 names the live and restated types when a decimal score would be rounded to an integer",
+      "migration live-schema MODIFY guard: type changes @regression @tier1 passes the timestamp to datetime move the committed auto migrations make",
+      "migration live-schema MODIFY guard: type changes @regression @tier1 passes widenings and alias restatements",
+      "migration live-schema MODIFY guard: type changes @regression @tier1 reads quoted parentheses in ENUM and SET members without truncating the type",
+      "migration live-schema MODIFY guard: type changes @regression @tier1 refuses a same-name restatement that drops precision, fractional seconds or width",
+      "migration live-schema MODIFY guard: type changes @regression @tier1 refuses a type change it has no widening rule for"
+    ],
     "40d8afc9cd271bab": [
       "MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1 ISSUE cross-checks against MAX_SUPPLY gate OFF: the same ISSUE keeps its legacy MINT_ADDRESS_MAX > MAX_SUPPLY rejection",
       "MAX_SUPPLY=0 is the uncapped sentinel @regression @tier1 ISSUE cross-checks against MAX_SUPPLY gate OFF: the same ISSUE keeps its legacy MINT_SUPPLY > MAX_SUPPLY rejection",
@@ -5574,6 +5590,29 @@
       "mainnet launch registry rows admits nothing extra from the empty map before launch",
       "mainnet launch registry rows registers an empty prelaunch seed source map",
       "mainnet launch registry rows registers the launch instant on mainnet only"
+    ],
+    "4775750ce5a991ad": [
+      "migration live-schema MODIFY guard @regression @tier1 does not read a keyword inside a string literal as an attribute",
+      "migration live-schema MODIFY guard @regression @tier1 finds each MODIFY clause, ignoring FIRST/AFTER and other clauses",
+      "migration live-schema MODIFY guard @regression @tier1 passes a MODIFY that restates every attribute or only widens",
+      "migration live-schema MODIFY guard @regression @tier1 passes when the live column is absent or the probe answers without a column row",
+      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips AUTO_INCREMENT",
+      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips ON UPDATE, COMMENT or a generation expression",
+      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips a DEFAULT",
+      "migration live-schema MODIFY guard @regression @tier1 refuses narrowing a nullable live column to NOT NULL or PRIMARY KEY",
+      "migration live-schema MODIFY guard @regression @tier1 refuses narrowing of type, length and charset",
+      "migration live-schema MODIFY guard: block comments @regression @tier1 does not read a keyword inside a block comment as a restated attribute",
+      "migration live-schema MODIFY guard: block comments @regression @tier1 leaves comment markers inside a quoted literal and executable comments alone",
+      "migration live-schema MODIFY guard: block comments @regression @tier1 still finds a MODIFY behind a block comment anywhere before the column",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 allows the retype on an empty table and on a BigInt minimum",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 allows the retype when no stored id is negative",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 does not count AUTO_INCREMENT inside a COMMENT literal as restated",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 probes a signed AUTO_INCREMENT id widened to an unsigned type",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 refuses the retype when a stored id is negative and names the minimum",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a MODIFY that drops AUTO_INCREMENT while going unsigned",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a narrower rank even when the id is AUTO_INCREMENT and unsigned",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a signed to unsigned retype of a column without AUTO_INCREMENT",
+      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses unsigned to signed on an AUTO_INCREMENT id"
     ],
     "47918a353044a5d4": [
       "archiveReissueRefusal() does not read when the author is missing",
@@ -7120,6 +7159,13 @@
       "protocol_changes: lists and market regtest overlay @regression @tier1 moves exactly the three Unix instant rows",
       "protocol_changes: lists and market regtest overlay @regression @tier1 never changes mainnet or testnet entries"
     ],
+    "55a3cc516852ecc3": [
+      "fee quote discloses BATCH coin payments owed @regression @tier1 matches pre-flight and omits the map when the run does not owe it",
+      "fee quote discloses the oracle usage fee owed @regression @tier1 a valid Mode B quote carries oracleFeesOwed beside the protocol-fee sizing",
+      "fee quote discloses the oracle usage fee owed @regression @tier1 answers the same map the pre-flight answers for the same run",
+      "fee quote discloses the oracle usage fee owed @regression @tier1 omits the field on a rejected run, which owes nothing",
+      "fee quote discloses the oracle usage fee owed @regression @tier1 omits the field when no oracle fee is owed"
+    ],
     "55b7c4dec20ef0d8": [
       "Send handler: resolved tick totals gate off @regression @tier1 keeps differently cased legs below the threshold",
       "Send handler: resolved tick totals gate off @regression @tier1 requires a handoff after identical spellings consolidate",
@@ -7131,6 +7177,16 @@
     ],
     "56407de1638e0f29": [
       "Database.createAirdrop() repeated legs @regression @tier1 keeps sibling rows intact when an exact leg repeats"
+    ],
+    "564a0d3a2cd9b0be": [
+      "BATCH dry-run read-back off the probe path @regression @tier1 answers for the BATCH when its last sub-command is invalid",
+      "BATCH dry-run read-back off the probe path @regression @tier1 ignores a filling sub-command's match capture",
+      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 BELOW-PROBE CONTROL: a decoded batch keeps the capture exactly as before",
+      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 a sub-command with no match keeps the status it really got",
+      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 gives every filling ORDER its own snapshot, not just the first",
+      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 leaves no sub-command's snapshot behind to answer for the batch",
+      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 lists the ORDER as valid, not as its match's pending_coinpay",
+      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 reads each filling ORDER fee from its originating action index"
     ],
     "565d695842341d6b": [
       "UtxoTracker.getSyncStatus() asks get_sync_status with a bounded request and returns the sync view",
@@ -11379,6 +11435,19 @@
       "Database.updateBalances (parallelized) @unit @regression handles a single string address",
       "Database.updateBalances (parallelized) @unit @regression passes the rollback flag through to each updateAddressBalance call",
       "Database.updateBalances (parallelized) @unit @regression runs address updates sequentially (one fully completes before the next starts)"
+    ],
+    "8621a576c9674f5f": [
+      "capability snapshot proof startup pin refusal allows a valid _NEXT pin with a decimal safe integer _FROM",
+      "capability snapshot proof startup pin refusal allows an unarmed chain and one that resolves nothing from the mirror",
+      "capability snapshot proof startup pin refusal allows regtest and missing options",
+      "capability snapshot proof startup pin refusal allows startup with a valid static pin",
+      "capability snapshot proof startup pin refusal does not apply the direct database refusal outside the armed mirror-backed live scope",
+      "capability snapshot proof startup pin refusal refuses a valid _NEXT pin with an invalid _FROM",
+      "capability snapshot proof startup pin refusal refuses armed testnet and mainnet startup without a pin",
+      "capability snapshot proof startup pin refusal refuses direct hub database reads even when the checkpoint pin is valid",
+      "capability snapshot proof startup pin refusal refuses invalid and empty-array static pins with their parser errors",
+      "capability snapshot proof startup pin refusal turns environment reader failures into refusal messages",
+      "capability snapshot proof startup pin refusal uses the call-time process environment reader by default"
     ],
     "8631561396ca1ece": [
       "protocol_changes/vm_twin/string_receiver_meter_matches_vm: activation parity @regression @tier1 agrees with the VM predicate on armed and unarmed networks",
@@ -16849,6 +16918,15 @@
       "ORDER and DISPENSER expiration boundary tests @regression @tier2 TS-04: EXPIRATION at 183 days charges a fee and is valid when balance covers it",
       "ORDER and DISPENSER expiration boundary tests @regression @tier2 TS-05: Missing EXPIRATION uses default (BLOCK_TIME + 90 days) and is valid"
     ],
+    "cebe47e7351730ad": [
+      "BATCH quote dispatch exception @regression @tier1 allows only EXECUTE through the quote-specific pre-scan",
+      "mandatory-native BATCH fee quote @regression @tier1 keeps XEXEC and non-pricing sub-commands refused",
+      "mandatory-native BATCH fee quote @regression @tier1 prices EXECUTE below and at the metered-gas gate",
+      "mandatory-native BATCH fee quote @regression @tier1 quotes DOGE DEPOSIT then EXECUTE at or above the exact accepted boundary",
+      "mandatory-native BATCH fee quote @regression @tier1 quotes a VM-free batch at or above the exact accepted boundary",
+      "mandatory-native BATCH fee quote @regression @tier1 returns no-verdict for an incomplete whole-batch run",
+      "mandatory-native BATCH fee quote @regression @tier1 uses one literal-wire run and its sequential second-leg fee"
+    ],
     "cec03c99db37953b": [
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure BELOW-PROBE CONTROL: a real transaction still needs the output and records nothing",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure BELOW-PROBE CONTROL: a real transaction that PASSES the oracle check records nothing",
@@ -18550,17 +18628,6 @@
       "HubDbSync price mirror repoint: skipped rounds stay without proof @regression @tier2 leaves skipped rows alone when the drain served no rows to fix a floor",
       "HubDbSync price mirror repoint: skipped rounds stay without proof @regression @tier2 leaves skipped rows alone when the finalized pass refused"
     ],
-    "e3e7ffb0929fda49": [
-      "capability snapshot proof startup pin refusal allows a valid _NEXT pin with a decimal safe integer _FROM",
-      "capability snapshot proof startup pin refusal allows an unarmed chain and one that resolves nothing from the mirror",
-      "capability snapshot proof startup pin refusal allows regtest and missing options",
-      "capability snapshot proof startup pin refusal allows startup with a valid static pin",
-      "capability snapshot proof startup pin refusal refuses a valid _NEXT pin with an invalid _FROM",
-      "capability snapshot proof startup pin refusal refuses armed testnet and mainnet startup without a pin",
-      "capability snapshot proof startup pin refusal refuses invalid and empty-array static pins with their parser errors",
-      "capability snapshot proof startup pin refusal turns environment reader failures into refusal messages",
-      "capability snapshot proof startup pin refusal uses the call-time process environment reader by default"
-    ],
     "e3eb231de5a57eeb": [
       "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 armed, a caller that supplies no block index keeps the unarmed count",
       "dispenser_fiat_pricing_activation: Mode A floor rule @regression @tier1 armed, a large payment is credited the documented count, not thirty-three over it",
@@ -18616,6 +18683,12 @@
       "Database.getEffectiveStakeByPubkey() @regression @tier1 returns the direct-stake row (Path 1) when present",
       "Database.setStakeDeactivationByPubkey() @regression @tier1 returns false when pubkey not found",
       "Database.setStakeDeactivationByPubkey() @regression @tier1 returns true and runs UPDATE when pubkey found"
+    ],
+    "e44564e3fb3fe405": [
+      "capability snapshot proof startup pin wiring @regression @tier1 does not refuse an unarmed chain, BTC, or regtest",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses a configured direct hub database and allows the verifying mirror mode",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with an invalid pin",
+      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with no pin and names rotation variables"
     ],
     "e4825d70c0c100d7": [
       "rollcall_activation epoch close arithmetic C = E + window + proof delay",
@@ -21407,7 +21480,7 @@
   "scripts": {
     "test": {
       "fileCount": 1707,
-      "titleCount": 16566,
+      "titleCount": 16575,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21439,7 +21512,7 @@
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
         "test/unit/action_dispatch/airdrop_destroy_multileg_preflight.test.js": "b1f68eec644f5216",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
-        "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "1ca812c110fd4110",
+        "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "564a0d3a2cd9b0be",
         "test/unit/action_dispatch/batch_probe_preflight.test.js": "0fc541411cfe9827",
         "test/unit/action_dispatch/batch_probe_preflight.test/coin_payments_disclosure.test.js": "8fba7e8bd4c65ff0",
         "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js": "8c24733fe3680942",
@@ -22192,8 +22265,8 @@
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/pinned.test.js": "0a2fc0a50228f0e1",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
-        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
-        "test/unit/consensus/capability_snapshot_proof/startup_pin_refusal.test.js": "e3e7ffb0929fda49",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "e44564e3fb3fe405",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin_refusal.test.js": "8621a576c9674f5f",
         "test/unit/consensus/capability_snapshot_proof/trust_pin.test.js": "693d182bd9ca31ce",
         "test/unit/consensus/capability_snapshot_proof/trust_set.test.js": "b468c3fd3eff32ee",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
@@ -22550,7 +22623,7 @@
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/airdrop_leg_draw_parity.test.js": "03533bd5b864e86b",
-        "test/unit/fees/fee_quote.test/batch_fee_quote.test.js": "6447cdb10a6b8999",
+        "test/unit/fees/fee_quote.test/batch_fee_quote.test.js": "cebe47e7351730ad",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "f617f8c3e61185f6",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "ee89b27c2210a19c",
@@ -22560,7 +22633,7 @@
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "a301c0edda99b954",
         "test/unit/fees/fee_quote_dry_run.test.js": "12d85fd04f18a7a4",
         "test/unit/fees/fee_quote_dry_run.test/vm_settled_gas_fee.test.js": "b3bb19f3c24eef10",
-        "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
+        "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "55a3cc516852ecc3",
         "test/unit/fees/fee_quote_primary_verdict.test.js": "5fdfe18d5e8ecd00",
         "test/unit/fees/fee_quote_tx_lock_budget.test.js": "ad8371ca0dd4fe40",
         "test/unit/fees/gas_mint_network_gate.test.js": "bd9b18d570905037",
@@ -22776,9 +22849,9 @@
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/destructive_guard_statement_allow_list.test.js": "a8be1dced7a7271c",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
-        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "0df8e33d38ab2a4c",
+        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "4775750ce5a991ad",
         "test/unit/migration/migration_runner.test/live_schema_guard.test/safety.test.js": "c2fbc94e3aacc401",
-        "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "eb5fe05fc04dd774",
+        "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "40cce3c81f3211cb",
         "test/unit/migration/migration_runner.test/query_timeout.test.js": "7e822a73cbf9b18f",
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
         "test/unit/migration/migration_runner.test/runner_guards.test.js": "af768b97a8636398",

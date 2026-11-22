@@ -37,6 +37,10 @@ describe('migration live-schema MODIFY guard: type changes @regression @tier1', 
             ['double', 'INT'], ['date', 'TIME'], ['datetime', 'TIMESTAMP'], ["enum('a','b')", 'VARCHAR(10)'],
             ['varchar(250)', 'TINYTEXT'], ['bigint(20)', 'DECIMAL(5,2)'], ['int(11)', 'DECIMAL(12,4)'],
             ['bigint(20) unsigned', 'DECIMAL(19,0)'], ['int(11)', 'DECIMAL(10,0) UNSIGNED'],
+            ['int(11)', 'BIGINT UNSIGNED'], ['tinyint(4)', 'INT UNSIGNED'],
+            ['smallint(6)', 'MEDIUMINT UNSIGNED'], ['int(11)', 'INT ZEROFILL'],
+            ['int(11)', 'BIGINT ZEROFILL'], ['int(11)', 'DECIMAL(12,0) ZEROFILL'],
+            ['double', 'DOUBLE ZEROFILL'],
         ]) assert.match(lossOf({ COLUMN_TYPE: live }, next), /narrows the type/, live + ' -> ' + next);
     });
 
@@ -54,6 +58,9 @@ describe('migration live-schema MODIFY guard: type changes @regression @tier1', 
             ['bigint(20) unsigned', 'DECIMAL(20,0) UNSIGNED'], ['decimal(8,4)', 'DECIMAL(10,4)'],
             ['decimal(8,4)', 'NUMERIC(8,4)'], ['decimal(10,0)', 'DECIMAL'], ['float', 'DOUBLE'],
             ['datetime(6)', 'DATETIME(6)'], ['tinyint(1)', 'BOOLEAN'], ['longtext', 'JSON'], ['varchar(250)', 'TEXT'],
+            ['int(11)', 'BIGINT'], ['int(10) unsigned', 'BIGINT'],
+            ['int(10) unsigned', 'BIGINT UNSIGNED'], ['int(10) unsigned', 'INT ZEROFILL'],
+            ['int(10) unsigned zerofill', 'BIGINT UNSIGNED ZEROFILL'],
         ]) assert.strictEqual(lossOf({ COLUMN_TYPE: live }, next), '', live + ' -> ' + next);
     });
 
@@ -67,6 +74,20 @@ describe('migration live-schema MODIFY guard: type changes @regression @tier1', 
     it('passes the timestamp to datetime move the committed auto migrations make', function () {
         assert.strictEqual(lossOf({ COLUMN_TYPE: 'timestamp', COLUMN_DEFAULT: 'current_timestamp()' },
             'DATETIME DEFAULT CURRENT_TIMESTAMP'), '');
+    });
+
+    it('reads quoted parentheses in ENUM and SET members without truncating the type', async function () {
+        assert.match(lossOf({ COLUMN_TYPE: "enum('a)','b')" }, "ENUM('a)')"), /drops b/);
+        assert.match(lossOf({ COLUMN_TYPE: "set('x)','y')" }, "SET('x)')"), /drops y/);
+        assert.strictEqual(lossOf({ COLUMN_TYPE: "enum('a)','b')" }, "ENUM('a)','b')"), '');
+        const conn = { query: async () => [liveRow({ COLUMN_TYPE: "enum('a)','b')" })] };
+        await assert.rejects(assertNoLiveColumnLoss(conn, 'f.sql',
+            statementsOf("ALTER TABLE t MODIFY state ENUM('a)');")), /drops b/);
+    });
+
+    it('fails closed on an incomplete restated type argument list', function () {
+        assert.match(lossOf({ COLUMN_TYPE: "enum('a','b')" }, "ENUM('a','b"), /cannot read the restated column type/);
+        assert.match(lossOf({ COLUMN_TYPE: "enum('a','b')" }, "ENUM('a','b'"), /cannot read the restated column type/);
     });
 });
 

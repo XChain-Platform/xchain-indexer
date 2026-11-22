@@ -26,10 +26,11 @@ const PreflightMemo = require('../../../src/chain/preflight_memo.js');
 
 const FEE_DEST = 'feeDestinationAddr111111111111111';
 const OWED     = { oracleAddr1111111111111111111111: '0.00020000' };
+const COIN_OWED = { sellerAddr111111111111111111111: '3.00000000' };
 
-function makeCtx(run){
+function makeCtx(run, coin){
     let util = new Utility();
-    util.config['COIN']    = 'BTC';
+    util.config['COIN']    = coin || 'BTC';
     util.config['GAS']     = 'XCHAIN';
     util.config['ADDRESS'] = Object.assign({}, util.config['ADDRESS'] || {}, { FEE_DESTINATION: FEE_DEST });
     return {
@@ -53,6 +54,13 @@ function makeCtx(run){
 }
 
 const DISPENSER = { action: 'DISPENSER', params: '0|AAA|1|1|0|1|USD|oracleAddr1111111111111111111111', source: 's' };
+const COINPAY_BATCH = { action: 'BATCH', params: '0|COINPAY|0|42', source: 's' };
+
+function coinpayRun(extra){
+    return Object.assign({ xchainFee: null,
+        batchFees: [{ action: 'COINPAY', xchainFee: '0' }],
+        subCommands: [{ action: 'COINPAY', status: 'valid' }] }, extra);
+}
 
 describe('fee quote discloses the oracle usage fee owed @regression @tier1', function () {
 
@@ -80,5 +88,25 @@ describe('fee quote discloses the oracle usage fee owed @regression @tier1', fun
             .computeFeeQuote(DISPENSER);
         assert.strictEqual(r.valid, false);
         assert.strictEqual(Object.prototype.hasOwnProperty.call(r, 'oracleFeesOwed'), false);
+    });
+});
+
+describe('fee quote discloses BATCH coin payments owed @regression @tier1', function () {
+    it('matches pre-flight and omits the map when the run does not owe it', async function () {
+        let quote = await makeCtx(coinpayRun({ coinPaymentsOwed: COIN_OWED }), 'DOGE')
+            .computeFeeQuote(COINPAY_BATCH);
+        let preflight = await makeCtx(coinpayRun({ coinPaymentsOwed: COIN_OWED }), 'DOGE')
+            .computePreflight(COINPAY_BATCH);
+        assert.strictEqual(quote.valid, true);
+        assert.strictEqual(quote.requiredFeeSats, 1000);
+        assert.deepStrictEqual(quote.coinPaymentsOwed, COIN_OWED);
+        assert.deepStrictEqual(quote.coinPaymentsOwed, preflight.coinPaymentsOwed);
+
+        let absent = await makeCtx(coinpayRun({}), 'DOGE').computeFeeQuote(COINPAY_BATCH);
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(absent, 'coinPaymentsOwed'), false);
+
+        let rejectedRun = coinpayRun({ status: 'invalid: obligation unknown', coinPaymentsOwed: COIN_OWED });
+        let rejected = await makeCtx(rejectedRun, 'DOGE').computeFeeQuote(COINPAY_BATCH);
+        assert.strictEqual(Object.prototype.hasOwnProperty.call(rejected, 'coinPaymentsOwed'), false);
     });
 });

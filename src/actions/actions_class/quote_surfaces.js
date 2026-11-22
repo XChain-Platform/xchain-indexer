@@ -405,9 +405,10 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     } else {
         quote = verdictQuote || await this.priceFeeQuote(base, run.xchainFee, feeOutputSats, run.nativeFeeLegs);
     }
-    // Disclose the oracle usage fee a Mode B DISPENSER owes, as the pre-flight does: the probe
-    // skips that output check, so valid:true alone hides a second native output the chain requires.
+    // Disclose native payments the probe assumed, as the pre-flight does. The probe skips their
+    // output checks, so valid:true alone hides additional native outputs the chain requires.
     if(run.status === 'valid' && run.oracleFeesOwed) quote.oracleFeesOwed = run.oracleFeesOwed;
+    if(run.status === 'valid' && run.coinPaymentsOwed) quote.coinPaymentsOwed = run.coinPaymentsOwed;
     return quote;
 }
 

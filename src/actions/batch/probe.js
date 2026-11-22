@@ -91,8 +91,9 @@ function recordSubVerdict(data, action, batchPosition, matchSnapshot){
 
 // Capture the fee each sub-command actually staged after it has run against the state left by
 // its predecessors. EXECUTE discloses its settled metered fee directly; ordinary handlers use
-// their common fees row. A missing row means that command charged nothing on this run.
-async function recordSubFee(data, action){
+// their common fees row. A filling ORDER or SWAP uses the originating index saved before its
+// match replaced ACTION_INDEX. A missing row means the command charged zero.
+async function recordSubFee(data, action, matchSnapshot){
     if(!Array.isArray(data['PROBE_BATCH_FEES'])) return;
     if(action === 'AIRDROP' && Array.isArray(data['PROBE_NATIVE_FEE_LEGS'])){
         data['PROBE_BATCH_FEES'].push({ action: action,
@@ -102,11 +103,15 @@ async function recordSubFee(data, action){
     let amount = null;
     if(action === 'EXECUTE' && Object.prototype.hasOwnProperty.call(data, 'PROBE_SETTLED_GAS_FEE'))
         amount = data['PROBE_SETTLED_GAS_FEE'];
-    else if(data['ACTION_INDEX'] !== null && data['ACTION_INDEX'] !== undefined){
-        let record = await this.indexerDb.getFeeRecord(data['ACTION_INDEX']);
+    else {
+        let feeIndex = matchSnapshot && matchSnapshot.actionIndex != null
+            ? matchSnapshot.actionIndex : data['ACTION_INDEX'];
+        let record = feeIndex == null ? null : await this.indexerDb.getFeeRecord(feeIndex);
         if(record) amount = record.amount;
     }
-    data['PROBE_BATCH_FEES'].push({ action: action, xchainFee: String(amount == null ? '0' : amount) });
+    data['PROBE_BATCH_FEES'].push({
+        action: action, xchainFee: String(amount == null ? '0' : amount)
+    });
 }
 
 module.exports = { seedProbeCollectors, recordSubVerdict, recordSubFee };

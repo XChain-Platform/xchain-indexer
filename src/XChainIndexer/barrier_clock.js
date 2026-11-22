@@ -36,10 +36,11 @@ module.exports = {
     // satisfied for a block, or null when that cannot be determined. Every such barrier has
     // the same escape hatch (`streamWatermark >= blockTime + grace`), and the watermark only
     // advances as real time does, so that escape cannot clear before blockTime + grace.
-    // A content-based satisfaction case may instead open from blockTime onward. Callers with
-    // a content case and a long grace must report that earlier floor separately, as the price
-    // barrier does, or a later fallback would suppress the hold for real mirror lag. Returns
-    // null when sync is off or the inputs are not finite.
+    // This value is a valid floor only when every satisfaction path is the stream watermark.
+    // Forward-stamped content and empty-mirror or certification paths can open at any instant,
+    // so those callers must report null. Price-time content is different: its timestamp has
+    // a blockTime floor, which priceTimeClearsAt reports separately. Returns null when sync is
+    // off or the inputs are not finite.
     //
     // Above the mirror-admission activation the barriers are keyed on the hub's per-table
     // height watermark, which can open them at any instant, so no first instant exists (the

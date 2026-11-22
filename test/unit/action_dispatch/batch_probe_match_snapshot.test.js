@@ -34,16 +34,20 @@ const MATCH_INDEX = 900;
 // Two filling ORDERs around a plain SEND.
 const WIRE = 'BATCH|0|ORDER|0|BTC||1|0|BTC|AAA|10|0;SEND|0|TEST|5|' + DEST + ';ORDER|0|BTC||2|0|BTC|BBB|20|0';
 
-let indexer, ctx, handler;
+let indexer, ctx, handler, orderIndexes;
 
 function makeCtx(){
     indexer = createMockIndexer();
+    orderIndexes = [];
+    let nextActionIndex = 100;
+    indexer.indexerDb.createActionIndex.callsFake(async () => ++nextActionIndex);
     let matchStub = { parse: sinon.stub().callsFake(async (params, data) => {
         // What order_match/settle.js does to the ORDER's own record on a native-coin fill.
         data['STATUS'] = 'pending_coinpay';
         data['ACTION_INDEX'] = MATCH_INDEX;
     }) };
     let orderStub = { parse: sinon.stub().callsFake(async (params, data) => {
+        orderIndexes.push(data['ACTION_INDEX']);
         data['STATUS'] = 'valid';
         await ctx.processAction('ORDER_MATCH', null, data, null);
     }) };
@@ -96,6 +100,23 @@ describe('BATCH pre-flight : a filling ORDER sub-command answers for itself @reg
         await handler.parse(['0'], data, null);
         assert.strictEqual(data['PROBE_SUB_VERDICTS'][2].action, 'ORDER');
         assert.strictEqual(data['PROBE_SUB_VERDICTS'][2].status, 'valid');
+    });
+
+    it('reads each filling ORDER fee from its originating action index', async function () {
+        indexer.indexerDb.getFeeRecord = sinon.stub().callsFake(async (actionIndex) => {
+            let amounts = { 101: '3', 102: '5', 103: '7' };
+            return amounts[actionIndex] ? { amount: amounts[actionIndex] } : null;
+        });
+        const data = txData(true);
+        data['BATCH_FEE_QUOTE'] = true;
+        await handler.parse(['0'], data, null);
+        assert.deepStrictEqual(orderIndexes, [101, 103]);
+        assert.deepStrictEqual(data['PROBE_BATCH_FEES'], [
+            { action: 'ORDER', xchainFee: '3' },
+            { action: 'SEND', xchainFee: '5' },
+            { action: 'ORDER', xchainFee: '7' }
+        ]);
+        assert.strictEqual(indexer.indexerDb.getFeeRecord.calledWith(MATCH_INDEX), false);
     });
 
     it('a sub-command with no match keeps the status it really got', async function () {

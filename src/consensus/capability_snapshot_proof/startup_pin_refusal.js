@@ -59,9 +59,15 @@ function refusal(names, detail){
         (detail ? ' (' + detail + ')' : '');
 }
 
+function directDatabaseRefusal(names, network){
+    return 'Startup refused: the capability snapshot proof gate is armed on ' + network +
+        ', but direct hub database reads do not verify checkpoint proofs against ' + names.pin +
+        '. Set HUB_DB_SYNC_ENABLED=true and use a local mirror database.';
+}
+
 /**
  * Decide whether startup must stop until an armed mirror-backed chain is pinned.
- * @param {{network: string, resolvesFromMirror: boolean, gateArmed: boolean} | null} opts startup state
+ * @param {{network: string, resolvesFromMirror: boolean, gateArmed: boolean, hubDbDirect?: boolean} | null} opts startup state
  * @param {function(string): (string | undefined)} readEnv call-time environment reader
  * @returns {string | null} refusal message, or null when startup may continue
  */
@@ -72,6 +78,7 @@ function startupPinRefusal(opts, readEnv = readEnvNow){
         if(opts.network !== 'testnet' && opts.network !== 'mainnet') return null;
 
         names = trustPinEnvNames(opts.network);
+        if(opts.hubDbDirect === true) return directDatabaseRefusal(names, opts.network);
         const current = readValue(readEnv, names.pin);
         const next = readValue(readEnv, names.next);
         const from = readValue(readEnv, names.from);

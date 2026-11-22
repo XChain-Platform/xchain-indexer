@@ -224,7 +224,7 @@ async function dispatchSubCommands(commands, data, error, normalize, collect){
         await this.actions.processAction(action, params, data, error);
 
         if(collect){
-            await probe.recordSubFee.call(this, data, action);
+            await probe.recordSubFee.call(this, data, action, this.actions._primaryVerdict);
             probe.recordSubVerdict.call(this, data, action, batchPosition, this.actions._primaryVerdict);
             // Restore, so no sub-command's snapshot is left to answer for the batch itself.
             this.actions._primaryVerdict = outerPrimary;

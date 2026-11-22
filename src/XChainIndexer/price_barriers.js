@@ -236,7 +236,9 @@ module.exports = {
                 // against a stale oracle copy. No transaction is open yet.
                 getLogger().warn('Deferring block ' + blockToParse + ' (oracle sync): ', err);
                 this.stallReason = 'oracle_sync_barrier';
-                this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'oracleWatermarkGraceS', blockToParse);
+                // Forward-stamped rows and certified empty mirrors can satisfy this wait
+                // immediately, so the later stream escape is not a clear-time floor.
+                this.stallClearsAt = null;
                 this.capabilityProofBarrierSkipped = false;
                 return true;
             }

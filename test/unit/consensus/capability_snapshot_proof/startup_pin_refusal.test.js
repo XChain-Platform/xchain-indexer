@@ -54,6 +54,22 @@ describe('capability snapshot proof startup pin refusal', function () {
         assert.strictEqual(decide(armed(), { [TESTNET_PIN]: pinned() }), null);
     });
 
+    it('refuses direct hub database reads even when the checkpoint pin is valid', function () {
+        for(const network of ['testnet', 'mainnet']){
+            const pin = network === 'testnet' ? TESTNET_PIN : MAINNET_PIN;
+            const refusal = decide({ ...armed(network), hubDbDirect: true }, { [pin]: pinned() });
+            assert.match(refusal, /HUB_DB_SYNC_ENABLED=true/);
+            assert.match(refusal, new RegExp(pin));
+            assert.strictEqual(decide({ ...armed(network), hubDbDirect: false }, { [pin]: pinned() }), null);
+        }
+    });
+
+    it('does not apply the direct database refusal outside the armed mirror-backed live scope', function () {
+        assert.strictEqual(decide({ ...armed('regtest'), hubDbDirect: true }, {}), null);
+        assert.strictEqual(decide({ ...armed(), gateArmed: false, hubDbDirect: true }, {}), null);
+        assert.strictEqual(decide({ ...armed(), resolvesFromMirror: false, hubDbDirect: true }, {}), null);
+    });
+
     it('allows a valid _NEXT pin with a decimal safe integer _FROM', function () {
         assert.strictEqual(decide(armed(), {
             [TESTNET_PIN + '_NEXT']: pinned('b'.repeat(64)),

@@ -90,7 +90,11 @@ function matchingClosedReplayWitness(marker, witness){
         phase.rules_from === marker.rules_from ? witness : null;
 }
 
-function assertCapabilitySnapshotPin(){
+function hubDbSyncEnabled(){
+    return CONFIG_ENV.HUB_DB_SYNC_ENABLED === 'true';
+}
+
+function assertCapabilitySnapshotPin(syncEnabled = hubDbSyncEnabled()){
     const network = this.config['NETWORK'];
     const coin = this.config['COIN'];
     const row = changes.get(CAPABILITY_SNAPSHOT_PROOF_KEY);
@@ -101,6 +105,7 @@ function assertCapabilitySnapshotPin(){
         resolvesFromMirror: MIRRORED_CAPABILITIES.some(
             capability => usesCapabilitySnapshot(this.config, capability)),
         gateArmed: typeof threshold === 'number' && threshold !== changes.UNARMED,
+        hubDbDirect: Boolean(this.hubDbHost && this.hubDbName && !syncEnabled),
     });
     if(refusal) this.util.throwError(refusal);
 }
@@ -254,11 +259,11 @@ module.exports = {
         this.hubDb = new database(this.hubDbHost, this.hubDbPort, this.hubDbName, this.hubDbUser, this.hubDbPass, this);
 
         // Optional: subscribe to the hub's WebSocket channel to keep the local hub DB in sync
-        // with new price_snapshots and oracle_prices rows. Used in distributed deployments where
-        // the indexer is on a different host from the hub. For single-host deployments, the
-        // local hub DB is the hub's MariaDB itself, so sync is not needed.
+        // with new price_snapshots and oracle_prices rows. Direct reads remain available where
+        // startup policy permits them. An armed capability proof gate on a live mirror-backed
+        // chain requires this verifier-backed mirror mode.
         // Enable by setting HUB_DB_SYNC_ENABLED=true (default off).
-        if(CONFIG_ENV.HUB_DB_SYNC_ENABLED === 'true'){
+        if(hubDbSyncEnabled()){
             this.hubDbSync = new HubDbSync(this.hubDb, {
                 selector: this.hubSelector,
                 coin: this.config['COIN'],

@@ -152,6 +152,17 @@ describe('migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsign
         assert.strictEqual((await probedVerdict(signedId, ALIGN, BigInt(0))).message, null);
     });
 
+    it('probes a signed AUTO_INCREMENT id widened to an unsigned type', async function () {
+        const live = liveRow({ COLUMN_TYPE: 'int(11)', EXTRA: 'auto_increment' });
+        const sql = 'ALTER TABLE t MODIFY id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT;';
+        const allowed = await probedVerdict(live, sql, 1);
+        assert.strictEqual(allowed.message, null);
+        assert.ok(allowed.seen.some(s => /^SELECT MIN\(/.test(s)), 'the wider unsigned retype must probe');
+        assert.strictEqual((await probedVerdict(live, sql, null)).message, null);
+        assert.match((await probedVerdict(live, sql, -5)).message,
+            /narrows the type \(int -> bigint unsigned\), live MIN\(id\) is -5/);
+    });
+
     it('refuses the retype when a stored id is negative and names the minimum', async function () {
         const got = await probedVerdict(signedId, ALIGN, -5);
         assert.match(got.message, /narrows the type \(bigint -> bigint unsigned\), live MIN\(id\) is -5/);
@@ -180,6 +191,9 @@ describe('migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsign
         const got = await probedVerdict(liveRow({ COLUMN_TYPE: 'bigint(20)' }), 'ALTER TABLE t MODIFY n BIGINT UNSIGNED;', 1);
         assert.match(got.message, /narrows the type \(bigint -> bigint unsigned\)/);
         assert.ok(!got.seen.some(s => /^SELECT MIN\(/.test(s)), 'a non AUTO_INCREMENT column must not probe');
+        const wider = await probedVerdict(liveRow({ COLUMN_TYPE: 'int(11)' }), 'ALTER TABLE t MODIFY n BIGINT UNSIGNED;', 1);
+        assert.match(wider.message, /narrows the type \(int -> bigint unsigned\)/);
+        assert.ok(!wider.seen.some(s => /^SELECT MIN\(/.test(s)), 'a wider non AUTO_INCREMENT retype must not probe');
     });
 
     it('still refuses a narrower rank even when the id is AUTO_INCREMENT and unsigned', async function () {

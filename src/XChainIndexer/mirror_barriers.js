@@ -42,15 +42,11 @@ module.exports = {
     // Above the mirror-admission activation the answer is null, and that null is load-bearing
     // rather than cosmetic. stallClearsAt names the FIRST instant a barrier can open, and
     // above the activation none exists: the height half reads no time and can open the
-    // barrier at any instant. The price-time, oracle, match and call callers still keep a
-    // stream escape at blockTime + grace once the hub has published a height for the table,
-    // but that escape is a later backstop, not a floor. Reporting it anyway would be a lie
-    // with consequences: waitingOnFutureBlock() would answer 'future_block_wait' until that
-    // instant, nextBarrierHold() would refuse to accumulate a hold, and the 900 s ceiling
-    // could never fire on a stall whose failing height half makes it genuine mirror lag,
-    // which IS remediable by a resync. Null is what turns this stall from "healthy,
-    // self-clearing" into "measurable, attributable and self-remedying", which is the whole
-    // point of the re-keying.
+    // barrier at any instant. Below the activation this helper is valid only for barriers
+    // whose every satisfaction path is the stream watermark. Forward-stamped content and
+    // empty-mirror certification can open at any instant, so those callers report null.
+    // Reporting a later stream backstop as a floor suppresses hold accounting and prevents
+    // the 900 s recovery ceiling from firing on remediable mirror lag.
     //
     // Keyed on B, the block being processed, exactly as the predicate is.
     barrierClearsAtHeightAware(blockTime, graceField, blockHeight){
@@ -87,7 +83,7 @@ module.exports = {
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain match sync): ', err);
                 this.stallReason = 'match_sync_barrier';
-                this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'matchWatermarkGraceS', blockToParse);
+                this.stallClearsAt = null;
                 this.capabilityProofBarrierSkipped = false;
                 return true;
             }
@@ -106,13 +102,9 @@ module.exports = {
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
                 this.stallReason = 'call_sync_barrier';
-                // callWatermarkGraceS, NOT the match grace: callSyncSatisfied waits on
-                // the call grace, and the two producers stamp effective_time differently
-                // (HUB_SYNC_WATERMARK_GRACE_S.call in hub/hub_db_sync/watermark_config.js).
-                // Keying the health verdict on the match value would mis-time the wedge
-                // discriminator the moment the two constants diverge or a regtest override
-                // moves one.
-                this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'callWatermarkGraceS', blockToParse);
+                // Forward-stamped content can satisfy this wait immediately, so the
+                // later stream escape is not a clear-time floor.
+                this.stallClearsAt = null;
                 this.capabilityProofBarrierSkipped = false;
                 return true;
             }
@@ -133,11 +125,9 @@ module.exports = {
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (bridge transfer sync): ', err);
                 this.stallReason = 'bridge_sync_barrier';
-                // bridgeWatermarkGraceS, never the match or call grace: the bridge
-                // engine is a third producer with its own effective_time stamping rule,
-                // and sharing another table's grace couples two producers' timing, the
-                // documented mistake the call barrier was split out to end.
-                this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'bridgeWatermarkGraceS', blockToParse);
+                // Forward-stamped content can satisfy this wait immediately, so the
+                // later stream escape is not a clear-time floor.
+                this.stallClearsAt = null;
                 this.capabilityProofBarrierSkipped = false;
                 return true;
             }
@@ -158,7 +148,7 @@ module.exports = {
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (policy snapshot sync): ', err);
                 this.stallReason = 'policy_sync_barrier';
-                this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'policyWatermarkGraceS', blockToParse);
+                this.stallClearsAt = null;
                 this.capabilityProofBarrierSkipped = false;
                 return true;
             }

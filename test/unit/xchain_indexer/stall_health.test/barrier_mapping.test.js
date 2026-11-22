@@ -66,7 +66,8 @@ const SYNC_SRC = fs.readFileSync(SYNC_ENTRY, 'utf8') + '\n' +
 const { stallReasonSites, countStallReasonAssignments } = require('../../../helpers/stall_reason_sites.js');
 const { BRIDGE_PROOF_BARRIER } = require('../../../../src/consensus/bridge_proof_client/stall.js');
 const { PRICE_LANDING_BARRIER, ROLLCALL_PROOF_REASON,
-        CAPABILITY_PROOF_REASON } = require('../../../../src/XChainIndexer/stall_health.js');
+        CAPABILITY_PROOF_REASON, waitingOnFutureBlock,
+        nextBarrierHold } = require('../../../../src/XChainIndexer/stall_health.js');
 const IMPORTED_REASONS = { REMOTE_TOKEN_RETRY_STALL_REASON, BRIDGE_PROOF_BARRIER };
 function graceWiring() {
     const pairs = [];
@@ -112,8 +113,8 @@ function graceWiring() {
 // assignment, and a new stallReason, in any form, FAILS here until it is added.
 //
 // 'height-aware' means the barrier was re-keyed onto the admission height watermark and
-// reports NO clear instant above its activation, which is what lets a hold accumulate and
-// the 900 s ceiling fire on a stall that is now genuine mirror lag.
+// reports NO clear instant above its activation. Forward-stamped content barriers report
+// null on both sides because their content or empty-mirror paths can open at any instant.
 const EXPECTED = [
     // Retroactive replay holds: the replay clears when it reaches replay_to, the go hold on
     // an operator go row and the diverged hold on a rewitness, so none has a clock instant.
@@ -127,11 +128,11 @@ const EXPECTED = [
     ['price_sync_barrier',              null,                          'null'],          // height case can clear early
     ['price_sync_barrier',              null,                          'content-floor'],
     ['price_landing_barrier',           null,                          'null'],          // clears on other chains' landed time
-    ['oracle_sync_barrier',             'oracleWatermarkGraceS',       'height-aware'],
-    ['match_sync_barrier',              'matchWatermarkGraceS',        'height-aware'],
-    ['call_sync_barrier',               'callWatermarkGraceS',         'height-aware'],
-    ['bridge_sync_barrier',             'bridgeWatermarkGraceS',       'height-aware'],
-    ['policy_sync_barrier',             'policyWatermarkGraceS',       'height-aware'],
+    ['oracle_sync_barrier',             null,                          'null'],          // forward-stamped content
+    ['match_sync_barrier',              null,                          'null'],          // forward-stamped content
+    ['call_sync_barrier',               null,                          'null'],          // forward-stamped content
+    ['bridge_sync_barrier',             null,                          'null'],          // forward-stamped content
+    ['policy_sync_barrier',             null,                          'null'],          // forward-stamped content
     ['list_share_sync_barrier',         null,                          'null'],
     ['remote_token_retry_barrier',      null,                          'null'],          // action-scoped height retry
     // Direct-hub-DB twin of call_sync_barrier. A null here (no watermark to key on)
@@ -174,17 +175,23 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
             'diverge or a regtest env override moves one, and both are 120s today so ' +
             'no behavioural assertion can see the slip. A re-keyed barrier that lost its ' +
             'height-aware helper reads as a clock barrier here, which is the other half.');
+        const recoverable = ['oracle_sync_barrier', 'match_sync_barrier', 'call_sync_barrier',
+                             'bridge_sync_barrier', 'policy_sync_barrier'];
+        for (const reason of recoverable) {
+            assert.strictEqual(waitingOnFutureBlock(reason, null, 1000), false, reason);
+            assert.ok(nextBarrierHold(null, 42, reason, null, 1000), reason + ' must accrue a hold');
+        }
     });
 
     it('every re-keyed barrier reports NO clear instant above the admission activation', function () {
         // The height half reads no t(B) and can open the barrier at any instant, so there is no
-        // first instant to report; the stream escape five of them keep is a later backstop,
-        // not a floor. Reporting one anyway keeps waitingOnFutureBlock() answering
+        // first instant to report; a stream escape is a later backstop, not a floor.
+        // Reporting one anyway keeps waitingOnFutureBlock() answering
         // 'future_block_wait', keeps nextBarrierHold() at null and makes the 900 s ceiling
         // unreachable on exactly the barrier whose stall is now remediable.
         const reKeyed = EXPECTED.filter(e => e[2] === 'height-aware' || e[2] === 'bound-aware');
-        assert.strictEqual(reKeyed.length, 8,
-            'eight generic EXPECTED entries are re-keyed onto a height; ' +
+        assert.strictEqual(reKeyed.length, 3,
+            'three generic EXPECTED entries are re-keyed onto a height; ' +
             'a change here means a barrier gained or lost its height keying');
         assert.ok(/\bbarrierClearsAtHeightAware\(blockTime, graceField, blockHeight\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the height-aware helper must return null while the admission consumer is armed');

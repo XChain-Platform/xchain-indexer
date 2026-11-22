@@ -69,6 +69,17 @@ describe('capability snapshot proof startup pin wiring @regression @tier1', func
             /not valid JSON/);
     });
 
+    it('refuses a configured direct hub database and allows the verifying mirror mode', function () {
+        sinon.stub(changes, 'get').returns({ testnet: 50 });
+        setPin(JSON.stringify([{ pubkey: 'a'.repeat(64), weight: '1', source: 'source-1' }]));
+        const direct = indexer();
+        direct.hubDbHost = 'configured';
+        direct.hubDbName = 'configured';
+
+        assert.throws(() => startup.assertCapabilitySnapshotPin.call(direct, false), /HUB_DB_SYNC_ENABLED=true/);
+        assert.doesNotThrow(() => startup.assertCapabilitySnapshotPin.call(direct, true));
+    });
+
     it('does not refuse an unarmed chain, BTC, or regtest', function () {
         const get = sinon.stub(changes, 'get');
         setPin(undefined);

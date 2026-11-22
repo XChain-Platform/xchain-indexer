@@ -32,6 +32,7 @@
 
 const { opensBackslashEscape } = require('../shared.js');
 const { generationLosses, intraFileColumnDependencies } = require('./migration_guards/column_change_safety.js');
+const { parseColumnType } = require('./migration_guards/column_type_parser.js');
 
 const INT_RANK  = { tinyint: 1, smallint: 2, mediumint: 3, int: 4, integer: 4, bigint: 5 };
 const TEXT_RANK = { tinytext: 1, text: 2, mediumtext: 3, longtext: 4 };
@@ -153,9 +154,7 @@ function modifyClauses(statements){
 
 // The data type, its arguments and unsignedness as the definition states them.
 function parseType(definition){
-    const m = /^\s*(\w+)\s*(?:\(([^)]*)\))?\s*(unsigned)?/i.exec(definition);
-    if(!m) return null;
-    return { name: m[1].toLowerCase(), args: m[2] == null ? null : m[2].trim(), unsigned: !!m[3] };
+    return parseColumnType(definition, opensBackslashEscape);
 }
 
 // The same shape from the live COLUMN_TYPE (`bigint(20) unsigned`, `enum('a','b')`).
@@ -225,9 +224,11 @@ function narrowedType(rawLive, rawNext, opts){
     if(live.name in INT_RANK && next.name in INT_RANK){
         const l = INT_RANK[live.name], n = INT_RANK[next.name];
         if(n < l) return live.name + ' -> ' + next.name;
+        const toUnsigned = !live.unsigned && next.unsigned;
         // Skip the signed -> unsigned flip only when the live probe proved no stored value is negative.
-        if(n === l && !live.unsigned && next.unsigned && opts && opts.unsignedRetypeSafe) return null;
-        if(n === l && live.unsigned !== next.unsigned) return live.name + (live.unsigned ? ' unsigned' : '') + ' -> ' + next.name + (next.unsigned ? ' unsigned' : '');
+        if(toUnsigned && opts && opts.unsignedRetypeSafe) return null;
+        if(toUnsigned || (n === l && live.unsigned && !next.unsigned))
+            return live.name + (live.unsigned ? ' unsigned' : '') + ' -> ' + next.name + (next.unsigned ? ' unsigned' : '');
         return null;
     }
     if(live.name in TEXT_RANK && next.name in TEXT_RANK) return TEXT_RANK[next.name] < TEXT_RANK[live.name] ? live.name + ' -> ' + next.name : null;
@@ -287,7 +288,11 @@ function losses(live, definition, opts = {}){
         out.push('narrows NULL -> NOT NULL');
     }
 
-    const narrowed = narrowedType(parseLiveType(live.COLUMN_TYPE), parseType(definition), opts);
+    const liveType = parseLiveType(live.COLUMN_TYPE), nextType = parseType(definition);
+    if(!liveType || liveType.incomplete) out.push('cannot read the live column type');
+    if(!nextType || nextType.incomplete) out.push('cannot read the restated column type');
+    const narrowed = liveType && !liveType.incomplete && nextType && !nextType.incomplete
+        ? narrowedType(liveType, nextType, opts) : null;
     if(narrowed) out.push('narrows the type (' + narrowed + ')' + (opts.liveMin == null ? '' : ', live MIN(' + opts.column + ') is ' + opts.liveMin));
 
     const liveSet = live.CHARACTER_SET_NAME ? String(live.CHARACTER_SET_NAME).toLowerCase() : null;
@@ -298,7 +303,6 @@ function losses(live, definition, opts = {}){
     }
     // A text MODIFY naming neither CHARACTER SET nor COLLATE takes the table's default collation,
     // so a column widened apart from its table (utf8mb4 in a utf8mb3 table) silently reverts.
-    const nextType = parseType(definition);
     const liveCollation = collationKey(live.COLLATION_NAME), tableCollation = collationKey(live.TABLE_COLLATION);
     if(liveSet && !nextSet && nextType && TEXTUAL.has(nextType.name) && liveCollation && tableCollation &&
        liveCollation !== tableCollation){
@@ -312,12 +316,12 @@ function losses(live, definition, opts = {}){
     return out;
 }
 
-// A same-rank signed -> unsigned MODIFY that keeps AUTO_INCREMENT on an AUTO_INCREMENT column.
+// A same-or-wider signed -> unsigned MODIFY that keeps AUTO_INCREMENT on an AUTO_INCREMENT column.
 function unsignedRetypeCandidate(live, definition){
     const from = parseLiveType(live.COLUMN_TYPE), to = parseType(definition);
-    if(!from || !to) return false;
+    if(!from || from.incomplete || !to || to.incomplete) return false;
     const l = INT_RANK[canonicalType(from).name], n = INT_RANK[canonicalType(to).name];
-    return l != null && l === n && !from.unsigned && to.unsigned &&
+    return l != null && n >= l && !from.unsigned && to.unsigned &&
         /\bauto_increment\b/.test(String(live.EXTRA || '').toLowerCase()) &&
         /\bAUTO_INCREMENT\b/i.test(blankLiterals(definition));
 }
