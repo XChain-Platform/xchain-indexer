@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-11-22
+
+### Fixed
+- Moved the BTC testnet capability snapshot proof activation to block 162900 so the testnet indexer boots on its existing database.
+
 ## [0.28.0] - 2026-11-22
 
 ### Added

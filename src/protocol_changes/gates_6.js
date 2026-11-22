@@ -92,10 +92,12 @@ addGate('airdrop_native_fee_tally_activation.AIRDROP_NATIVE_FEE_TALLY_ACTIVATION
 // capability_snapshot_proof_activation
 // Height on the mirrored row's BTC snapshot_block. From it mirror-resolved capability rows require a checkpoint proof. Below it they apply as before.
 // Read with coin BTC on every chain, so the BTC:testnet entry arms TLTC and TDOGE too; the bare testnet entry stays UNARMED so their boot gate records do not move.
-// Testnet is armed at a past height, which is safe only if every row mirrored at or above it before the roll verifies against its snapshot checkpoint.
+// v0.28.1 moves BTC:testnet from the v0.28.0 cut tip (162658) to 162900, above the TBTC applied tip, because boot
+// replay refuses a gate moved at or below the tip and a TBTC genesis rebuild cannot reach tip (replay forks at 150698).
+// TLTC and TDOGE enforced 162658 from their v0.28.0 boot and held or refused no row in the moved window.
 addGate('capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 162658,
+    'BTC:testnet': 162900,
     testnet: UNARMED,
     regtest: 0,
 });
