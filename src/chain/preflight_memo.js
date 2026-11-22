@@ -14,7 +14,8 @@
  *
  * XChain Platform Indexer - pre-flight verdict memo.
  *
- * Bounded LRU keyed on (action, params-as-wire, source, blockIndex, variant). A public
+ * Bounded LRU keyed by a fixed-size digest of (action, params-as-wire, source,
+ * blockIndex, variant). A public
  * validity dry-run contends with block processing on the shared tx
  * mutex, so an identical re-run at the same height is pure waste. The
  * blockIndex is PART of the key: a new tip changes every key, so a
@@ -30,6 +31,8 @@
 
 'use strict';
 
+const crypto = require('crypto');
+
 class PreflightMemo {
     constructor(maxEntries = 256) {
         this.max = maxEntries;
@@ -38,16 +41,18 @@ class PreflightMemo {
 
     // `variant` distinguishes verdicts computed under different dry-run assumptions at the
     // same height (today: the fee settlement mode). The JSON array keeps every field boundary
-    // unambiguous for arbitrary content. BATCH raw wire receives the same treatment as `p`.
+    // unambiguous for arbitrary content, and hashing keeps caller-sized text out of Map keys.
+    // BATCH raw wire receives the same treatment as `p`.
     key(action, params, source, blockIndex, variant) {
         const p = Array.isArray(params) ? params.join('|') : String(params == null ? '' : params);
-        return JSON.stringify([
+        const material = JSON.stringify([
             String(action),
             p,
             String(source == null ? '' : source),
             String(blockIndex),
             String(variant == null ? '' : variant)
         ]);
+        return crypto.createHash('sha256').update(material, 'utf8').digest('hex');
     }
 
     get(key) {

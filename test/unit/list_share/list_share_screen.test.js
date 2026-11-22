@@ -19,6 +19,7 @@ const assert = require('assert');
 const { createScreen } = require('../../../src/consensus/list_share_settle/screen.js');
 const { deriveListSnapshotId } = require('../../../src/consensus/list_share_settle/canonical.js');
 const { LIST_SHARE_HALT_REASON } = require('../../../src/consensus/list_share_settle/halt.js');
+const chainIdentity = require('../../../src/hub/hub_db_sync/chain_identity.js');
 
 const COINS = ['BTC', 'LTC', 'DOGE'];
 
@@ -34,7 +35,7 @@ function admissionColumns(row){
 
 const ah = { columnsAdmitBlocks: admissionColumns };
 const screen = createScreen({ ah }).screenListSnapshot;
-const ctx = { coin: 'BTC', network: 'regtest', config: { BTC_CHAIN_ID: 'btc-regtest' } };
+const ctx = { coin: 'BTC', network: 'regtest', config: {} };
 
 function fullRow(overrides = {}){
     const row = Object.assign({
@@ -146,10 +147,20 @@ function registerRowValidationTests(){
         assertHalt(fullRow({ snapshot_id: 'bad' }), 'snapshot_id');
     });
 
+    // The halt on two differing identities is the mirror apply fence's (refuseForeignChainRow).
+    // This screen reads no per-node identity, so a BTC_CHAIN_ID planted in its config is inert.
     it('halts when two set BTC chain identities differ', function () {
-        assertHalt(fullRow({ btc_chain_id: 'other' }), 'btc_chain_id');
-        assert.ok(screen(fullRow({ btc_chain_id: null }), ctx).fields);
-        assert.ok(screen(fullRow(), Object.assign({}, ctx, { config: {} })).fields);
+        const fence = { _expectedBtcChainId: 'b'.repeat(64), _refusedChainIdRows: new Map(),
+                        noteRefusedRowName() {} };
+        assert.strictEqual(chainIdentity.refuseForeignChainRow.call(
+            fence, 'list_snapshots', { btc_chain_id: 'c'.repeat(64) }), true,
+            'the mirror apply fence admitted a list snapshot from another chain instance');
+        assert.strictEqual(chainIdentity.refuseForeignChainRow.call(
+            fence, 'list_snapshots', { btc_chain_id: 'b'.repeat(64) }), false,
+            'the mirror apply fence refused a list snapshot of its own chain');
+        const planted = Object.assign({}, ctx, { config: { BTC_CHAIN_ID: 'b'.repeat(64) } });
+        assert.ok(screen(fullRow({ btc_chain_id: 'c'.repeat(64) }), planted).fields,
+            'the list screen compared the row against a per-node chain identity');
     });
 
     it('halts unless status is finalized', function () {

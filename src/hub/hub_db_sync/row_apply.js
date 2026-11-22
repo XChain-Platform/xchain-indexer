@@ -30,6 +30,7 @@ const { LOCAL_COLUMN_CACHE_TTL_MS } = require('./mirror_bounds.js');
 const { coerceMirrorValue, priceUpsertSql, applyMirrorWrite } = require('./mirror_write.js');
 const { mirrorUpsertSql } = require('./row_upserts.js');
 const { recordAttestationCopy } = require('./apply/attestation_copies.js');
+const { canonicalBlockHeight } = require('./apply/canonical_height.js');
 
 module.exports = {
 
@@ -124,6 +125,15 @@ module.exports = {
         // Network fence, on the same footing: a row for a network this mirror does not serve
         // is refused on arrival rather than mirrored and purged at the next bootstrap.
         if (await this.refuseForeignNetworkRow(table, row)) return false;
+        if (table === 'capability_snapshots') {
+            let snapshotBlock = canonicalBlockHeight(row && row.snapshot_block);
+            if (snapshotBlock === null) {
+                getLogger().warn('HubDbSync: refusing capability_snapshots row with non-canonical snapshot_block ' +
+                    String(row && row.snapshot_block).slice(0, 32));
+                return false;
+            }
+            row = Object.assign({}, row, { snapshot_block: snapshotBlock });
+        }
         // Stake re-derivation fence for capability_snapshots, on the SAME footing as the
         // chain-identity fence above and for the same reason: this is the one mirrored
         // table that arrives with no authentication at all, so a hub that serves a forged

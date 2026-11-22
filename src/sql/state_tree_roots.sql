@@ -21,7 +21,7 @@ CREATE TABLE state_tree_roots (
     stakes_root       CHAR(64) NOT NULL,                   -- BTC-only; EMPTY_SMT_ROOT on LTC/DOGE
     state_root        CHAR(64) NOT NULL,                   -- fixedMerkleRoot([balances, stakes, EMPTY,EMPTY,EMPTY])
     block_merkle_root CHAR(64) NOT NULL,                   -- per-block content root (SPV spec §5)
-    -- Reserved sub-tree slot 4, armed per chain by state_subtree_activation.js.
+    -- Reserved sub-tree slot 4, armed per chain by consensus/gates/state_subtree_gate.js.
     -- NULL means the slot committed EMPTY_SMT_ROOT at this height, which is what
     -- every historical row means, so this column needs no backfill. Written by
     -- the same statement that writes state_root, from the same gated value, so

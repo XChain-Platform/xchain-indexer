@@ -12,7 +12,7 @@
 --
 --********************************************************************
 
--- xchain:migration mode=manual
+-- xchain:migration mode=manual deploy-precondition=required
 --
 -- Migration: the NOT NULL half of the raw-wire-field utf8mb4 widen. Paired with the
 -- mode=auto 2026-09-02-utf8mb4-raw-wire-fields.sql of the same date; the reasoning for the
@@ -22,6 +22,10 @@
 -- destructive-DDL classifier (db._destructiveAutoStatement), so the file cannot be tagged
 -- mode=auto. Omitting NOT NULL is not an option: a MODIFY restates the whole column, so it
 -- would silently relax the column and diverge the two schema paths.
+--
+-- DEPLOY PRECONDITION
+-- assertRegisteredUtf8mb4ColumnsStayWide halts startup while any manual registry
+-- column remains narrow. The header tag lets the deploy guard refuse before restart.
 --
 -- WHAT IS STILL WEDGED UNTIL THIS RUNS
 -- ------------------------------------

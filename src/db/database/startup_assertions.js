@@ -192,11 +192,11 @@ module.exports = {
         }
     },
 
-    // Every column in the raw-wire widen registry must stay utf8mb4 after the
-    // migration ledger says the widen has run. verifyTables cannot repair a
-    // charset regression, so detect it before a 4-byte wire value wedges ingest.
-    // Missing columns pass through because table creation and column presence have
-    // their own contracts, and a fresh database can reach this check before them.
+    // Every column in the raw-wire widen registry is checked live on every boot.
+    // The manual half is a registered deploy precondition because verifyTables cannot
+    // repair a charset regression. Missing columns pass through because table creation
+    // and column presence have their own contracts, and a fresh database can reach this
+    // check before them.
     async assertRegisteredUtf8mb4ColumnsStayWide(){
         if(!this.dbName) return;
         const entries = utf8mb4Columns.UTF8MB4_RAW_FIELD_COLUMNS;
@@ -214,6 +214,7 @@ module.exports = {
             );
             if(!rows) return;
             const drifted = [];
+            let manualDrift = false;
             for(const row of rows){
                 const table = String(row.table_name || row.TABLE_NAME || '');
                 const column = String(row.column_name || row.COLUMN_NAME || '');
@@ -221,11 +222,17 @@ module.exports = {
                 if(!entry || utf8mb4Columns.isAlreadyUtf8mb4(row)) continue;
                 const charset = row.character_set_name || row.CHARACTER_SET_NAME || 'non-character';
                 drifted.push(entry.table + '.' + entry.column + ' (' + charset + ')');
+                if(entry.mode === 'manual') manualDrift = true;
             }
             if(drifted.length){
+                const remedy = manualDrift
+                    ? ' Run the pending migration: node src/db/migration/migrate.js --file ' +
+                        Database.startupAssertedMigrationFile('assertRegisteredUtf8mb4ColumnsStayWide') +
+                        ' (writer stopped; check gated_files ROW_FORMAT first, see the file header).'
+                    : ' Restore the registered charset before starting the indexer.';
                 throw new Error(
                     'registered utf8mb4 columns drifted from utf8mb4: ' + drifted.sort().join(', ') +
-                    '. Restore the registered charset before starting the indexer.'
+                    '.' + remedy
                 );
             }
         } finally {

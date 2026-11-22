@@ -24,7 +24,7 @@ const { toUtf8mb3 } = require('../utf8mb3.js');
 
 // EVERY bound value must be storable in its column, whatever the wire carried.
 //
-// anchor.js records a rejected wire rather than dropping it (a retired version below
+// src/actions/anchor/ records a rejected wire rather than dropping it (a retired version below
 // ANCHOR_ACTIVATION, an unknown version byte, a malformed field), and the row it hands
 // over holds the RAW positional walk: on a pre-restart v5/v7 wire, or on a hostile v1,
 // hashes and chain names sit in numeric slots and 64-char strings sit in 8-char columns.
@@ -77,7 +77,7 @@ function anchorActionRow(data, status_id){
     let version = intOrNull(data['FORMAT'], U8);
     if(version === null) version = 0;
     // Publisher tail (#2486): carried by v0 and v1, NULL on v2. Mirrors validator_signatures
-    // exactly: anchor.js pre-serializes the XANCPUB sig list to a JSON string (as it does
+    // exactly: src/actions/anchor/ pre-serializes the XANCPUB sig list to a JSON string (as it does
     // VALIDATOR_SIGNATURES = JSON.stringify(sigs)) before dispatch, so both are stored as-is.
     let publisher = strOrNull(data['PUBLISHER'], 64);
     let publisherAttestations = strOrNull(data['PUBLISHER_ATTESTATIONS'], TEXT);
@@ -104,9 +104,9 @@ function anchorActionRow(data, status_id){
         intOrNull(data['CHUNK_INDEX'], U32),
         strOrNull(data['ARCHIVE_B64'], TEXT),
         strOrNull(data['VALIDATOR_SIGNATURES'], TEXT),
-        // Publisher-attestation tail (#2486), written on v0 and v1. Both NULL on v2. anchor.js must set
+        // Publisher-attestation tail, written on v0 and v1. Both NULL on v2. src/actions/anchor/ must set
         // data['PUBLISHER_ATTESTATIONS'] = JSON.stringify(publisherSigs) for the attestations
-        // to flow (that one-line hand-off is owned in anchor.js).
+        // to flow (that one-line hand-off is owned in src/actions/anchor/).
         publisher,
         publisherAttestations,
         status_id,

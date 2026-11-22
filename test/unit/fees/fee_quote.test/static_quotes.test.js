@@ -23,6 +23,7 @@ const { makeUtil, makeDb, makeCtx, FEE_DEST, PLACEHOLDER, BTC_PRICES } = require
 
 const LTC_PRICES = { 'XCHAIN/USD': '1.00000000', 'LTC/USD': '100.00000000' };
 const CODE_B64   = Buffer.from('x', 'utf8').toString('base64');
+const EXECUTE_METER_ENV = 'XC_EXECUTE_NATIVE_METERED_GAS_REGTEST_ACTIVATION';
 
 // DEPLOY/EXECUTE stage their protocol fee from the gas schedule BEFORE entering
 // the VM, and that pre-VM number is what validateNativeCoinFee judges the native output
@@ -53,16 +54,68 @@ describe('native coin fee quote @regression @tier1', function () {
                 assert.ok(/NOT pre-judged/.test(q.note), q.note);
             });
 
-            it('EXECUTE: VM_EXECUTE_BASE only (metered gas re-prices the record, not the check)', async function () {
+            it('EXECUTE before activation: VM_EXECUTE_BASE only', async function () {
+                const before = process.env[EXECUTE_METER_ENV];
+                delete process.env[EXECUTE_METER_ENV];
                 let util = makeUtil('LTC', FEE_DEST);
                 let { ctx, calls } = makeCtx(util, makeDb({ prices: LTC_PRICES }));
-                let q = await ctx.computeFeeQuote.call(ctx, { action: 'EXECUTE', params: ['0', 'contract1', 'method', 'arg'], source: 'src' });
+                let q;
+                try {
+                    q = await ctx.computeFeeQuote.call(ctx, { action: 'EXECUTE', params: ['0', 'contract1', 'method', 'arg'], source: 'src' });
+                } finally {
+                    if(before === undefined) delete process.env[EXECUTE_METER_ENV];
+                    else process.env[EXECUTE_METER_ENV] = before;
+                }
                 assert.strictEqual(calls.dryRuns, 0);
                 assert.strictEqual(q.supported, true);
                 assert.strictEqual(q.valid, null);
                 assert.strictEqual(q.gasCost, 1000);
                 assert.strictEqual(q.xchainFee, '0.01000000');
                 assert.strictEqual(q.requiredFeeSats, 10000);
+            });
+
+            it('EXECUTE after activation: quotes dry-run gas plus the safety margin', async function () {
+                const before = process.env[EXECUTE_METER_ENV];
+                process.env[EXECUTE_METER_ENV] = '0';
+                let util = makeUtil('LTC', FEE_DEST);
+                let { ctx, calls } = makeCtx(util, makeDb({ prices: LTC_PRICES }),
+                    { dryRun: { xchainFee: '0.50000000' } });
+                let q;
+                try {
+                    q = await ctx.computeFeeQuote.call(ctx, { action: 'EXECUTE', params: ['0', 'contract1', 'method'], source: 'src' });
+                } finally {
+                    if(before === undefined) delete process.env[EXECUTE_METER_ENV];
+                    else process.env[EXECUTE_METER_ENV] = before;
+                }
+                assert.strictEqual(calls.dryRuns, 1);
+                assert.strictEqual(q.estimatedGasCost, 50000);
+                assert.strictEqual(q.gasSafetyMarginPercent, 20);
+                assert.strictEqual(q.gasCost, 60000);
+                assert.strictEqual(q.xchainFee, '0.60000000');
+                assert.strictEqual(q.requiredFeeNative, '0.00600000');
+                assert.strictEqual(q.requiredFeeSats, 600000);
+            });
+
+            it('EXECUTE after activation: refuses to quote when the dry run is unavailable', async function () {
+                const before = process.env[EXECUTE_METER_ENV];
+                process.env[EXECUTE_METER_ENV] = '0';
+                let util = makeUtil('LTC', FEE_DEST);
+                let { ctx, calls } = makeCtx(util, makeDb({ prices: LTC_PRICES }),
+                    { dryRun: { throws: true } });
+                let q;
+                try {
+                    q = await ctx.computeFeeQuote.call(ctx, { action: 'EXECUTE', params: ['0', 'contract1', 'method'], source: 'src' });
+                } finally {
+                    if(before === undefined) delete process.env[EXECUTE_METER_ENV];
+                    else process.env[EXECUTE_METER_ENV] = before;
+                }
+                assert.strictEqual(calls.dryRuns, 1);
+                assert.strictEqual(q.valid, null);
+                assert.strictEqual(q.validated, false);
+                assert.strictEqual(q.noVerdict, true);
+                assert.strictEqual(q.retryable, true);
+                assert.strictEqual(q.requiredFeeSats, undefined, 'a metered EXECUTE without a gas estimate must not quote a payable amount');
+                assert.strictEqual(q.requiredFeeSatsExact, undefined);
             });
 
             it('DEPLOY v2/v3 chunked: base only, the v4 carriers already paid per-byte', async function () {
@@ -167,7 +220,7 @@ describe('native coin fee quote @regression @tier1', function () {
 describe('native coin fee quote @regression @tier1', function () {
     describe('computeFeeQuote() [dry-run-backed default]', function () {
         describe('static (no-VM) quotes for DEPLOY/EXECUTE @regression', function () {
-            it('a schedule that cannot price the action fails closed to the refusal', async function () {
+            it('a pre-activation schedule that cannot price the action fails closed to the refusal', async function () {
                 let util = makeUtil('LTC', FEE_DEST);
                 delete util.config['GAS_SCHEDULE'].VM_EXECUTE_BASE;
                 let { ctx } = makeCtx(util, makeDb({ prices: LTC_PRICES }));

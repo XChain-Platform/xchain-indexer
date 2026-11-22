@@ -112,6 +112,8 @@ describe('migration reorder attribution @regression @tier1', function () {
             'SET @s = \'DROP TABLE balances\'',                 // dynamic SQL staging
             'CALL rebuild_everything()',                        // a body the scanner cannot see
             '/*!50000 DROP TABLE balances */',                  // executed by the server, stripped by a naive scan
+            'SET STATEMENT lock_wait_timeout=5 FOR ALTER TABLE sends ADD INDEX ix (a)',
+            "SET STATEMENT optimizer_switch='subquery_cache=off' FOR DROP TABLE balances",
         ]) {
             const seen = migrationTouchedTables([stmt]);
             assert.ok(seen.opaque, 'expected opaque for: ' + stmt);
@@ -121,6 +123,7 @@ describe('migration reorder attribution @regression @tier1', function () {
 
     it('lets a session-variable SET through as touching nothing', function () {
         assert.deepStrictEqual(migrationTouchedTables(['SET NAMES utf8mb4']), { tables: [], opaque: null });
+        assert.deepStrictEqual(migrationTouchedTables(["SET time_zone = '+00:00'"]), { tables: [], opaque: null });
     });
 
     // A statement that names a second table must count both, or a reorder against that
@@ -178,6 +181,12 @@ describe('migration reorder verdict @regression @tier1', function () {
         assert.strictEqual(reorderVerdict(pending, [{ file: 'b.sql', statements: backfill }]).divergent, true);
         assert.strictEqual(reorderVerdict({ file: 'a.sql', statements: backfill },
             [{ file: 'b.sql', statements: ['ALTER TABLE tokens ADD COLUMN x INT'] }]).divergent, true);
+        const wrapped = reorderVerdict(pending, [{
+            file: 'b.sql',
+            statements: ['SET STATEMENT lock_wait_timeout=5 FOR CREATE INDEX ix3 ON state_tree_roots (chain)'],
+        }]);
+        assert.strictEqual(wrapped.divergent, true);
+        assert.strictEqual(wrapped.opaque[0].file, 'b.sql');
     });
 
     it('calls a reorder against an applied rename or a LIKE source divergent', function () {

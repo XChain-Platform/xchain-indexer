@@ -26,8 +26,10 @@
 #
 # So the preflight below is the point of this script, more than the database is:
 #
-#   * require('xchain-vm') must actually load, or the run REFUSES to start. A silent
-#     VM-less run reports "deploy VM executor unavailable" and looks like a defect.
+#   * require('xchain-vm') must load and declare the consensus epoch this indexer
+#     expects, or every DEPLOY/EXECUTE suite reports a misleading product failure.
+#   * When the canonical sibling is present, the staged VM bytes must match it. The
+#     epoch alone cannot detect source drift within one release.
 #   * XCHAIN_SDK_PATH and XCHAIN_DECODER_SQL_PATH must resolve. Several suites are
 #     cross-repo consensus drift guards that deliberately HARD-FAIL rather than skip,
 #     so a missing sibling reads as a red tier.
@@ -96,6 +98,23 @@ run-db-tiers: require('xchain-vm') FAILS, so this run would report false failure
   Fix: restore the vendored copy (npm run vendor:vm, or copy xchain-vm/ from a
   working checkout) and re-run.
 VMERR
+    exit 78
+fi
+
+if ! node -e "const vm = require('xchain-vm'); const runtime = require(process.argv[1]); runtime.assertVmConsensusEpoch(vm);" \
+    "$REPO_ROOT/src/actions/actions_class/vm_runtime.js"; then
+    cat >&2 <<'EPOCHERR'
+run-db-tiers: staged xchain-vm uses a different consensus epoch than this indexer.
+
+  Every DEPLOY/EXECUTE suite would fail with VM CONSENSUS EPOCH MISMATCH. That is
+  stale local staging, not a product defect. Refresh it with `npm run vendor:vm`
+  (or `bash bin/vendor-vm.sh`) and re-run this command.
+EPOCHERR
+    exit 78
+fi
+
+if ! bash "$REPO_ROOT/bin/vendor-vm.sh" check; then
+    echo "run-db-tiers: staged xchain-vm differs from the canonical sibling; run 'npm run vendor:vm'." >&2
     exit 78
 fi
 

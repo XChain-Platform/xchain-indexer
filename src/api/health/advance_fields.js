@@ -23,6 +23,7 @@
 
 const { stallWedged, waitingOnFutureBlock, stallClassOf, publishedStallClass, atProcessableTip,
         barrierCeilingExceeded } = require('../../XChainIndexer');
+const { stallWindowSince } = require('../../XChainIndexer/stall_health.js');
 
 // Is the counter advancing, is the poll loop alive, and if a stall is set, is it
 // a healthy wait, a barrier defer or a wedge. `now` is the caller's one clock read.
@@ -49,16 +50,17 @@ function advanceFields(indexer, now){
                               failures: indexer.dbOutage.failures,
                               lastErrorClass: indexer.dbOutage.lastErrorClass
                           } : null,
-        // NOTE degraded stays true during the healthy future-stamped-block wait as well,
-        // deliberately: the monitor rules key on `degraded === false` for the wedge case, so
-        // flipping it there would turn a healthy wait into a crit. waitingOnFutureBlock and
-        // stallClass below are how the two are told apart.
+        // NOTE degraded is a legacy field (stalled && !wedged). It is false both when
+        // nothing is stalled and when the stall is wedged, so it is not a wedge signal.
+        // It stays true through a healthy future-block wait for the dashboard fallback
+        // used by payloads without stallClass. Wedge, restart and refusal decisions must
+        // key on stallClass === 'wedged'; waitingOnFutureBlock distinguishes the wait.
         degraded:         !!indexer.stallReason
                             && !stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                             indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                             indexer.priceLandingGraceMs,
-                                            indexer.barrierHold && indexer.barrierHold.since,
-                                            indexer.proofWaitGraceMs),
+                                            stallWindowSince(indexer),
+                                            indexer.proofWaitGraceMs, indexer.rollbackGraceMs),
         // true when the stall is nothing but a wait for wall clock to reach a future-stamped
         // block. Healthy and self-clearing: consensus forbids committing that block yet, so the
         // indexer is already holding everything it is permitted to hold. A testnet4 miner
@@ -77,8 +79,8 @@ function advanceFields(indexer, now){
                               stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                            indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                            indexer.priceLandingGraceMs,
-                                           indexer.barrierHold && indexer.barrierHold.since,
-                                           indexer.proofWaitGraceMs),
+                                           stallWindowSince(indexer),
+                                           indexer.proofWaitGraceMs, indexer.rollbackGraceMs),
                               indexer.stallReason,
                               { decoderReorgHalted: indexer.decoderReorgHalted === true ||
                                                        indexer.decoderReorgHalted === null,

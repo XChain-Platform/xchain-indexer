@@ -92,11 +92,38 @@ describe('archive-anchor content query: validateArchiveAnchorParams() @regressio
         assert.ok(ARCHIVE_CRC_RE.test('00000000'));
     });
 
+    it('refuses chain, network and author wider than their columns and accepts the widths', function () {
+        assert.strictEqual(ok({ chain: 'C'.repeat(10), network: 'n'.repeat(20), author: 'a'.repeat(120) }).ok, true);
+        for (const over of [{ chain: 'C'.repeat(11) }, { network: 'n'.repeat(21) }])
+            assert.deepStrictEqual(ok(over), { ok: false, error: 'chain and network are required strings' });
+        assert.deepStrictEqual(ok({ author: 'a'.repeat(121) }), { ok: false, error: 'author must be a string address' });
+        assert.deepStrictEqual(validateArchiveAnchorParams({ author: 'a'.repeat(121) }),
+            { ok: false, error: 'author must be a string address' });
+        assert.strictEqual(validateArchiveAnchorParams({ author: 'a'.repeat(120) }).author_only, true);
+    });
+
     it('rejects a missing / non-integer checkpoint identity', function () {
         assert.strictEqual(ok({ chain: '' }).ok, false);
         assert.strictEqual(ok({ network: null }).ok, false);
         assert.strictEqual(ok({ block_index: -1 }).ok, false);
         assert.strictEqual(ok({ checkpoint_seq: 1.5 }).ok, false);
+    });
+
+    it('rejects coercible and unsafe integer content keys', function () {
+        const invalid = [true, false, '', [], [5], null, '1e3', '0x10', '01', ' 1', 9007199254740994];
+        for (const field of ['block_index', 'checkpoint_seq', 'match_count']) {
+            for (const value of invalid)
+                assert.strictEqual(ok({ [field]: value }).ok, false,
+                    field + ' accepted ' + JSON.stringify(value));
+        }
+    });
+
+    it('accepts canonical integer content keys through the safe-integer boundary', function () {
+        for (const field of ['block_index', 'checkpoint_seq', 'match_count']) {
+            for (const value of [0, '0', '850000', Number.MAX_SAFE_INTEGER])
+                assert.strictEqual(ok({ [field]: value }).ok, true,
+                    field + ' rejected ' + String(value));
+        }
     });
 
     it('carries an optional author through, and rejects a non-string one', function () {
@@ -109,8 +136,8 @@ describe('archive-anchor content query: validateArchiveAnchorParams() @regressio
 describe('archive-anchor content query: ARCHIVE_ANCHOR_BY_CONTENT_SQL @regression @tier1', function () {
 
     it('keys on the checkpoint identity AND the content commitment', function () {
-        for (const term of ['a.chain = ?', 'a.network = ?', 'a.block_index = ?',
-                            'a.checkpoint_seq = ?', 'a.batch_crc32 = ?', 'a.match_count = ?'])
+        for (const term of ['k.chain = ?', 'k.network = ?', 'k.block_index = ?',
+                            'k.checkpoint_seq = ?', 'k.batch_crc32 = ?', 'k.match_count = ?'])
             assert.ok(ARCHIVE_ANCHOR_BY_CONTENT_SQL.includes(term), 'missing predicate: ' + term);
     });
 
@@ -127,6 +154,10 @@ describe('archive-anchor content query: ARCHIVE_ANCHOR_BY_CONTENT_SQL @regressio
     it('uses the shared archive-head row predicate (a v2 chunk carries no checkpoint identity)', function () {
         assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1]);
         assert.ok(ARCHIVE_ANCHOR_BY_CONTENT_SQL.includes(archiveHeadPredicate('a')));
+        assert.ok(ARCHIVE_ANCHOR_BY_CONTENT_SQL.includes('FROM anchor_actions k'));
+        assert.ok(ARCHIVE_ANCHOR_BY_CONTENT_SQL.includes('a.action_index = k.action_index'));
+        assert.ok(ARCHIVE_ANCHOR_BY_CONTENT_SQL.includes('a.chain IS NULL'));
+        assert.ok(/SELECT[\s\S]*k\.chain[\s\S]*a\.match_batch_seq/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL));
         assert.ok(!/a\.version\s+IN\s*\(/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL),
             'the archive-head predicate must classify folded rows by attributes');
     });
@@ -215,6 +246,42 @@ describe('archive-anchor content query: chunk presence @regression @tier1', func
     it('a malformed total_chunks can never be complete', function () {
         assert.strictEqual(buildArchiveAnchorResponse(CONFIG, 705, head({ total_chunks: null }), []).chunks_complete, false);
         assert.strictEqual(buildArchiveAnchorResponse(CONFIG, 705, head({ total_chunks: 0 }), []).chunks_complete, false);
+    });
+
+    it('a stray chunk at or above total_chunks neither counts as present nor blocks completeness', function () {
+        const rows = [{ chunk_index: 1 }, { chunk_index: 2 }, { chunk_index: 5 }];
+        assert.deepStrictEqual(presentChunkIndexes(head(), rows), [0, 1, 2]);
+        const res = buildArchiveAnchorResponse(CONFIG, 705, head(), rows);
+        assert.deepStrictEqual(res.chunks_present, [0, 1, 2]);
+        assert.strictEqual(res.chunks_complete, true);
+    });
+
+    it('a stray chunk does not make a missing in-range index look covered', function () {
+        const res = buildArchiveAnchorResponse(CONFIG, 705, head({ total_chunks: 4 }),
+            [{ chunk_index: 1 }, { chunk_index: 3 }, { chunk_index: 9 }]);
+        assert.deepStrictEqual(res.chunks_present, [0, 1, 3]);
+        assert.strictEqual(res.chunks_complete, false);
+    });
+
+    it('a one-chunk batch is complete with the head alone, stray rows or not', function () {
+        const bare = buildArchiveAnchorResponse(CONFIG, 705, head({ total_chunks: 1 }), []);
+        assert.strictEqual(bare.chunks_complete, true);
+        const stray = buildArchiveAnchorResponse(CONFIG, 705, head({ total_chunks: 1 }), [{ chunk_index: 2 }]);
+        assert.deepStrictEqual(stray.chunks_present, [0]);
+        assert.strictEqual(stray.chunks_complete, true);
+    });
+
+    it('chunks_complete follows archiveChunkCoverage with the geometry rule at the head height', function () {
+        const { archiveChunkCoverage, archiveOrphanGeometryActive } =
+            require('../../../src/actions/anchor/anchor_action_query/archive_query.js');
+        const rows = [{ chunk_index: 1, total_chunks: 3 }, { chunk_index: 2, total_chunks: 7 }];
+        for (const net of ['regtest', 'mainnet']) {
+            const config = { COIN: 'DOGE', NETWORK: net };
+            const ignore = archiveOrphanGeometryActive(config, 700);
+            const want = archiveChunkCoverage(rows, 3, ignore) !== null;
+            const res = buildArchiveAnchorResponse(config, 705, head(), rows);
+            assert.strictEqual(res.chunks_complete, want, net);
+        }
     });
 });
 

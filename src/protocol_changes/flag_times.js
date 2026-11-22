@@ -252,6 +252,10 @@ const STAKE_SNAPSHOT_DECIMAL_STRINGS_MAINNET_TIME = UNARMED;
 const STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME = 1791804379;
 const ITER_SET_METER_MAINNET_TIME = UNARMED;
 const ITER_SET_METER_TESTNET_TIME = 1791804379;
+// Mirrors xchain-vm LINT_REGEX_GROUP_DEPTH_ACTIVATION. Mainnet stays inert,
+// testnet arms at 2026-11-17T00:00:00Z, and the row sets regtest from genesis.
+const LINT_REGEX_GROUP_DEPTH_MAINNET_TIME = UNARMED;
+const LINT_REGEX_GROUP_DEPTH_TESTNET_TIME = 1794873600;
 // DISPENSER_REFILL: a refill that adds escrow to a dispenser consults the token's trade
 // controller (actions/dispenser/controller_guard.js). Mainnet stays UNARMED until the
 // operator arms it; testnet is armed at the instant below.
@@ -289,6 +293,28 @@ const STRING_RECEIVER_METER_TESTNET_TIME = 1792454400;
 // Mirrors xchain-vm TOSTRING_SIZE_METER_ACTIVATION.
 const TOSTRING_SIZE_METER_MAINNET_TIME = UNARMED;
 const TOSTRING_SIZE_METER_TESTNET_TIME = 1792454400;
+// Arm testnet at 2026-11-16T00:00Z, already past, so multi-part FILEs work from boot.
+// A past instant is safe only while no testnet FILE of version 1 or 2 lands before the roll:
+// the row's 'change' unit is outside the boot gate record, so no boot replay re-judges one.
+const FILE_MULTIPART_TESTNET_TIME = 1794787200;
+// Mirrors xchain-vm STATE_KEY_STORABLE_ACTIVATION, whose null is UNARMED here: mainnet stays
+// inert, testnet is armed at 2026-11-17T00:00Z, already past, and regtest runs it from genesis.
+// A past instant is safe only while no testnet execution between it and the roll set such a key
+// without halting: one that deleted it again in the same run, or failed after the set, would be
+// judged differently by a replay. A committed write never got that far, since its INSERT failed.
+const STATE_KEY_STORABLE_MAINNET_TIME = UNARMED;
+const STATE_KEY_STORABLE_TESTNET_TIME = 1794873600;
+// A cross-chain ORDER's GET_ADDRESS is checked against GET_COIN's address format, as SWAP's
+// is. Mainnet stays unarmed until the mainnet activation work names an instant. Testnet is
+// armed at 2026-11-17T00:00Z, already past. A past instant is safe only while no testnet
+// cross-chain ORDER lands between it and the roll: the row's 'change' unit is outside the
+// boot gate record, so no boot replay re-judges one, and none had landed when it was set.
+const ORDER_GET_ADDRESS_COIN_MAINNET_TIME = UNARMED;
+const ORDER_GET_ADDRESS_COIN_TESTNET_TIME = 1794873600;
+// Arm testnet at 2026-11-17T00:00Z. Before it a contract state value holding a character
+// above U+FFFF halts the block (utf8mb3 state_value, errno 1366), so no stored row holds one
+// and the escape changes no committed text; the row is outside the boot gate record.
+const STATE_VALUE_ASTRAL_ESCAPE_TESTNET_TIME = 1794873600;
 
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
@@ -318,6 +344,8 @@ module.exports = {
     STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME,
     ITER_SET_METER_MAINNET_TIME,
     ITER_SET_METER_TESTNET_TIME,
+    LINT_REGEX_GROUP_DEPTH_MAINNET_TIME,
+    LINT_REGEX_GROUP_DEPTH_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
     STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
@@ -342,4 +370,10 @@ module.exports = {
     STRING_RECEIVER_METER_TESTNET_TIME,
     TOSTRING_SIZE_METER_MAINNET_TIME,
     TOSTRING_SIZE_METER_TESTNET_TIME,
+    FILE_MULTIPART_TESTNET_TIME,
+    STATE_KEY_STORABLE_MAINNET_TIME,
+    STATE_KEY_STORABLE_TESTNET_TIME,
+    ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
+    ORDER_GET_ADDRESS_COIN_TESTNET_TIME,
+    STATE_VALUE_ASTRAL_ESCAPE_TESTNET_TIME,
 };

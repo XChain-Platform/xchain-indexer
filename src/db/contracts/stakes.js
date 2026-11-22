@@ -75,7 +75,9 @@ module.exports = {
     },
 
     // Set deactivation_block for the ALREADY-ACTIVE contract_stakes rows matching (target, pubkey, tick).
-    // Used by createContractUnstake to start the cooldown on a staker's active (target, tick) rows.
+    // Used by UNSTAKE v1 (actions/unstake/index.js sweepContractStake, valid path only, after
+    // createContractUnstake writes the contract_unstakes row) to start the cooldown on a staker's
+    // active (target, tick) rows.
     // Same load-bearing `currentBlock` filter as setStakeDeactivationByPubkey: a pending-activation
     // top-up (activation_block > currentBlock) is excluded from the unstake amount, so deactivating it
     // here would orphan its tokens (cooldown sweep never refunds it). It stays active until a later UNSTAKE.
@@ -159,8 +161,11 @@ module.exports = {
         };
     },
 
-    // Check whether the (target, source) combination already owns an active stake for (pubkey, tick).
-    // Used by STAKE v3 to detect "new vs. top-up" - top-up requires the existing stake be owned by the same source.
+    // The source that first recorded a valid contract_stakes row for (target, pubkey, tick), or null.
+    // The read has no activation_block or deactivation_block filter and no balance test, so a pending,
+    // fully unstaked or slashed row still names its source: the first valid staker keeps the key on
+    // that (target, tick); only a DELEGATE rotation rewriting a live row's signing_pubkey_id moves a row off it.
+    // STAKE v3 compares this with SOURCE to tell a top-up from a pubkey collision.
     async getContractStakeOwner(targetContractIndex, pubkey, tick){
         let pubkey_id = await this.getPubkeyId(String(pubkey).toLowerCase());
         if(pubkey_id === null) return null;
@@ -181,6 +186,10 @@ module.exports = {
         let status_id         = await this.createStatus(data['STATUS']);
         let source_id         = await this.getAddressId(data['SOURCE']);
         let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        // A refused empty key has no index_pubkeys id; keep the row under 0, which names no
+        // pubkey, instead of binding NULL to the NOT NULL column.
+        if(signing_pubkey_id === null && data['STATUS'] !== 'valid')
+            signing_pubkey_id = 0;
         let tick_id           = await this.createTicker(data['TICK']);
         let target_contract_index = Number(data['TARGET_CONTRACT_INDEX']);
         let action_index      = data['ACTION_INDEX'];
@@ -217,6 +226,10 @@ module.exports = {
         let status_id         = await this.createStatus(data['STATUS']);
         let source_id         = await this.getAddressId(data['SOURCE']);
         let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        // A refused empty key has no index_pubkeys id; keep the row under 0, which names no
+        // pubkey, instead of binding NULL to the NOT NULL column.
+        if(signing_pubkey_id === null && data['STATUS'] !== 'valid')
+            signing_pubkey_id = 0;
         let tick_id           = await this.createTicker(data['TICK']);
         let target_contract_index = Number(data['TARGET_CONTRACT_INDEX']);
         let action_index      = data['ACTION_INDEX'];

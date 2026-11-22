@@ -25,6 +25,8 @@ function planListRematch(listData, orderIndexes, swapIndexes){
 
     matches.sort((a, b) => a.index - b.index);
 
+    // processAction snapshots STATUS and ACTION_INDEX from each step for the fee-quote dry-run,
+    // so every step must retain those fields from the LIST record.
     return matches.map(({ action, index, indexKey }) => ({
         action,
         data: { ...listData, [indexKey]: index }

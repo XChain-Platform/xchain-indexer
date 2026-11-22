@@ -1,4 +1,16 @@
-/*
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
  * test/unit/actions/execute/fee_capped_at_held_gas.test.js
  *
  * execute_fee_cap_activation. An EXECUTE is admitted on the VM_EXECUTE_BASE floor and metered
@@ -31,15 +43,17 @@ function handler(held, network){
     util.getAddressesList = () => ({});
     util.addAddressTicker = () => {};
     const executions = [];
+    const feeRecords = [];
     let reads = 0;
     return {
-        debits, executions, reads: () => reads,
+        debits, executions, feeRecords, reads: () => reads,
         util,
         config: { GAS_PRICE: '0.00001', NETWORK: network || 'regtest', COIN: 'BTC' },
         mapper: { createMappings: async () => {} },
         indexerDb: {
             getAddressBalances: async () => { reads++; return held; },
             createContractExecution: async (row) => { executions.push(row); },
+            createFeeRecord: async (row) => { feeRecords.push(row); },
             updateBalances: async () => {},
             updateTokens: async () => {},
         },
@@ -77,8 +91,13 @@ describe('EXECUTE fee cap gate @regression @tier1', function(){
 
     it('armed: a run metered past the caller\'s balance debits only the balance', async function(){
         process.env[ENV] = 'armed';
-        const { h, c, debit } = await debitFor({ [TICK_ID]: '0.02' });
+        const data = { SOURCE: 'caller', ACTION_INDEX: 5, BLOCK_INDEX: 3, METHOD: 'burn',
+            CONTRACT_ACTION_INDEX: 2, DRY_RUN: true };
+        const { h, c, debit } = await debitFor({ [TICK_ID]: '0.02' }, { data });
         assert.strictEqual(debit, '0.02', 'metered 10 XCHAIN, held 0.02');
+        assert.strictEqual(h.util.bcstr(h.feeRecords[0].AMOUNT), debit,
+            'fee history records the capped bill, not the uncapped meter');
+        assert.strictEqual(c.data.PROBE_SETTLED_GAS_FEE, debit, 'probe reports the exact capped debit');
         assert.strictEqual(c.data.STATUS, 'out_of_resource', 'the outcome stands');
         assert.strictEqual(h.executions[0].GAS_USED, 1000000, 'the record keeps the metered gas');
     });
@@ -108,7 +127,10 @@ describe('EXECUTE fee cap gate: armed edges @regression @tier1', function(){
 
     it('armed: a covered fee is billed in full', async function(){
         process.env[ENV] = 'armed';
-        assert.strictEqual((await debitFor({ [TICK_ID]: '50' }, { gasUsed: 600, vmError: null })).debit, '0.006');
+        const live = await debitFor({ [TICK_ID]: '50' }, { gasUsed: 600, vmError: null });
+        assert.strictEqual(live.debit, '0.006');
+        assert.strictEqual(live.c.data.PROBE_SETTLED_GAS_FEE, undefined,
+            'decoded transactions do not carry probe-only fields');
     });
 
     it('armed at a height: blocks below it debit the full fee', async function(){
@@ -129,6 +151,32 @@ describe('EXECUTE fee cap gate: armed edges @regression @tier1', function(){
             const { h } = await debitFor(null, over);
             assert.strictEqual(h.debits.length, 0);
             assert.strictEqual(h.reads(), 0);
+        }
+    });
+});
+
+describe('EXECUTE dry-run settled gas probe @regression @tier1', function(){
+    let saved;
+    beforeEach(() => { saved = process.env[ENV]; });
+    afterEach(() => { if(saved === undefined) delete process.env[ENV]; else process.env[ENV] = saved; });
+
+    const dryData = () => ({ SOURCE: 'caller', ACTION_INDEX: 5, BLOCK_INDEX: 3, METHOD: 'burn',
+        CONTRACT_ACTION_INDEX: 2, DRY_RUN: true });
+
+    it('a failed but charged run reports the full metered debit below the cap gate', async function(){
+        delete process.env[ENV];
+        const { c, debit } = await debitFor({ [TICK_ID]: '0.02' }, { data: dryData() });
+        assert.strictEqual(debit, '10');
+        assert.notStrictEqual(c.data.STATUS, 'valid');
+        assert.strictEqual(c.data.PROBE_SETTLED_GAS_FEE, debit);
+    });
+
+    it('a native-paid, system-injected or refused run reports no settled gas', async function(){
+        process.env[ENV] = 'armed';
+        for(const over of [{ feePaymentMode: 1 }, { skipFee: true }, { error: 'invalid: insufficient funds (GAS)' }]){
+            const { h, c } = await debitFor({ [TICK_ID]: '50' }, Object.assign({ data: dryData() }, over));
+            assert.strictEqual(h.debits.length, 0);
+            assert.strictEqual(c.data.PROBE_SETTLED_GAS_FEE, undefined, JSON.stringify(over));
         }
     });
 });

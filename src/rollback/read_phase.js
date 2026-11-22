@@ -28,6 +28,7 @@
 // the two collectors disagree about which markets a reorg must recompute.
 const Database  = require('../db');
 const readSql   = require('../db/rollback/read_phase.js');
+const { retractedLandingClocks } = require('./landing_clock.js');
 
 module.exports = {
 
@@ -187,13 +188,17 @@ module.exports = {
     // result, which here is indistinguishable from "no batch was un-landed" and would
     // silently skip a retraction the reorg is never retried to re-issue.
     // The round window of each valid PRICE batch the reorg rolls back, as the price
-    // retraction carries it to the hub.
+    // retraction carries it to the hub, with the landing clock its push sent when that
+    // clock can be rebuilt exactly (see landing_clock.js).
     async collectRetractedPriceBatches(firstActionIndex){
-        let rows = await readSql.readRetractedPriceBatchRows(this.indexerView, firstActionIndex);
-        return (rows || []).map(r => ({
-            first_round: Number(r.batch_first_round),
-            last_round:  Number(r.batch_last_round)
-        }));
+        let rows = (await readSql.readRetractedPriceBatchRows(this.indexerView, firstActionIndex)) || [];
+        let clocks = await retractedLandingClocks(this.indexerView, rows.map(r => r.block_index));
+        return rows.map(r => {
+            let window = { first_round: Number(r.batch_first_round), last_round: Number(r.batch_last_round) };
+            let clock = (r.block_index === null || r.block_index === undefined) ? undefined : clocks.get(Number(r.block_index));
+            if(clock !== undefined) window.block_time = clock;
+            return window;
+        });
     },
 
     async collectUnlandedAttestBatches(firstActionIndex){

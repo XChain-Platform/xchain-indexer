@@ -27,6 +27,9 @@
 // per call.
 const coinRegistry = require('../../coins');
 const { findFeeOutput } = require('../fee_output.js');
+const { fitsUtf8mb3 } = require('../../db/utf8mb3.js');
+
+const NO_VALIDATOR_PRICE = 'invalid: ORACLE_ADDRESS (no validator price to value the oracle fee)';
 
 // Batch-cumulative oracle-fee accounting (BATCH_ISSUANCE_LIMITS), the same
 // shape validateNativeCoinFee uses for the native fee pool.
@@ -120,7 +123,7 @@ module.exports = {
     // Kept as the same product Counterparty computes, just with the cancellation applied:
     //
     // That per-dispense premise is what SETTLEMENT does only at/above
-    // DISPENSER_ORACLE_PER_TOKEN_PRICE. Below it, dispense.js spent the published price
+    // DISPENSER_ORACLE_PER_TOKEN_PRICE. Below it, dispense/pricing_paths.js spent the published price
     // as the price of one whole FILL, so the fee an oracle was paid and the proceeds the
     // dispenser could actually take in differed by a factor of giveAmount. This
     // function is unchanged either side of that flag day: per-token is the canonical
@@ -261,11 +264,15 @@ module.exports = {
         // settlement uses (GET_COIN, not GIVE_COIN - see reverseOraclePriceMatch).
         let window   = parseInt(this.config['FIAT_DISPENSER_PRICE_WINDOW']) || 86400;
         let coinPair = dispenser['GET_COIN'] + '/' + dispenser['FIAT_CODE'];
+        // price_snapshots.coin_pair is utf8mb3. An unrepresentable pair names no row,
+        // so answer like an unknown ASCII pair without binding it to the strict read.
+        if(!fitsUtf8mb3(coinPair))
+            return { valid: false, error: NO_VALIDATOR_PRICE };
         let priceDb  = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
         let snapshots = await this.fiatWindowPrices(priceDb, coinPair, blockTime - window, blockTime,
             this.fiatPricingBound(blockIndex, blockTime));
         if(!snapshots || snapshots.length === 0)
-            return { valid: false, error: 'invalid: ORACLE_ADDRESS (no validator price to value the oracle fee)' };
+            return { valid: false, error: NO_VALIDATOR_PRICE };
 
         let expectedFee = this.computeOracleFee(
             oracleRow.value, dispenser['GIVE_ESCROW'], snapshots[0].price, feeFraction);

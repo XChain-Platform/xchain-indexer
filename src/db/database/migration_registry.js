@@ -155,6 +155,11 @@ const STARTUP_ASSERTED_MIGRATIONS = [
         symptom:   'Fatal indexer error: pubkeys.pubkey holds 66 chars but VARCHAR(130) is required'
     },
     {
+        file:      '2026-09-02-utf8mb4-raw-wire-fields-not-null.sql',
+        assertion: 'assertRegisteredUtf8mb4ColumnsStayWide',
+        symptom:   'registered utf8mb4 columns drifted from utf8mb4'
+    },
+    {
         file:      '2026-08-24-validator-rewards-round-qualifier.sql',
         assertion: 'assertRewardUniqueKeyCarriesQualifier',
         symptom:   'Fatal indexer error: validator_rewards.reward_unique does not include round_qualifier'

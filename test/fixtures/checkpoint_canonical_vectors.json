@@ -1,0 +1,233 @@
+{
+  "description": "Authoritative XCHECKPOINT signing-string vectors shared by every checkpoint builder.",
+  "notes": [
+    "Regtest cases activate checkpoint commitment, supersession, and EQUIV at height zero.",
+    "Boundary cases pin commitment at mainnet 961000 and testnet 146000, plus BTC:testnet supersession at 158557.",
+    "The ANCHOR v0 section builder is excluded because its wire intentionally carries no supersession fields.",
+    "The mirrored-row and ANCHOR FORMAT 0 builders always append roots, so gated_only cases apply only to gated builders."
+  ],
+  "cases": [
+    {
+      "name": "plain rooted regtest checkpoint",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "regtest",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 480,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|regtest|500|7|0||XCHECKPOINT|BTC|regtest|500|bh|lh|ah|ch|7|480|d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4|1|e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5|2"
+    },
+    {
+      "name": "superseding rooted regtest checkpoint",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "regtest",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 480,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2,
+        "supersedes_from": "400",
+        "rules_digest": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|regtest|500|7|0||XCHECKPOINT|BTC|regtest|500|bh|lh|ah|ch|7|480|d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4|1|e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5|2|SUPERSEDE|400|abababababababababababababababababababababababababababababababab"
+    },
+    {
+      "name": "mainnet immediately below checkpoint commitment",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "mainnet",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 960999,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2
+      },
+      "expected": "XCHECKPOINT|BTC|mainnet|500|bh|lh|ah|ch|7|960999",
+      "gated_only": true
+    },
+    {
+      "name": "mainnet at checkpoint commitment",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "mainnet",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 961000,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|mainnet|500|7|0||XCHECKPOINT|BTC|mainnet|500|bh|lh|ah|ch|7|961000|d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4|1|e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5|2"
+    },
+    {
+      "name": "testnet immediately below checkpoint commitment",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "testnet",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 145999,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|testnet|500|7|0||XCHECKPOINT|BTC|testnet|500|bh|lh|ah|ch|7|145999",
+      "gated_only": true
+    },
+    {
+      "name": "testnet at checkpoint commitment",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "testnet",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 146000,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|testnet|500|7|0||XCHECKPOINT|BTC|testnet|500|bh|lh|ah|ch|7|146000|d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4|1|e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5|2"
+    },
+    {
+      "name": "post-activation null roots stay rootless",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "regtest",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 480,
+        "state_root": null,
+        "state_root_version": null,
+        "block_merkle_root": null,
+        "block_merkle_version": null
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|regtest|500|7|0||XCHECKPOINT|BTC|regtest|500|bh|lh|ah|ch|7|480",
+      "gated_only": true
+    },
+    {
+      "name": "testnet immediately below supersession activation",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "testnet",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 158556,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2,
+        "supersedes_from": "400",
+        "rules_digest": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+      },
+      "throws": true
+    },
+    {
+      "name": "testnet at supersession activation",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "testnet",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 158557,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2,
+        "supersedes_from": "400",
+        "rules_digest": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+      },
+      "expected": "EQUIV|XCHECKPOINT|BTC|testnet|500|7|0||XCHECKPOINT|BTC|testnet|500|bh|lh|ah|ch|7|158557|d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4|1|e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5|2|SUPERSEDE|400|abababababababababababababababababababababababababababababababab"
+    },
+    {
+      "name": "supersession fields below activation are rejected",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "mainnet",
+        "block_index": 961000,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 961000,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2,
+        "supersedes_from": "400",
+        "rules_digest": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB"
+      },
+      "throws": true
+    },
+
+    {
+      "name": "incomplete supersession fields are rejected",
+      "checkpoint": {
+        "chain": "BTC",
+        "network": "regtest",
+        "block_index": 500,
+        "block_hash": "bh",
+        "ledger_hash": "lh",
+        "actions_hash": "ah",
+        "contract_hash": "ch",
+        "checkpoint_seq": 7,
+        "snapshot_block": 480,
+        "state_root": "D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4D4",
+        "state_root_version": 1,
+        "block_merkle_root": "E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5E5",
+        "block_merkle_version": 2,
+        "supersedes_from": 400
+      },
+      "throws": true
+    }
+  ]
+}

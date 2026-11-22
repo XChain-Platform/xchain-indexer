@@ -32,7 +32,7 @@ module.exports = {
 
         if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
             // Ownership dispenser expire: release the escrow gate, but only if it is
-            // still held by this dispenser. Mirrors dispenser_close.js, which gates
+            // still held by this dispenser. Mirrors dispenser_close/close.js, which gates
             // the same release on getTokenEscrow(...) === ACTION_INDEX so a stale or
             // already-cleared gate is never touched. tokens.owner_id is unchanged
             // (ownership stays with the seller) on this expiry path.
@@ -46,9 +46,9 @@ module.exports = {
             // close/expire reduces it, so a re-settlement would refund it twice (util.isDispenserSettled).
             // Negate via bcsub, not JS unary minus: -GIVE_REMAINING coerces the 64-precision
             // bignumber string to a float and silently loses digits past ~15 sig figs, de-syncing
-            // the escrow debit from the full-precision credit below (mirrors dispense.js). Negate
+            // the escrow debit from the full-precision credit below (mirrors dispense/settle.js). Negate
             // at the same precision (64). Guarded on GIVE_REMAINING > 0, mirroring
-            // dispenser_close.js, so an empty balance dispenser does not push a zero-value pair.
+            // dispenser_close/settle.js, so an empty balance dispenser does not push a zero-value pair.
             escrows.push([dispenser['GIVE_TICK'], this.util.bcsub(0, dispenser['GIVE_REMAINING'], 64), dispenser['SOURCE']]);
             credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], dispenser['SOURCE']]);
         }

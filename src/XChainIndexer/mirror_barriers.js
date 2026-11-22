@@ -31,7 +31,7 @@ const {
     REMOTE_TOKEN_RETRY_STALL_REASON
 } = require('../actions/cross_chain_remote_token.js');
 const { capabilityReadHeld } = require('../consensus/capability_snapshot_proof/held_read.js');
-const CAPABILITY_PROOF_REASON = 'capability_proof_unavailable';
+const { CAPABILITY_PROOF_REASON } = require('./stall_health.js');
 const CAPABILITY_PROOF_POLL_MS = 250;
 
 module.exports = {
@@ -171,8 +171,9 @@ module.exports = {
     // Its activation gate copies the reader's own, both clauses (consumerActive in
     // consensus/list_share_settle.js), so the barrier waits exactly where a block reads the
     // table. The admission clause is not redundant: regtest arms the consumer at 0 while mirror
-    // admission is env-armed. Change one gate, change the other. Gating is safe because the
-    // barrier is a node-local wait, never hashed, so the gate moves no consensus value.
+    // admission is env-armed. list_share_barrier_wiring.test.js pins the two real gates: a
+    // narrower barrier gate would let a block read list_snapshots without waiting. Gating is
+    // safe because the barrier is a node-local wait, never hashed, so it moves no consensus value.
     async deferOnListShareSync(blockToParse, blockTime){
         if(!this.hubDbSync ||
            !gateRegistry.activeAt('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION',
@@ -198,7 +199,8 @@ module.exports = {
     // where a pin is actually read: a block is first processed with the barrier skipped, an
     // admitted read in it fails the block closed (db.assertRemoteTokenBarrierNotSkipped), and
     // the retry of that block waits here. A wait, never hashed: below the activation, or with
-    // no mirror to wait on, it does nothing.
+    // no mirror to wait on, it does nothing. The barrier and reader both call
+    // remoteTokenAdmissionActive, so this activation rule is not duplicated.
     async deferOnRemoteTokenSync(blockToParse){
         let armed = remoteTokenAdmissionActive(this.config['NETWORK'], this.config['COIN'], blockToParse);
         let mirrored = !!this.hubDbSync || !!this.hubDb;
@@ -354,6 +356,7 @@ module.exports = {
                     ' at snapshot_block ' + read.snapshotBlock + ' is still held for its proof');
                 this.stallReason = CAPABILITY_PROOF_REASON;
                 this.stallClearsAt = null;
+                this.capabilityProofBarrierSkipped = false;
                 return true;
             }
             await this.util.sleep(Math.min(CAPABILITY_PROOF_POLL_MS, Math.max(1, deadline - Date.now())));

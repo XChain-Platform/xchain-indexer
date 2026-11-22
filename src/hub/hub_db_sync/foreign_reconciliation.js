@@ -52,33 +52,8 @@ function checkpointRowsEqual(local, served, columns) {
 
 module.exports = {
 
-    // Converge the half of a retract/revive the bootstrap cannot re-deliver (#3211).
-    //
-    // The hub never DELETEs a retracted match: retractMatchesForReorg UPDATEs it to
-    // status='retracted' and broadcasts a deletion event, and the snapshot endpoint then
-    // filters those rows out (`status <> 'retracted'`) so a bootstrapping mirror matches a
-    // streamed one. That works only while the mirror SAW the deletion. A mirror that was
-    // disconnected across the retraction - or that legitimately refused the event under the
-    // receive-side guards - holds a finalized row the hub has retracted, and
-    // no later delivery can fix it: the row is absent from every bootstrap page, so the
-    // convergence ODKU never gets a version to compare against. The mirror keeps settling a
-    // match the hub retracted, which is a money-bearing fork from a streamed peer.
-    //
-    // After a COMPLETE re-page, a finalized row that was local when the drain began, whose
-    // match_id the hub did not serve, and whose effective_time is covered by the drain's
-    // certified watermark can only be such a retraction. Local ids are deliberately absent
-    // from that proof: they belong to this mirror and have no ordering relationship to a
-    // different hub's ids.
-    //
-    // Converge by marking status='retracted', NOT by deleting:
-    //   - consensus reads filter status='finalized' (db.getEffectiveUnsettledMatches), so the
-    //     settlement effect is identical to the DELETE the streamed path applies;
-    //   - a REVIVE is still able to win it back, because the convergence ODKU compares a
-    //     later effective_time (a delete would leave the revive to INSERT, which is also
-    //     fine, but marking keeps the row's provenance and matches AnchorRecovery's already
-    //     documented retracted-row carve-out);
-    //   - a mistaken mark is fail-CLOSED (a match stops settling), where a mistaken delete
-    //     would also lose the signed row itself.
+    // Mark pre-drain finalized matches retracted when a complete page omits
+    // them below its certified watermark. Keep rows so later revivals can win.
     async snapshotFinalizedMatches() {
         try {
             let rows = await this.hubDb.doQuery(
@@ -119,47 +94,41 @@ module.exports = {
         await this.refreshMatchSyncTimestamp();
     },
 
-    // Clear finalized price rounds this hub does not hold.
-    //
-    // Repointing an indexer at a different hub - another network, a rebuilt database, a
-    // re-genesised testnet - leaves every round the previous hub served sitting in the
-    // mirror. price_snapshots is the one mirrored table with NO defence against that.
-    // It carries no `network` column, so mirrorNetworkScope returns null and both
-    // purgeForeignNetworkRows is unreachable for it. A full re-page converges only the keys the
-    // two hubs SHARE, because applyRow's upsert is keyed on (round_number, coin_pair):
-    // a foreign round the new hub has never reached is simply never addressed.
-    //
-    // Those survivors are not inert. Every consensus read takes the NEWEST finalized row
-    // by round_number - db.getLatestPrice (ORDER BY round_number DESC LIMIT 1, the native
-    // fee gate's price source) and the getPrice() preload (MAX(round_number) per pair) -
-    // so a foreign round numbered above anything the new hub has reached wins every read
-    // for the life of the mirror, and its old block_timestamp then fails the staleness
-    // guard. That is the observed shape: a correctly-configured LTC testnet indexer
-    // serving a 4.4-day-old XCHAIN/USD and a frozen LTC/USD with the fee gate shut, on a
-    // mirror that was never going to converge, until the table was purged by hand.
-    //
-    // What makes the delete provable, and why it is a stronger warrant than the two
-    // purges above rather than a weaker one: the hub's price_snapshots snapshot endpoint
-    // applies NO filter (`SELECT * FROM price_snapshots WHERE id > ?`), unlike the
-    // status-filtered match/call feeds. So a COMPLETE drain - short final page, zero apply
-    // errors, which is the only state this runs in - has seen every row the hub holds. A
-    // local finalized row at a key that drain did not serve as finalized is therefore a
-    // row the hub does not have: either a round it never produced, or one it holds as
-    // skipped, which the status-gated upsert deliberately never lets demote a local round.
-    // A round the hub holds as disputed is not in that set: the upsert takes an incoming
-    // disputed row whole, so the drain has already turned the local copy to disputed.
-    // Neither survivor is recoverable by any later delivery, exactly like the retraction
-    // reconcileRetractedMatches converges.
-    //
-    // Delete rather than mark: unlike a match, a price round has no status consensus
-    // treats as a tombstone (a 'skipped' row IS a legitimate hub row), and the hub's own
-    // row for that key re-arrives on the next drain if it exists. Local `skipped` rows are
-    // left alone: no consensus read sees them, and the upsert converges them in place.
-    async reconcileForeignPriceRounds(servedKeys, keysComplete, maxServedRound, floorTs) {
+    // Delete finalized keys omitted by a complete unfiltered drain, plus skipped
+    // rows below the lowest round served by a drain from zero.
+    async reconcileForeignPriceRounds(servedKeys, keysComplete, maxServedRound, floorTs, minServedRound) {
         if (!servedKeys) return;
         let stale = await this.staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound, floorTs);
-        if (stale === null || stale.length === 0) return;
-        // Chunked so one oversized IN list can never blow the statement limit.
+        if (stale === null) return;
+        let staleSkipped = await this.staleSkippedPriceRoundIds(floorTs, minServedRound);
+        if (staleSkipped.length > 0) await this.deleteForeignPriceRows(staleSkipped, 'skipped');
+        if (stale.length === 0) return;
+        await this.deleteForeignPriceRows(stale, 'finalized');
+        await this.refreshPriceSyncHeight();
+    },
+
+    // Local skipped rows below the lowest round a drain from zero served. Empty when the
+    // drain started at the mirror floor (it never saw the hub's oldest rows), served
+    // nothing, or the read failed.
+    async staleSkippedPriceRoundIds(floorTs, minServedRound) {
+        if (Number(floorTs) > 0 || minServedRound === null || minServedRound === undefined) return [];
+        let floorRound = Number(minServedRound);
+        if (!Number.isFinite(floorRound)) return [];
+        try {
+            let locals = await this.hubDb.doQuery(
+                "SELECT id FROM price_snapshots WHERE status = 'skipped' AND round_number < ?", [floorRound]);
+            return (locals || []).map(r => Number(r.id)).filter(Number.isFinite);
+        } catch (e) {
+            getLogger().warn('HubDbSync: skipped price round reconciliation skipped (read failed):', e);
+            return [];
+        }
+    },
+
+    async deleteForeignPriceRows(stale, status) {
+        // Chunk deletes to bound statement size and report each chunk as
+        // bootstrap progress for the stall detector.
+        let startedAt = Date.now();
+        let lastReportAt = startedAt;
         for (let i = 0; i < stale.length; i += 500) {
             let chunk = stale.slice(i, i + 500);
             try {
@@ -169,20 +138,28 @@ module.exports = {
                 getLogger().warn('HubDbSync: price round reconciliation failed for a chunk:', e);
                 return;
             }
+            let now = Date.now();
+            if (this._bootstrapping) {
+                this._bootstrapLastProgressAt = now;
+                this._bootstrapProgressTicks = (Number(this._bootstrapProgressTicks) || 0) + 1;
+            }
+            let done = i + chunk.length;
+            if (this.bootstrapProgressMs > 0 && done < stale.length &&
+                (now - lastReportAt) >= this.bootstrapProgressMs) {
+                lastReportAt = now;
+                getLogger().info('HubDbSync: removing ' + status + ' price_snapshots rows this hub does not hold: ' +
+                    done + ' of ' + stale.length + ' deleted, ' +
+                    Math.max(1, Math.round((now - startedAt) / 1000)) + 's elapsed');
+            }
         }
-        getLogger().warn('HubDbSync: removed ' + stale.length + ' finalized price_snapshots row(s) this hub does ' +
-            'not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind, and the newest ' +
-            'round_number wins every price read); the mirror now holds only what this hub serves');
-        await this.refreshPriceSyncHeight();
+        getLogger().warn('HubDbSync: removed ' + stale.length + ' ' + status + ' price_snapshots row(s) this hub ' +
+            'does not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind' +
+            (status === 'finalized' ? ', and the newest round_number wins every price read' : '') +
+            '); the mirror now holds only what this hub serves');
     },
 
-    // A hub rebuild can reuse checkpoint_seq for a different signed lineage. The ordinary
-    // INSERT IGNORE bootstrap cannot move a local row at that natural key, and it cannot
-    // remove sequences the rebuilt hub no longer serves. Take a second, read-only page walk
-    // and stage it completely before touching the mirror. Conflicting served keys are
-    // replaced first; only after every replacement lands are pre-pass rows absent from the
-    // served key set removed. Rows delivered live after the local snapshot are not candidates
-    // for deletion and remain available while the replacement runs.
+    // Stage a complete checkpoint page before replacing conflicting natural keys.
+    // Remove only pre-pass rows absent from the served set after replacements land.
     async reconcileStateCheckpoints(scope) {
         let allowed;
         try {
@@ -285,20 +262,14 @@ module.exports = {
         return null;
     },
 
-    // The local finalized rows the drain proves foreign, by natural key when the served
-    // set is complete and by the round ceiling when it overflowed. Null when the pass
-    // must not run at all: a read failed, or the key derivation itself looks broken. A
-    // floorTs above zero judges only rows at or above that block time: the drain started at
-    // the mirror floor (choosePriceRepageStart) and served nothing older.
+    // Return foreign finalized ids by key, or by round ceiling after key overflow.
+    // Return null on read or key-derivation failure; floorTs limits judged rows.
     async staleForeignPriceRoundIds(servedKeys, keysComplete, maxServedRound, floorTs) {
         let floor = (Number(floorTs) > 0) ? [Number(floorTs)] : [];
         let locals, stale;
         if (!keysComplete) {
-            // The set overflowed its memory cap, so absence from it proves nothing. Fall
-            // back to the weaker half that needs no set: the drain saw every row the hub
-            // holds, so no round above the highest it served exists there. This still
-            // clears the shape that poisons the ORDER BY round_number DESC readers, and
-            // leaves any lower-numbered foreign round for the operator.
+            // An overflowed key set proves absence only above the highest served
+            // round, so leave lower unmatched rows untouched.
             getLogger().warn('HubDbSync: price round reconciliation exceeded its key cap (' +
                 PRICE_FINALIZED_KEY_CAP + '); falling back to the round-ceiling rule ' +
                 '(rounds above ' + maxServedRound + ' only)');
@@ -325,13 +296,8 @@ module.exports = {
                 .filter(r => !servedKeys.has(priceRoundKey(r.round_number, r.coin_pair)))
                 .map(r => Number(r.id))
                 .filter(Number.isFinite);
-            // Sanity fence on the KEY DERIVATION itself, not on the data. Every finalized
-            // row this drain served was applied to the local table moments ago, so it must
-            // read back into the served set. If the hub served finalized rounds and NOT ONE
-            // local finalized row matched, the two sides are not producing the same key
-            // (a column rename, a driver type change) and this pass would empty a healthy
-            // mirror. Refuse, loudly: a stalled reconciliation is recoverable, a wiped
-            // price history under a mirror the operator believes is converging is not.
+            // Refuse when no local finalized row matches a served key; that signals
+            // incompatible key derivation and would otherwise empty the mirror.
             if (servedKeys.size > 0 && locals.length > 0 && stale.length === locals.length) {
                 getLogger().error('HubDbSync: price round reconciliation refused: the hub served ' +
                     servedKeys.size + ' finalized round(s) but NONE of the ' + locals.length +
@@ -343,45 +309,8 @@ module.exports = {
         return stale;
     },
 
-    // Clear capability snapshots this hub does not hold (#1837).
-    //
-    // capability_snapshots is defenceless against a repoint for exactly the reasons
-    // price_snapshots is: no `network` column (so mirrorNetworkScope returns null and
-    // the network purge is unreachable). A full re-page converges only the uq_cap_snap keys
-    // the two hubs SHARE, and a row from the previous hub at a block boundary the new one
-    // has never reached is simply never addressed. MEASURED 2026-08-28: both testnet
-    // indexer mirrors still held 43 rows at snapshot_block 957439 - a BTC MAINNET height -
-    // inherited from the retired first-generation mainnet hub.
-    //
-    // Those survivors are not inert. snapshot_block is the plane every read of this table
-    // keys on: db.getStakeWeightsByCapability / getValidatorsByCapability resolve a
-    // validator set at a block boundary, and applyRetraction gates the RETRACTION_SIGNING
-    // era on MAX(snapshot_block) over the mirror itself, so a mainnet height sitting in a
-    // testnet mirror both offers a mainnet stake set to any future capability whose
-    // boundary lands on it and holds a flag-day gate open from the wrong chain's height.
-    //
-    // What makes the delete provable is the same warrant reconcileForeignPriceRounds
-    // rests on, and it is the stronger kind: the hub's snapshot endpoint for this table is
-    // UNFILTERED (hub api.js: SELECT * FROM capability_snapshots WHERE id > ?), and the hub
-    // never deletes or prunes a row it has written, so a COMPLETE drain - short final page,
-    // zero apply errors, the only state this runs in - has seen every row the hub holds. A
-    // local row at a key that drain did not serve is a row this hub does not have, and no
-    // later delivery can address it.
-    //
-    // TWO FENCES on top of that warrant, because this table is consensus-bearing:
-    //   - only rows that PREDATE the drain are judged (id <= preDrainMaxId). The ids are
-    //     locally assigned, so a row applied while the drain ran - a live WS event on this
-    //     table applies immediately rather than buffering, unlike the price path - carries a
-    //     higher id and is exempt; the next drain judges it once the pages cover it.
-    //   - if the hub served rows and NOT ONE local row matched a served key, the two sides
-    //     are not deriving the same key (a column rename, a driver type change) and this
-    //     pass would empty a healthy mirror. Refuse, loudly: a stalled reconciliation is
-    //     recoverable, a wiped validator-set history under a mirror the operator believes
-    //     is converging is not.
-    //
-    // Delete rather than mark: presence of the row IS the qualification statement (there is
-    // no status column and no tombstone consensus honours), and the hub's own row for that
-    // key re-arrives on the next drain if it exists.
+    // Delete pre-drain capability rows omitted by a complete unfiltered drain.
+    // Exempt concurrent rows and refuse deletion when served and local keys never match.
     async reconcileForeignCapabilitySnapshots(servedKeys, keysComplete, maxServedBlock, preDrainMaxId) {
         if (!servedKeys) return;
         preDrainMaxId = Number(preDrainMaxId);
@@ -407,18 +336,13 @@ module.exports = {
             'read of this table keys on snapshot_block); the mirror now holds only what this hub serves');
     },
 
-    // The local rows that predate the drain and that the drain proves foreign, by natural
-    // key when the served set is complete and by the snapshot_block ceiling when it
-    // overflowed. Null when the pass must not run: a read failed, or the key derivation
-    // itself looks broken.
+    // Return pre-drain foreign snapshot ids by key, or by block ceiling after
+    // key overflow. Return null on read or key-derivation failure.
     async staleForeignSnapshotIds(servedKeys, keysComplete, maxServedBlock, preDrainMaxId) {
         let stale;
         if (!keysComplete) {
-            // The set overflowed its memory cap, so absence from it proves nothing. Fall back
-            // to the weaker half that needs no set: the drain saw every row the hub holds, so
-            // no boundary above the highest it served exists there. That still clears the
-            // shape this pass exists for (a foreign chain's height sits ABOVE anything a
-            // younger network has reached) and leaves any lower foreign boundary alone.
+            // An overflowed key set proves absence only above the highest served
+            // snapshot block, so leave lower unmatched rows untouched.
             getLogger().warn('HubDbSync: capability snapshot reconciliation exceeded its key cap (' +
                 CAPABILITY_SNAPSHOT_KEY_CAP + '); falling back to the snapshot_block-ceiling rule ' +
                 '(boundaries above ' + maxServedBlock + ' only)');
@@ -435,11 +359,8 @@ module.exports = {
         } else {
             let locals;
             try {
-                // Unrestricted read: the id fence decides what may be DELETED, but the
-                // key-derivation fence below has to weigh every local row, including the ones
-                // this drain just applied. On a mirror whose whole pre-drain content is
-                // foreign - the repoint case - those fresh rows are the only proof that the
-                // two sides still derive the same key.
+                // Read all local keys to validate derivation; the pre-drain id fence
+                // still limits which rows can be deleted.
                 locals = await this.hubDb.doQuery(
                     'SELECT id, snapshot_block, capability, signing_pubkey, source FROM capability_snapshots');
             } catch (e) {
@@ -463,26 +384,8 @@ module.exports = {
         return stale;
     },
 
-    // Clear oracle rows the hub has retracted.
-    //
-    // A PRICE v1 reorg makes the hub DELETE the rolled-back oracle_prices rows
-    // (PriceAggregator retract -> db/oracle.js deleteOraclePricesForRetraction) and broadcast
-    // a deletion event. That event is unsigned, so it is not quorum class and the hub never
-    // keeps it for deletion replay: a mirror that was disconnected across it, or refused it,
-    // holds a row the hub no longer has, and no later delivery can address it. Every consensus
-    // read of this table (the VM oracle preload, the oracle barrier's MAX(effective_at)) would
-    // keep selecting it on this node alone.
-    //
-    // The warrant is the one reconcileForeignCapabilitySnapshots rests on: the hub's snapshot
-    // route for this table is UNFILTERED (findOraclePricesAfterId: SELECT * ... WHERE id > ?),
-    // so a COMPLETE drain from zero has seen every row the hub holds, and a local row at a key
-    // that drain did not serve is a row the hub does not have. The same two fences apply:
-    //   - only rows that PREDATE the drain are judged (id <= preDrainMaxId), because a live
-    //     oracle event applies immediately and can land a row after the last page was read;
-    //   - if the hub served rows and NOT ONE local row matched a served key, the two sides
-    //     are not deriving the same key, and the pass refuses rather than empty the table.
-    // Delete rather than mark: the table has no status column, and the delete is exactly what
-    // the streamed deletion would have done.
+    // Delete pre-drain oracle rows omitted by a complete unfiltered drain from zero.
+    // Exempt concurrent rows and refuse deletion when served and local keys never match.
     async reconcileRetractedOracleRows(servedKeys, keysComplete, preDrainMaxId) {
         if (!servedKeys) return;
         preDrainMaxId = Number(preDrainMaxId);

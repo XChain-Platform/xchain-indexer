@@ -23,6 +23,23 @@ describe('list share metadata gate readers', function () {
         const gate = require('../../../../src/consensus/gates/list_meta_gate.js');
         assert.strictEqual(LIST_META_GATE_KEY, 'list_meta_activation.LIST_META_ACTIVATION');
         assert.strictEqual(Object.prototype.hasOwnProperty.call(gate, 'LIST_META_ACTIVATION'), false);
+
+        const wired = [];
+        const deps = {
+            canonical: { wireListMetaGate: fn => wired.push(fn) },
+            screen: { wireListMetaGate: fn => wired.push(fn) },
+        };
+        require('../../../../src/consensus/list_share_settle/apply.js')(deps);
+        assert.deepStrictEqual(wired, [isListMetaActive, isListMetaActive]);
+        assert.strictEqual(deps.isListMetaApplyActive, isListMetaApplyActive);
+        assert.strictEqual(
+            require('../../../../src/consensus/list_share_settle/halt.js').LIST_META_GATE_KEY,
+            LIST_META_GATE_KEY
+        );
+        assert.strictEqual(
+            require('../../../../src/actions/list/meta.js').createMetaFormat().gate,
+            LIST_META_GATE_KEY
+        );
     });
 
     it('is active for the hub and every apply chain at regtest genesis', function () {

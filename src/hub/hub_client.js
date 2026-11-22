@@ -25,17 +25,9 @@ const { CONFIG_ENV } = require('../config.js');
 const { sendHubRequest, HUB_RATE_LIMIT_RPC_CODE, readRateLimitHeaders } = require('./hub_client/request.js');
 const { resolveConfigEndpoint } = require('./hub_client/config_endpoint.js');
 const { readEnvNow } = require('./hub_db_sync/env.js');
-// Name the hub rejections a REPLAY can never turn into an acceptance.
-// A push can fail INSIDE a successful JSON-RPC envelope: PriceAggregator returns
-// { accepted:false, reason } and api.js returns { error:'...' } as an ordinary method
-// result, and call rejects on neither. Every pattern here judges the PAYLOAD itself,
-// which a queued row replays byte for byte, so retrying only grows the queue. Anything
-// else is retryable, including a reason this list has never seen: a needless retry costs
-// a queue slot, a wrong drop costs a never-re-derivable oracle price (actions/price.js).
-//
-// 'insufficient quorum' is deliberately absent, like its weighted twin 'insufficient
-// signer stake': the hub counts the sigs against its OWN validator snapshot (buried height,
-// its MIN_STAKE, its BTC indexer), and this indexer only queues a price it already found quorate.
+// Hub rejections inside a successful JSON-RPC envelope ({accepted:false,reason}, {error}) that a
+// replay can never clear, since a queued row replays the payload byte for byte; unknown reasons stay
+// retryable. 'insufficient quorum|signer stake' are absent on purpose: the hub counts sigs on its own snapshot.
 const TERMINAL_HUB_REJECTIONS = [
     /^duplicate$/i,                        // the hub already holds this action key
     /^stale \(retracted generation\)$/i,   // ingest fence; it only ever hardens
@@ -44,27 +36,14 @@ const TERMINAL_HUB_REJECTIONS = [
     /^chain must be one of\b/i             // api.js validateChain
 ];
 
-// The THROWN counterpart of TERMINAL_HUB_REJECTIONS above. The hub's durable push
-// handlers now answer a refusal of the call's own arguments with a JSON-RPC error rather
-// than an in-result message, and call rejects on a top-level `error` before
-// requireHubAccepted ever sees a payload, so without this every such push retried
-// forever: the durable push types carry no attempt cap (hub_push_queue.js) and the queued
-// row replays the same arguments into the same verdict on every drain.
-//
-// -32602 (Invalid params) is the only code here, and deliberately. It judges the PAYLOAD,
-// which a replay cannot change. -32603 (Internal error), the hub's own -32029 throttle and
-// every transport failure describe the HUB's state, which a later attempt can clear, so
-// they stay retryable, on the same asymmetry the list above is built on: a needless retry
-// costs a queue slot, a wrong drop costs a never-re-derivable oracle price.
+// Thrown JSON-RPC codes a replay can never clear: only -32602 (Invalid params) judges the payload.
+// -32603, the -32029 throttle and transport errors describe hub state and stay retryable; durable
+// push types have no attempt cap, so a terminal code left retryable would replay forever.
 const TERMINAL_HUB_RPC_CODES = new Set([-32602]);
 
-// Read the terminal reason out of a REJECTION, or null when a retry could still clear it.
-//
-// Keyed on the code alone, never on the message. The patterns above are safe against a
-// hub RESULT, whose text the hub authored, but a rejection's message can come from this
-// client's own transport paths, and one of those reads 'Invalid JSON response: ...', which
-// /^invalid\b/ matches. Classifying that terminal would drop a durable row on a truncated
-// body. The code is only ever set from a parsed JSON-RPC envelope, so it cannot collide.
+// Terminal reason of a REJECTION, or null when a retry could still clear it. Keyed on the code, never
+// the message: client transport text ('Invalid JSON response') matches /^invalid\b/ and would drop a
+// durable row on a truncated body.
 function terminalHubRejection(err){
     if(!err) return null;
     // A throttle is the hub declining to LOOK at the payload, never a verdict on it, and
@@ -79,17 +58,12 @@ function terminalHubRejection(err){
     return String(err.message || code);
 }
 
-// Read the application-level rejection out of a hub result, or null when the call was
-// accepted. Covers BOTH shapes the hub uses: a check on `accepted` alone misses the
-// api.js { error } path, and that path carries the transient failures (a hub still
-// booting its aggregator, an unexpected exception inside a handler).
-
-// Total wall-clock budget for one hub call, overridable with HUB_CALL_DEADLINE_MS.
-// The `timeout` request option below is an IDLE-socket timer that resets on every byte
-// received, so it bounds a silent socket and nothing else: a hub drip-feeding a body
-// holds the call open forever inside it. Set far above any healthy push so the ceiling
-// can only fire on a wedged request, never on a slow-but-live hub.
+// Total wall-clock budget for one hub call (env HUB_CALL_DEADLINE_MS). The request `timeout` is an idle-socket
+// timer reset by every byte, so this sits far above a healthy push and fires only on a wedged request.
 const HUB_CALL_DEADLINE_MS = 60000;
+
+// Rejection reason out of a hub result, or null when accepted. Checks both shapes: `accepted` alone
+// misses the api.js { error } path, which carries the transient failures.
 
 function hubRejectionReason(result){
     if(!result || typeof result !== 'object') return null;
@@ -110,16 +84,9 @@ class HubClient {
     constructor(hubUrl, apiKey, configUrl, configApiKey){
         this.hubUrl = hubUrl || CONFIG_ENV.HUB_API_URL || '';
         this.apiKey = apiKey || CONFIG_ENV.HUB_API_KEY || '';
-        // The config oracle is not reachable over the mirror feed. getallconfigs returns
-        // every service's connection parameters, DB user and password included, so the hub
-        // keeps it off the public feed port: api.js admits only FEED_RPC_METHODS there and
-        // answers everything else with -32601 'Method not available on this port'. Every
-        // push method this client sends IS on that allowlist, so an indexer pointed at a
-        // validator's feed port pushes and mirrors correctly and then fails its config poll
-        // once a minute forever, silently freezing the hub-supplied params at their startup
-        // values. Point HUB_CONFIG_URL at a private hub API port to separate the two roles.
-        // Unset, both fall back to the explicitly configured API endpoint, so a
-        // single-hub deployment is unchanged while selector seeds remain feed-only.
+        // getallconfigs returns every service's DB credentials, so the hub keeps it off its public feed port
+        // (-32601); HUB_CONFIG_URL points at a private API port, and unset it falls back to the API endpoint,
+        // while a feed-port-only indexer's config poll fails silently.
         let configEndpoint = resolveConfigEndpoint({
             configUrl: configUrl || CONFIG_ENV.HUB_CONFIG_URL,
             apiUrl: this.hubUrl,
@@ -131,10 +98,8 @@ class HubClient {
         this.configApiKey  = configEndpoint.apiKey;
         this.configEnabled = configEndpoint.enabled;
         if(configEndpoint.notice) getLogger().warn(configEndpoint.notice);
-        // Interim credential scoping: when the hub gates its retraction rails
-        // (push*reorg) behind a dedicated HUB_REORG_API_KEY, the reorg pushes
-        // must carry that key; everything else keeps the bulk key.
-        // Unset = legacy single-key behavior.
+        // Retraction rails (push*reorg) use HUB_REORG_API_KEY when the hub gates them behind it;
+        // unset keeps the single bulk key.
         this.reorgApiKey = CONFIG_ENV.HUB_REORG_API_KEY || this.apiKey;
         this.enabled = !!this.hubUrl;
         // Wall-clock ceiling for a single call; see HUB_CALL_DEADLINE_MS.
@@ -154,24 +119,16 @@ class HubClient {
         this.selectorCandidateSource = (typeof fn === 'function') ? fn : null;
     }
 
-    // Read the hub's operational params. The one method here that is NOT on the hub's
-    // feed-port allowlist, so it goes to configUrl (a private hub API port) rather than
-    // hubUrl; see the constructor. Left as a thin wrapper over call so callers never
-    // have to know which endpoint a method belongs to.
+    // Read the hub's operational params; the one method off the feed-port allowlist, so it goes to
+    // configUrl (a private API port) rather than hubUrl.
     async getAllConfigs(){
         if(!this.configEnabled) return null;
         return this.call('getallconfigs', {}, this.configApiKey, this.configUrl);
     }
 
-    // Push a chain tip update to the hub (fire-and-forget). Network is
-    // optional; older hubs ignore it, newer ones use it to scope the
-    // chain_tips entry so multi-network hubs don't collide on 'mainnet'.
-    //
-    // chainId is the block-1 hash of this chain, sent by the BITCOIN indexer only: it is
-    // how the hub learns which Bitcoin chain instance it is serving, so it can stamp its
-    // cross-chain rows with it and every mirror can refuse the rows of a chain that was
-    // re-genesised out from under a hub database. Omitted from the params when absent, so
-    // an older hub and every non-BTC indexer are on exactly the wire they were.
+    // Push a chain tip update (fire-and-forget); network scopes chain_tips on multi-network hubs. chainId
+    // (block-1 hash) is sent by the BITCOIN indexer only, so the hub can stamp cross-chain rows and mirrors
+    // refuse a re-genesised chain; omitted when absent, so older hubs see the same wire.
     async pushChainTip(coin, network, blockHeight, blockTime, chainId){
         if(!this.enabled) return;
         try {
@@ -213,48 +170,25 @@ class HubClient {
         return this.push('pushoracleprice', priceData);
     }
 
-    // Push a validated PRICE batch (a signed window of rounds) to the hub for cross-chain
-    // aggregation via pushpricebatch. batchData mirrors pushPriceRound's payload one-for-one
-    // (source_chain, btc_block_height, sigs, action_index, block_index, push_generation) plus
-    // rounds[] carrying the window's per-round data and block_time, the landing block's own
-    // time. block_time is required here (not just for a single round) because the hub keys its
-    // pair-name flag day per round on it, and batching widens the hub/chain time skew from the
-    // ~10 minutes a single round carries to ~70 minutes for a six-round window.
+    // Push a validated PRICE batch (signed window of rounds) via pushpricebatch; batchData mirrors pushPriceRound
+    // plus rounds[] and block_time, required because the hub keys its per-round pair-name flag day on it and
+    // batching widens the hub/chain time skew to ~70 minutes.
     async pushPriceBatch(batchData){
         if(!this.enabled) return;
         return this.push('pushpricebatch', batchData);
     }
 
-    // Push a validated ATTEST batch (a signed window of finalized attestation responses,
-    // parsed off the DOGE rail) to the hub via pushattestbatch. The hub re-verifies the
-    // batch quorum, inserts the carried rows into the response mirror and re-serves them
-    // to every BTC indexer through the ordinary mirror path, which is how a chain-only
-    // node's mirror is rebuilt from chain parse alone.
-    //
-    // batchData is the delivery arm's payload verbatim: source_chain, network,
-    // window_start, window_end, row_count, btc_block_height, rows[], sigs[], action_index,
-    // block_index, block_time, push_generation. The hub destructures exactly those names,
-    // so nothing here reshapes them. rows and sigs are the reassembled body as it came off
-    // the chain, so the hub verifies the same bytes this node verified.
+    // Push a validated ATTEST batch (finalized responses parsed off the DOGE rail) via pushattestbatch; the hub
+    // re-verifies quorum and re-serves the rows through the mirror. batchData is the delivery arm's payload
+    // verbatim (the hub destructures exact names), rows and sigs as they came off the chain.
     async pushAttestBatch(batchData){
         if(!this.enabled) return;
         return this.push('pushattestbatch', batchData);
     }
 
-    // Notify the hub that a reorg rolled back PRICE actions on this chain so it can
-    // retract any price_snapshots / oracle_prices rows seeded from those actions.
-    // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
-    // fromActionIndex: lowest rolled-back action_index; the hub deletes rows for
-    //                  this source_chain whose action_index is >= this value.
-    // toActionIndex (optional): upper bound for a CLOSED-range retraction. The live retraction
-    // omits it (open-ended is safe before forward processing resumes); a DEFERRED retraction from
-    // the queue passes it so a row re-published at A' inside the original range is not wiped.
-    // retractionGeneration (optional): the rollback's PRE-bump push generation. Both the live and
-    // deferred retractions carry it so the hub fences the delete to push_generation <= it,
-    // leaving a row re-published at a recycled action_index (higher generation) intact.
-    // batches (optional): [{first_round, last_round}] of each PRICE batch the reorg rolled
-    // back, so the hub clears the landing clock on every round of it, not only on rounds
-    // it stored from the batch itself. Omitted when there are none.
+    // Retract PRICE rows seeded by rolled-back actions: fromActionIndex (lowest rolled-back, the hub deletes >=),
+    // optional toActionIndex (closed range for a deferred retraction), retractionGeneration (PRE-bump; fences the
+    // delete to push_generation <=) and batches [{first_round,last_round,block_time?}] to clear each landing's clock.
     async retractPriceRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration, batches){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
@@ -264,16 +198,9 @@ class HubClient {
         return this.push('pushpricereorg', params, this.reorgApiKey);
     }
 
-    // Notify the hub that a reorg rolled back XCALL request actions on this chain so it
-    // can retract any cross_chain_calls relay rows seeded from those requests. The hub
-    // marks them 'retracted' and broadcasts deletions, so every indexer mirroring its
-    // cross_chain_calls table purges the orphaned rows (otherwise a 'finalized' relay row
-    // from an orphaned request stays eligible for re-injection on the target chain).
-    // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
-    // fromActionIndex: lowest rolled-back action_index; the hub retracts relay rows for
-    //                  this source_chain whose source_action_index is >= this value.
-    // toActionIndex (optional): closed-range upper bound for a deferred retraction.
-    // retractionGeneration (optional): see retractPriceRange.
+    // Retract XCALL relay rows (cross_chain_calls) seeded by rolled-back requests; the hub marks them 'retracted'
+    // and broadcasts deletions so no orphan stays eligible for re-injection. Params as retractPriceRange; matches
+    // source_action_index >= fromActionIndex.
     async retractXcallRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
@@ -282,16 +209,9 @@ class HubClient {
         return this.push('pushxcallreorg', params, this.reorgApiKey);
     }
 
-    // Notify the hub that a reorg rolled back DEX ORDER actions on this chain so it can retract
-    // any cross_chain_matches rows whose retracted leg references those orders. The hub marks the
-    // matching matches 'retracted', restores both legs' remaining capacity, and broadcasts
-    // deletions, so every indexer mirroring its cross_chain_matches table purges the orphaned rows
-    // (otherwise a 'finalized' match against an orphaned order stays eligible for settlement).
-    // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
-    // fromActionIndex: lowest rolled-back action_index; the hub retracts matches for this
-    //                  source_chain whose a_action_index/b_action_index is >= this value.
-    // toActionIndex (optional): closed-range upper bound for a deferred retraction.
-    // retractionGeneration (optional): see retractPriceRange (fenced per-leg by the hub).
+    // Retract cross_chain_matches whose leg references a rolled-back DEX ORDER; the hub marks them 'retracted',
+    // restores both legs' capacity and broadcasts deletions. Params as retractPriceRange; matches
+    // a_action_index/b_action_index >= fromActionIndex, fenced per leg.
     async retractMatchRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
@@ -300,16 +220,9 @@ class HubClient {
         return this.push('pushdexreorg', params, this.reorgApiKey);
     }
 
-    // Notify the hub that a reorg rolled back XBRIDGE lock/burn actions on this chain so it can
-    // retract any bridge_transfers rows whose SOURCE leg sits in the orphaned range. The hub marks
-    // them 'retracted', releases the source-leg guard, forgets the finalized ring entry and
-    // broadcasts deletions, so every indexer mirroring bridge_transfers drops the row (otherwise a
-    // 'finalized' transfer from an orphaned lock stays eligible to mint on the destination chain).
-    // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
-    // fromActionIndex: lowest rolled-back action_index; the hub retracts transfers for this
-    //                  source_chain whose src_action_index is >= this value.
-    // toActionIndex (optional): closed-range upper bound for a deferred retraction.
-    // retractionGeneration (optional): see retractPriceRange (fenced on push_generation by the hub).
+    // Retract bridge_transfers whose SOURCE leg sits in a rolled-back XBRIDGE range; the hub marks them 'retracted',
+    // releases the source-leg guard and broadcasts deletions. Params as retractPriceRange; matches
+    // src_action_index >= fromActionIndex, fenced on push_generation.
     async retractBridgeRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
         if(!this.enabled) return;
         let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
@@ -318,23 +231,9 @@ class HubClient {
         return this.push('pushbridgereorg', params, this.reorgApiKey);
     }
 
-    // Notify the hub that a reorg un-landed an ATTEST v5/v6 batch this chain carried, so
-    // it can clear the batch link that landing stamped on every response the batch
-    // carried.
-    //
-    // NOT A RANGE, and not a delete. The four range retractions above name a rolled-back
-    // action range and the hub removes what that range seeded; this one names ONE batch,
-    // because the hub-side effect is to NULL a single link column and never to remove a
-    // row: a mirror row is legitimate whichever batch carried it (its federation
-    // signatures are the authority), and on a chain-only node the batch-inserted row is
-    // the only copy in existence. Clearing the link is also what lets the batch re-land,
-    // since the hub sets that column only where it IS NULL.
-    //
-    // The batch is named by its key AND by the signed window bounds that key is derived
-    // from, so the hub re-derives the key rather than trusting it, plus the action index
-    // the landing push carried (the HEAD's), which is the value stamped on
-    // the rows. No generation fence: the mirror table has no push_generation column and
-    // the link is cosmetic by construction.
+    // Un-land an ATTEST v5/v6 batch after a reorg: NOT a range retraction and never a delete, the hub only NULLs the
+    // batch link so the batch can re-land (mirror rows stay legitimate). Sends batch_key with its window bounds (the hub
+    // re-derives the key) and the landing push's action_index; no generation fence.
     async retractAttestBatch(sourceChain, retraction){
         if(!this.enabled) return;
         let params = {
@@ -348,16 +247,9 @@ class HubClient {
         return this.push('retractattestbatch', params, this.reorgApiKey);
     }
 
-    // Deliver one push and judge BOTH shapes a hub refusal arrives in: the in-result message
-    // requireHubAccepted reads, and the JSON-RPC error call rejects on. Every push method
-    // above goes through here rather than calling call directly, so the two shapes cannot
-    // drift apart again.
-    //
-    // A terminal rejection is returned as { error: message }, which is byte for byte what
-    // the hub itself returned for this same refusal before it moved the guard into the
-    // error slot. Nothing downstream reads the value (HubPushQueue and XChainIndexer both
-    // key on throw-versus-resolve alone), so the terminal verdict reaches them as the
-    // delivered path and the queued row is dropped instead of replayed forever.
+    // Deliver one push and judge both refusal shapes (the in-result message requireHubAccepted reads, the JSON-RPC
+    // error call rejects on). A terminal rejection resolves as { error } like the in-result path, because queue and
+    // indexer key on throw-versus-resolve alone, so the row is dropped, not replayed forever.
     async push(method, params, apiKeyOverride){
         let result;
         try {
@@ -375,14 +267,14 @@ class HubClient {
         return this.requireHubAccepted(method, result);
     }
 
-    // Throw on an application-level hub rejection a retry could still clear, so the durable
-    // outbox RETAINS the row instead of deleting it. call resolves any
-    // error-free JSON-RPC envelope, so before this every rejection read as a delivery:
-    // HubPushQueue.attempt called markHubPushDelivered and XChainIndexer's post-commit
-    // path did the same, which destroyed the only remaining copy of a price the hub had
-    // just refused for a transient reason (no validator snapshot, a hub DB error, an
-    // aggregator still booting). Returns the result untouched when there is nothing wrong.
+    // Throw on a missing acknowledgement or a hub rejection a retry could still clear, so
+    // the durable outbox keeps the row. Returns an acknowledged result untouched otherwise.
     requireHubAccepted(method, result){
+        if(result === null || typeof result !== 'object' || Array.isArray(result)){
+            let err = new Error('hub returned no acknowledgement for ' + method);
+            err.hubRejection = 'no acknowledgement';
+            throw err;
+        }
         let reason = hubRejectionReason(result);
         if(reason === null) return result;
         if(TERMINAL_HUB_REJECTIONS.some(rx => rx.test(reason))){

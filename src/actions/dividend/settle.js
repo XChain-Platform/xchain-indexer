@@ -76,7 +76,7 @@ module.exports = {
         // Bill the controller-guard gas to SOURCE (a GAS burn with no offsetting credit); the
         // end-of-action updateTokens recomputes GAS supply from the ledger so sanityCheck holds.
         if(this.util.bcgt(guardFee, 0)){
-            debits.push([gasTick, guardFee, dividend['SOURCE']]);
+            this.util.billGuardGas(debits, gasTick, guardFee, dividend['SOURCE'], data);
             this.util.addAddressTicker(dividend['SOURCE'], gasTick);
         }
 

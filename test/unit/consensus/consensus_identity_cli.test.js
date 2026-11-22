@@ -120,6 +120,10 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.status, 2, res.stdout + res.stderr);
         assert.strictEqual(res.stdout, '');
         assert.ok(res.stderr.includes(KEY), res.stderr);
+        const { refusalLine } = require(BIN);
+        assert.strictEqual(refusalLine(new Error("Cannot find module 'x'\nRequire stack:\n- child.js")),
+            "consensus-identity: Cannot find module 'x'");
+        assert.strictEqual(refusalLine('plain refusal'), 'consensus-identity: plain refusal');
     });
 });
 
@@ -131,7 +135,7 @@ describe('bin/consensus-identity.js argument validation', function () {
         const res = run(['--phantom-write', output]);
         assert.strictEqual(res.status, 2);
         assert.strictEqual(res.stdout, '');
-        assert.strictEqual(res.stderr, 'unknown flag: --phantom-write\n');
+        assert.strictEqual(res.stderr, 'consensus-identity: unknown flag: --phantom-write\n');
         assert.strictEqual(fs.existsSync(output), false);
     });
 
@@ -139,14 +143,14 @@ describe('bin/consensus-identity.js argument validation', function () {
         const res = run(['ignored.json']);
         assert.strictEqual(res.status, 2);
         assert.strictEqual(res.stdout, '');
-        assert.strictEqual(res.stderr, 'unknown flag: ignored.json\n');
+        assert.strictEqual(res.stderr, 'consensus-identity: unknown flag: ignored.json\n');
     });
 
     it('refuses a value option whose value is missing', function () {
         const res = run(['--out']);
         assert.strictEqual(res.status, 2);
         assert.strictEqual(res.stdout, '');
-        assert.strictEqual(res.stderr, '--out requires a value\n');
+        assert.strictEqual(res.stderr, 'consensus-identity: --out requires a value\n');
     });
 
     it('implements the hub-compatible --out JSON write', function () {
@@ -157,6 +161,16 @@ describe('bin/consensus-identity.js argument validation', function () {
         assert.strictEqual(res.status, 0, res.stderr);
         assert.strictEqual(res.stderr, '');
         assert.deepStrictEqual(JSON.parse(fs.readFileSync(output, 'utf8')), JSON.parse(res.stdout));
+    });
+
+    it('documents every long flag parseArgs accepts', function () {
+        const res = run(['--help']);
+        assert.strictEqual(res.status, 0, res.stderr);
+        const source = fs.readFileSync(BIN, 'utf8');
+        const parseBody = source.slice(source.indexOf('function parseArgs'), source.indexOf('async function main'));
+        const flags = Array.from(parseBody.matchAll(/arg === '(--[^']+)'/g), (match) => match[1]);
+        for (const flag of flags) assert.ok(res.stdout.includes(flag), `--help omits ${flag}`);
+        assert.ok(res.stdout.includes('XC_ROLLCALL_REGTEST_ACTIVATION=armed'), 'help ended before its final example');
     });
 });
 
@@ -187,6 +201,8 @@ describe('bin/consensus-identity.js function-valued gate rows', function () {
 });
 
 describe('bin/consensus-identity.js --compare against a flat --out reading', function () {
+    // Each case spawns a node subprocess, and the 30 s default is too tight on a loaded CI venue.
+    this.timeout(120000);
     // Write this tree's own --out reading, edited by `mutate`, and return its path.
     function flatPin(mutate) {
         const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-flat-'));
@@ -253,9 +269,52 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
         for (const body of bodies) {
             const res = run(['--compare', pinFile(body)]);
             assert.strictEqual(res.status, 2, JSON.stringify(body) + res.stdout + res.stderr);
+            assert.match(res.stderr, /^consensus-identity: /);
             assert.strictEqual(res.stderr.trim().split('\n').length, 1, res.stderr);
             assert.ok(!res.stderr.includes('Cannot convert'), res.stderr);
         }
+    });
+});
+
+// A sentinel reading compared under the same armed-map failure matches field for
+// field, so the unreadable check has to fire in --compare mode as well.
+describe('bin/consensus-identity.js --compare with an UNREADABLE armed map', function () {
+    this.timeout(120000);
+    // A preload that adds one throwing armed-map row in the child, so the real fingerprint reads UNREADABLE.
+    function throwingRowPreload() {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-unreadable-'));
+        const file = path.join(dir, 'throwing_row.js');
+        fs.writeFileSync(file, 'require(' + JSON.stringify(path.resolve(REPO, 'src/consensus/armed_map/manifest.js'))
+            + ").ENTRIES.push(['zz_test.THROWS', () => { throw new Error('carrier failed to load'); }]);\n");
+        return file;
+    }
+
+    // Write a sentinel --out reading under the preload and return its path.
+    function sentinelPin(preload) {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-sentinel-'));
+        const file = path.join(dir, 'identity.json');
+        const res = run(['--out', file, '--json'], preload);
+        assert.strictEqual(res.status, 1, res.stdout + res.stderr);
+        const written = JSON.parse(fs.readFileSync(file, 'utf8'));
+        assert.strictEqual(written.armed_map_fingerprint, 'UNREADABLE');
+        assert.ok(written.armed_map_fingerprint_unreadable_reason.includes('zz_test.THROWS'));
+        assert.strictEqual(written.armed_map_rows, null);
+        return file;
+    }
+
+    it('exits 1 comparing a sentinel reading under the same failure, never a pass', function () {
+        const preload = throwingRowPreload();
+        const res = run(['--compare', sentinelPin(preload)], preload);
+        assert.strictEqual(res.status, 1, res.stdout + res.stderr);
+        assert.match(res.stderr, /^armed_map_fingerprint UNREADABLE: .*zz_test\.THROWS/m);
+        assert.ok(res.stdout.includes('ok armed_map_fingerprint'), res.stdout);
+    });
+
+    it('reports a readable build compared against a sentinel reading as a mismatch', function () {
+        const res = run(['--compare', sentinelPin(throwingRowPreload())]);
+        assert.strictEqual(res.status, 1, res.stdout + res.stderr);
+        assert.ok(res.stdout.includes('MISMATCH armed_map_fingerprint'), res.stdout);
+        assert.ok(!res.stderr.includes('UNREADABLE'), res.stderr);
     });
 });
 
@@ -263,6 +322,8 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
 // reading --json must never take a missing ledger read for a pass. The child gets
 // no database variables, which is one of the ways the read comes back unread.
 describe('bin/consensus-identity.js an unread tip', function () {
+    // Each case spawns a node subprocess, and the 30 s default is too tight on a loaded CI venue.
+    this.timeout(120000);
     const DB_KEYS = ['INDEXER_DB_HOST', 'INDEXER_DB_PORT', 'INDEXER_DB_USER', 'INDEXER_DB_PASS', 'INDEXER_DB_NAME'];
 
     function runWithoutDb(args) {
@@ -310,7 +371,7 @@ describe('bin/consensus-identity.js --at-block height', function () {
                 assert.strictEqual(res.status, 2, JSON.stringify(raw) + ' ' + extra.join(' '));
                 assert.strictEqual(res.stdout, '');
                 assert.strictEqual(res.stderr,
-                    `--at-block requires a non-negative integer height, got ${JSON.stringify(raw)}\n`);
+                    `consensus-identity: --at-block requires a non-negative integer height, got ${JSON.stringify(raw)}\n`);
             }
         }
     });

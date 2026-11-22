@@ -25,6 +25,7 @@ const path    = require('path');
 // The state-key binary collation flag day is a registry row read by literal key (W5),
 // keyed '<COIN>:<network>' so the coin goes with the height.
 const gateRegistry = require('../../consensus/gate_registry');
+const { PENDING_ASSEMBLY_STATUS } = require('../../actions/deploy/constants.js');
 const STATE_KEY_COLLATION_KEY = 'state_key_collation_activation.STATE_KEY_COLLATION_ACTIVATION';
 const U64_MAX = '18446744073709551615';   // BIGINT UNSIGNED
 
@@ -144,11 +145,11 @@ module.exports = {
                      INNER JOIN contract_executions ce ON (ce.action_index=c.action_index)
                      INNER JOIN index_statuses s ON (s.id=c.status_id)
                      WHERE c.source_id=? AND c.code_hash=? AND c.action_index < ?
-                       AND s.status='pending: CODE_HASH (awaiting chunks)'
+                       AND s.status=?
                        AND NOT EXISTS (SELECT 1 FROM contract_executions x WHERE x.assembler_action_index=c.action_index)
                      ORDER BY c.action_index ASC
                      LIMIT 1`;
-        let results = await this.doQuery(query, [source_id, codeHash, beforeActionIndex]);
+        let results = await this.doQuery(query, [source_id, codeHash, beforeActionIndex, PENDING_ASSEMBLY_STATUS]);
         return results.length > 0 ? results[0] : null;
     },
 
@@ -227,11 +228,10 @@ module.exports = {
         let error_message = data['ERROR_MESSAGE'];
         let emitted_count = data['EMITTED_COUNT'] || 0;
         let block_index  = data['BLOCK_INDEX'];
-        // Deferred chunked-DEPLOY fields (DEPLOY_DEFERRED_ASSEMBLY): the pending
-        // assembler this constructor row consumed (NULL for inline and self-completed
-        // deploys, and for every non-DEPLOY execution) and the fee mode a DEPLOY
-        // constructor row's base fee was paid in (1 native, 2 XCHAIN; NULL before the
-        // flag day and for non-DEPLOY rows). Neither enters a block-hash preimage.
+        // Deferred chunked-DEPLOY fields: the pending assembler this constructor row
+        // consumed (NULL for inline and self-completed deploys, and for every non-DEPLOY
+        // execution), plus the mode a DEPLOY constructor or EXECUTE paid its fee in
+        // (1 native, 2 XCHAIN). Neither enters a block-hash preimage.
         let assembler_action_index = this.util.isNull(data['ASSEMBLER_ACTION_INDEX']) ? null : data['ASSEMBLER_ACTION_INDEX'];
         let fee_payment_mode = this.util.isNull(data['FEE_PAYMENT_MODE']) ? null : data['FEE_PAYMENT_MODE'];
         let query  = "SELECT action_index FROM contract_executions WHERE action_index=? LIMIT 1";

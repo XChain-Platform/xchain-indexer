@@ -1,13 +1,23 @@
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md. A commercial
+// license (without AGPL source-disclosure terms) is available -
+// contact legal@dankest.llc.
+
 'use strict';
 
 const assert = require('assert');
 const path = require('path');
 const H = require('./helpers/apply_harness.js');
 
-const vectors = require(path.resolve(
-    __dirname,
-    '../../../../xchain-documentation/protocol/test-vectors/list_share.json'
-));
+const DOCS_DIR = process.env.XCHAIN_DOCS_DIR || path.resolve(
+    __dirname, '../../../../xchain-documentation'
+);
+const vectors = require(path.join(DOCS_DIR, 'protocol/test-vectors/list_share.json'));
 const versions = vectors.canonicals;
 const byBytes = (a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
 

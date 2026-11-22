@@ -103,6 +103,23 @@ describe('the poll pass stops advancing while the decoder reports a durable REOR
         const { ix, calls } = makeIndexer({ halted: false });
         await ix.pollDecoderOnce({}, 50);
         assert.strictEqual(calls.catchUpToDecoder, 1);
+
+        // Keep an unknown tip unsynced, while preserving the known level-tip transition.
+        const unknown = makeIndexer({ halted: false }).ix;
+        unknown.synced = false;
+        unknown.readPollCursors = async () => ({ lastProcessedReorgId: null, unprocessedReorgs: [],
+                                                lastDecoderBlock: null, lastIndexerBlock: 70 });
+        unknown.catchUpToDecoder = async () => ({ lastIndexerBlock: 70, lastDecoderBlock: null });
+        await unknown.pollDecoderOnce({}, 50);
+        assert.strictEqual(unknown.synced, false);
+
+        const level = makeIndexer({ halted: false }).ix;
+        level.synced = false;
+        level.readPollCursors = async () => ({ lastProcessedReorgId: null, unprocessedReorgs: [],
+                                              lastDecoderBlock: 70, lastIndexerBlock: 70 });
+        level.catchUpToDecoder = async () => ({ lastIndexerBlock: 70, lastDecoderBlock: 70 });
+        await level.pollDecoderOnce({}, 50);
+        assert.strictEqual(level.synced, true);
     });
 });
 
@@ -177,5 +194,54 @@ describe('the decoder-halt gate follows the halt probe across passes @regression
         const { ix, calls, view } = makeProbedIndexer(async () => true);
         await ix.pollDecoderOnce(view, 50);
         assert.strictEqual(calls.catchUpToDecoder, 1);
+    });
+});
+
+describe('a halted pass drops the mirror-barrier hold it carried in @regression @tier1', function () {
+    const { barrierCeilingExceeded, barrierHoldMs } = require('../../../src/XChainIndexer/stall_health');
+    const CEILING_MS = 900000;
+
+    function heldIndexer(halted) {
+        const { ix, calls } = makeIndexer({ halted });
+        ix.barrierHoldCeilingMs = CEILING_MS;
+        ix.barrierHold = { block: 73, reason: 'price_sync_barrier', since: Date.now() - 2 * CEILING_MS, notified: true };
+        return { ix, calls };
+    }
+
+    it('reads no ceiling crossing and no hold age while the decoder is halted', async function () {
+        const { ix } = heldIndexer(true);
+        assert.strictEqual(barrierCeilingExceeded(ix.barrierHold, CEILING_MS, Date.now()), true,
+            'control: the carried-in hold is past the ceiling before the pass');
+        await ix.pollDecoderOnce({}, 50);
+        assert.strictEqual(ix.barrierHold, null);
+        assert.strictEqual(barrierCeilingExceeded(ix.barrierHold, CEILING_MS, Date.now()), false);
+        assert.strictEqual(barrierHoldMs(ix.barrierHold, Date.now()), 0);
+    });
+
+    it('starts a fresh hold clock when the same block defers again after the halt clears', async function () {
+        const { ix } = heldIndexer(true);
+        await ix.pollDecoderOnce({}, 50);
+        ix.decoderReorgHalted = false;
+        await ix.pollDecoderOnce({}, 50);
+        assert.strictEqual(ix.barrierHold.block, 73);
+        assert.ok(Date.now() - ix.barrierHold.since < 60000, 'the halt is not counted against the ceiling');
+        assert.strictEqual(barrierCeilingExceeded(ix.barrierHold, CEILING_MS, Date.now()), false);
+    });
+
+    it('control: a pass that is not halted keeps a same-block hold across passes', async function () {
+        const { ix } = heldIndexer(false);
+        const since = ix.barrierHold.since;
+        await ix.pollDecoderOnce({}, 50);
+        assert.strictEqual(ix.barrierHold.since, since);
+    });
+
+    it('drops the hold on a pass held by a diverged replay witness', async function () {
+        const { ix } = heldIndexer(false);
+        ix.completeRetroactiveReplay = async () => {};
+        ix.replayWitnessHoldsBlocks = async () => true;
+        ix.holdRetroactiveReplayDiverged = function () { this.stallReason = 'retroactive_replay_diverged'; };
+        await ix.pollDecoderOnce({}, 50);
+        assert.strictEqual(ix.barrierHold, null);
+        assert.strictEqual(ix.stallReason, 'retroactive_replay_diverged');
     });
 });

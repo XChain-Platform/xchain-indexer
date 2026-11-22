@@ -32,14 +32,27 @@
 // CHECKPOINT_VERSIONS is the checkpoint-bearing version set and CHECKPOINT_SECTION_VERSIONS
 // the bundle-section family inside it; both live beside the tables they name, in
 // src/db/anchor_sql.js, and reach every caller through the entry's re-export.
-const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS } = require('../../../db/anchor_sql.js');
+const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS, ANCHOR_KEY_MAX_LENGTH } = require('../../../db/anchor_sql.js');
+const { fitsUtf8mb3 } = require('../../../db/utf8mb3.js');
+const rpcParams = require('../../../api/rpc/params.js');
 
 // A DOGE txid as the hub announces it (XANC_V0_DONE.txid / XANC_FINALIZED.txid).
 const TXID_RE = /^[0-9a-fA-F]{64}$/;
 
+// Chain and network must be non-empty strings no wider than the columns they are matched against.
+function anchorKeyTextOk(chain, network) {
+    return !rpcParams.string(chain, { name: 'chain', maxLength: ANCHOR_KEY_MAX_LENGTH.chain, required: true }).error &&
+           !rpcParams.string(network, { name: 'network', maxLength: ANCHOR_KEY_MAX_LENGTH.network, required: true }).error;
+}
+
 // Validate the getanchoraction request shape. Returns
 // {ok:true, block_index, checkpoint_seq, txid, version} on success (txid/version
 // null when not supplied), or {ok:false, error} otherwise.
+//
+// A success also carries `unmatchable: true` when chain or network holds a character
+// above U+FFFF. anchor_actions is utf8mb3, so no row can carry such a key and the answer
+// is "not anchored"; the caller skips the query, which would otherwise throw errno 1267
+// (Illegal mix of collations). The key is absent for every key the table can hold.
 //
 // `txid` and `version` are OPTIONAL narrowing filters added for the hub's
 // anchor-gossip gate: without them this RPC answers "is THIS CHECKPOINT anchored
@@ -48,11 +61,11 @@ const TXID_RE = /^[0-9a-fA-F]{64}$/;
 // which is what closes the forged-anchor gap (a Byzantine ELECTED publisher
 // announcing a real-but-different or never-mined txid).
 function validateAnchorActionParams({ chain, network, block_index, checkpoint_seq, txid, version }) {
-    if (typeof chain !== 'string' || !chain || typeof network !== 'string' || !network)
+    if (!anchorKeyTextOk(chain, network))
         return { ok: false, error: 'chain and network are required strings' };
-    let bi = Number(block_index);
-    let cs = Number(checkpoint_seq);
-    if (!Number.isInteger(bi) || bi < 0 || !Number.isInteger(cs) || cs < 0)
+    let bi = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+    let cs = rpcParams.integer(checkpoint_seq, { name: 'checkpoint_seq', min: 0 });
+    if (bi.error || cs.error)
         return { ok: false, error: 'block_index and checkpoint_seq must be non-negative integers' };
     let wantTxid = null;
     if (txid !== undefined && txid !== null && txid !== '') {
@@ -62,12 +75,14 @@ function validateAnchorActionParams({ chain, network, block_index, checkpoint_se
     }
     let wantVersion = null;
     if (version !== undefined && version !== null && version !== '') {
-        let ver = Number(version);
-        if (!Number.isInteger(ver) || !CHECKPOINT_VERSIONS.includes(ver))
+        let ver = rpcParams.integer(version, { name: 'version', min: 0 });
+        if (ver.error || !CHECKPOINT_VERSIONS.includes(ver.value))
             return { ok: false, error: 'version must be one of ' + CHECKPOINT_VERSIONS.join(', ') };
-        wantVersion = ver;
+        wantVersion = ver.value;
     }
-    return { ok: true, block_index: bi, checkpoint_seq: cs, txid: wantTxid, version: wantVersion };
+    let v = { ok: true, block_index: bi.value, checkpoint_seq: cs.value, txid: wantTxid, version: wantVersion };
+    if (!fitsUtf8mb3(chain) || !fitsUtf8mb3(network)) v.unmatchable = true;
+    return v;
 }
 
 // Pick the anchor row a caller asked for from the candidate set. `rows` must be
@@ -160,6 +175,6 @@ function buildAnchorActionResponse(config, latest, row, extra) {
 }
 
 module.exports = {
-    TXID_RE, normalizeVersion,
+    TXID_RE, normalizeVersion, anchorKeyTextOk,
     validateAnchorActionParams, selectAnchorRow, buildAnchorActionResponse
 };

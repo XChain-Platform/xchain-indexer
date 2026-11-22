@@ -52,9 +52,10 @@ module.exports = {
         return typeof value === 'bigint' || (!isNaN(parseFloat(value)) && isFinite(value));
     },
 
-    // Determine if value is floating point
+    // Determine if value is a finite number carrying a fraction. Whole numbers of any
+    // magnitude (a unix timestamp past 2^31, a satoshi count) are not floats.
     isFloat(value){
-        return value === +value && value !== (value|0);
+        return typeof value === 'number' && Number.isFinite(value) && !Number.isInteger(value);
     },
 
     // Determine if value is integer

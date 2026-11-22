@@ -21,11 +21,14 @@ const sinon  = require('sinon');
 const HubDbSync        = require('../../../../../src/hub/hub_db_sync.js');
 const priceBarriers    = require('../../../../../src/XChainIndexer/price_barriers.js');
 const Database         = require('../../../../../src/db');
+const { landedSelection } = require('../../../../../src/db/prices/landed_selection.js');
+const ProtocolChanges  = require('../../../../../src/protocol_changes.js');
 const Utility          = require('../../../../../src/utility');
 const { getTestConfig } = require('../../../../fixtures/config');
 const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
 
 const LANDED_ROW = 'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION';
+const STRICT_ROW = 'price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION';
 const BLOCK_HEIGHT = 4906100;
 const T = 1791144199;
 
@@ -168,5 +171,35 @@ describe('price landing barrier @regression @tier1', function () {
         // Without the barrier the unstamped live read answers differently (no round), the split it closes.
         const early = await makeDb(rounds(false)).getLatestPrice('LTC/USD', BLOCK_HEIGHT, opts);
         assert.strictEqual(early, null);
+    });
+
+    it('matches landedSelection across every network, coin and gate boundary', function () {
+        sinon.restore();
+        const thresholds = [LANDED_ROW, STRICT_ROW]
+            .flatMap(key => Object.values(ProtocolChanges.get(key)))
+            .filter(Number.isFinite);
+        const heights = new Set([null, 0, 1]);
+        for (const threshold of thresholds) {
+            heights.add(threshold - 1);
+            heights.add(threshold);
+            heights.add(threshold + 1);
+        }
+        let seen = { landedActive: false, landedInactive: false };
+        for (const network of ['mainnet', 'testnet', 'regtest', 'devnet']) {
+            for (const coin of ['BTC', 'LTC', 'DOGE']) {
+                const sync = new HubDbSync({ doQuery: async () => [] }, { enabled: true, network, coin });
+                for (const height of heights) {
+                    const reader = landedSelection({ NETWORK: network, COIN: coin }, height);
+                    const barrierActive = sync.landingActiveAt(height);
+                    const barrierStrict = barrierActive && sync.strictLandingActiveAt(height);
+                    assert.strictEqual(barrierActive, reader.landedActive,
+                        JSON.stringify({ network, coin, height, kind: 'landed' }));
+                    assert.strictEqual(barrierStrict, reader.landedStrict,
+                        JSON.stringify({ network, coin, height, kind: 'strict' }));
+                    seen[reader.landedActive ? 'landedActive' : 'landedInactive'] = true;
+                }
+            }
+        }
+        assert.deepStrictEqual(seen, { landedActive: true, landedInactive: true });
     });
 });

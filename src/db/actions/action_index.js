@@ -37,7 +37,7 @@ const STATUS_TABLES = new Set([
     'contract_executions', 'contract_stakes', 'contract_unstakes', 'contracts', 'delegations',
     'deploy_chunks', 'deposits', 'destroys', 'dispenser_cancels', 'dispenser_closes',
     'dispenser_edits', 'dispenser_expires', 'dispenser_statuses', 'dispensers', 'dispenses',
-    'dividends', 'fees', 'files', 'gated_files', 'issues', 'links', 'list_edits', 'list_metas',
+    'dividends', 'fees', 'file_manifests', 'file_parts', 'files', 'gated_files', 'issues', 'links', 'list_edits', 'list_metas',
     'lists', 'messages', 'mints', 'order_cancels', 'order_edits', 'order_expires',
     'order_matches', 'order_statuses', 'orders', 'poll_results', 'polls', 'prices',
     'reward_claims', 'sends', 'sleeps', 'stake_key_revocations', 'stakes', 'swap_cancels',
@@ -181,13 +181,13 @@ module.exports = {
     // The slice lands AFTER the settled-set exclusion so the cap counts real work, and
     // the ORDER BY above is a total order on quorum-agreed content, so every operator
     // takes the identical prefix. See CROSS_SETTLE_MAX_PER_BLOCK in protocol/constants.js
-    // for why the cap is consensus-visible and why it lands behind the
-    // CROSS_SETTLE_PER_BLOCK_CAP flag day (operator ruling of 2026-08-11).
+    // for why the cap is consensus-visible. CROSS_SETTLE_PER_BLOCK_CAP gates the branch
+    // and is armed at genesis on every shipped network, including mainnet.
     //
     // The `limit` is the CALLER's decision because that caller (processCrossChainSettlements)
-    // is the one holding the block index the flag day is evaluated against: it passes the
-    // protocol cap once the gate is on, and MAX_SAFE_INTEGER before, which is the legacy
-    // uncapped pass. This method never evaluates the gate itself, so it can never disagree
+    // holds the block index the gate is evaluated against: it passes the protocol cap when
+    // enabled and MAX_SAFE_INTEGER when disabled, which selects the uncapped pass. This
+    // method never evaluates the gate itself, so it can never disagree
     // with the caller about which side of the flag day a block is on.
     // Whether an action index has been parsed on this chain (a row in `actions`), as of the
     // current parse height. CROSS_SETTLE uses it to tell a local leg the replay has not

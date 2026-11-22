@@ -95,34 +95,40 @@ class HubPushDeliveryStore {
 
     async attempt(row, candidates){
         let parsed = await this.queue.parseHubPushPayload(row);
-        if(parsed === null) return;
+        if(parsed === null) return false;
 
         let deliveredTo = await this.getDeliveredTo(row.id);
         let firstError = null;
+        let rateLimitedError = null;
         for(let address of candidates){
             if(deliveredTo.has(address)) continue;
             try {
                 let delivered = await this.queue.deliverHubPush(
                     row, parsed.payload, this.clientForAddress(address));
-                if(!delivered) return;
+                if(!delivered) return false;
                 await this.markDelivered(row.id, address);
                 deliveredTo.add(address);
                 getLogger().info('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id +
                     ' to ' + address);
             } catch (err){
                 if(!firstError) firstError = err;
-                if(err && err.rateLimited) break;
+                if(err && err.rateLimited){
+                    rateLimitedError = err;
+                    break;
+                }
             }
         }
 
         if(candidates.every(address => deliveredTo.has(address))){
             await this.indexerDb.markHubPushDelivered(row.id);
-            return;
+            return true;
         }
-        if(firstError){
+        let failure = rateLimitedError || firstError;
+        if(failure){
             let attemptNo = (Number(row.attempts) || 0) + 1;
-            await this.queue.recordHubPushFailure(row, firstError, attemptNo);
+            await this.queue.recordHubPushFailure(row, failure, attemptNo);
         }
+        return false;
     }
 }
 

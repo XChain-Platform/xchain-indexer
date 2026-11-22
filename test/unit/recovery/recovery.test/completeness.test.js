@@ -282,6 +282,31 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 
     describe('completeness cross-check (REC-SUBSET-1)', function () {
         describe('as-of-block threshold + weight reconstruction', function () {
+            it('does not restore slash debits twice after the historical-set gate', async function () {
+                let btcDb = btcDbStub([], {
+                    slashRestores: [{ source: 'src_a', restored: '10' }]
+                });
+                btcDb.config = { NETWORK: 'testnet', COIN: 'BTC' };
+                let queriedDebits = false;
+                let doQuery = btcDb.doQuery;
+                btcDb.doQuery = async function (sql, params) {
+                    if (String(sql).includes('capability_slash_debits')) queriedDebits = true;
+                    return doQuery.call(this, sql, params);
+                };
+                let rec = new AnchorRecovery(memDb([], []), Object.assign({ btcDb }, quiet));
+                let group = { capability: 'cross_chain', block: 156914, rows: [
+                    { source: 'src_a', signing_pubkey: 'a'.repeat(64), amount: '10' }
+                ] };
+                let resolved = [{ source: 'src_a', weight: '10' }];
+
+                await rec.verifyWeightedCompleteness(group, resolved, 156908, '1');
+                assert.strictEqual(queriedDebits, false);
+                group.rows[0].amount = '9';
+                await assert.rejects(
+                    () => rec.verifyWeightedCompleteness(group, resolved, 156908, '1'),
+                    /forged weight/);
+            });
+
             it('rejects a snapshot spelling two weights for one source', async function () {
                 // Every key of a source carries the SAME aggregate (capability_snapshots.sql),
                 // so two spellings are a way to hide an inflated weight behind an honest row.

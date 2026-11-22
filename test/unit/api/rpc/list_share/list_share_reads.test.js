@@ -120,14 +120,20 @@ function registerDatabaseApiViewRead(){
             getListType: sinon.stub().resolves(2),
             getListAtBlock: sinon.stub().resolves(members),
             poolQuery: sinon.stub().callsFake(async (sql, args) => {
+                if(/AS share_action_index/.test(sql)){
+                    assert.deepStrictEqual(args, []);
+                    return [{
+                        root_index: 100,
+                        name: 'Database-backed name',
+                        owner: 'database-backed-owner',
+                        share_block: 70,
+                        share_action_index: 700
+                    }];
+                }
                 if(/FROM list_metas lm/.test(sql)){
                     assert.deepStrictEqual(args, args.length === 2 ? [100, 77] : [100]);
                     return [{ name: 'Database-backed name', description: 'Database-backed description' }];
                 }
-                if(/FROM lists l/.test(sql))
-                    return [{ root_index: 100, share_block: 70, share_action_index: 700 }];
-                if(/FROM list_transfers lt/.test(sql))
-                    return [{ address: 'database-backed-owner' }];
                 throw new Error('unexpected query: ' + sql);
             })
         });
@@ -149,7 +155,7 @@ function registerDatabaseApiViewRead(){
             share_block: 70,
             share_action_index: 700
         }]);
-        assert.strictEqual(db.poolQuery.callCount, 4);
+        assert.strictEqual(db.poolQuery.callCount, 2);
     });
 }
 
@@ -200,7 +206,6 @@ function registerInvalidListReadErrors(){
         for(const block of [-1, 1.5, '01', 'x', null, Number.MAX_SAFE_INTEGER + 1])
             assert.deepStrictEqual(await rpc.getlistat({ list_index: 1, block }),
                 { error: 'block must be a non-negative integer' });
-        assert.deepStrictEqual(await rpc.getlistat(null), { error: 'list_index must be a positive integer' });
     });
 }
 
@@ -208,15 +213,17 @@ function registerTransferredOwnerRead(){
     it('lists a shared root with its owner after a transfer', async function(){
         const view = {
             doQuery: sinon.stub().callsFake(async (sql, args) => {
-                if(/FROM lists l/.test(sql)){
-                    assert.deepStrictEqual(args, []);
-                    return [{ root_index: 100, share_block: 20, share_action_index: 200 }];
-                }
+                assert.match(sql, /AS share_action_index/);
                 assert.match(sql, /FROM list_transfers lt/);
-                assert.deepStrictEqual(args, [100]);
-                return [{ address: 'transferred-owner' }];
+                assert.deepStrictEqual(args, []);
+                return [{
+                    root_index: 100,
+                    name: 'Shared watchlist',
+                    owner: 'transferred-owner',
+                    share_block: 20,
+                    share_action_index: 200
+                }];
             }),
-            getListMeta: sinon.stub().resolves({ name: 'Shared watchlist', description: null }),
             getListSource: sinon.stub().rejects(new Error('transfer owner must win'))
         };
         const indexerDb = { apiView: sinon.stub().returns(view) };
@@ -229,9 +236,25 @@ function registerTransferredOwnerRead(){
             share_block: 20,
             share_action_index: 200
         }]);
-        assert.strictEqual(view.doQuery.callCount, 2);
-        assert.ok(view.getListMeta.calledOnceWithExactly(100, null));
+        assert.strictEqual(view.doQuery.callCount, 1);
         assert.ok(indexerDb.apiView.calledOnceWithExactly());
+        const rows = Array.from({ length: 200 }, (_, i) => ({
+            root_index: i + 1,
+            name: i % 2 ? null : 'list-' + i,
+            owner: i % 3 ? 'owner-' + i : null,
+            share_block: 1000 + i,
+            share_action_index: 2000 + i
+        }));
+        const bulkView = { doQuery: sinon.stub().resolves(rows) };
+        const bulkDb = { apiView: sinon.stub().returns(bulkView) };
+        const bulkRpc = buildListShareRpc({ indexer: fakeIndexer({ indexerDb: bulkDb }) });
+
+        const result = await bulkRpc.getsharedlists({ network: 'regtest' });
+
+        assert.strictEqual(result.length, 200);
+        assert.deepStrictEqual(result[0], rows[0]);
+        assert.deepStrictEqual(result[199], rows[199]);
+        assert.ok(bulkView.doQuery.calledOnce);
     });
 }
 

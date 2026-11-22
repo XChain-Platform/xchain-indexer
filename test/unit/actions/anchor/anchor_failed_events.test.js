@@ -10,7 +10,7 @@
 
 // Row 4 of the proactive-system-watch spec: a refused ANCHOR says so.
 //
-// anchor.js prints an accepted and a refused anchor through the same
+// src/actions/anchor/ prints an accepted and a refused anchor through the same
 // console.log, at the same level, one word apart, so nothing reading the
 // stream can separate them. These cases drive the REAL parser and assert the
 // ANCHOR_FAILED record, and that an accepted anchor emits none.

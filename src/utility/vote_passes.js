@@ -119,6 +119,7 @@ module.exports = {
             data['IS_SYNTHETIC']          = true;
             // Mirror the synthetic-action positional layout: VERSION|POLL_REF
             await actions.processAction('VOTE', [2, poll.action_index], data, null);
+            db.clearPollTallyWatermarkEntry(poll.action_index);
         }
 
         // 2. Early-decide trigger: armed open polls (a decide_threshold is set, not

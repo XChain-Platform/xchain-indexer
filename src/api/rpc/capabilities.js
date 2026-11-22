@@ -31,6 +31,8 @@ function buildCapabilitiesRpc(ctx){
         stakeWeightsByCapabilityRpc(ctx), capabilityStakeProofRpc(ctx));
 }
 
+// Federation read gated in src/api.js because the proof includes committed
+// per-pubkey stake source and weight data.
 function capabilityStakeProofRpc({ indexer }){
     return {
         async getcapabilitystakeproof({capability, block_index, pubkeys}){

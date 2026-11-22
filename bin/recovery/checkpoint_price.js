@@ -187,10 +187,30 @@ function verifyBatchPriceGroup(group, ctx){
         fail('price batch', batch.first_round, 'fails quorum against the archived price set');
 }
 
+// A batch-proofed group is verifiable here only when the archive happens to carry its whole
+// signed round range, each round's signed anchor and the price set at the batch height. The hub
+// archives price rows by round, stamps a batch row's reference_block with the landing height
+// rather than the signed anchor, and lets a validator's sibling rounds keep their own proofs, so
+// an honest archive routinely holds a partial or unprovable group. Such a group is quarantined
+// (never written) and the rest of the archive is restored; the rounds stay recoverable from the
+// chain through the hub's price re-ingest. A forged batch proof therefore costs its own rows,
+// never an unverified write.
+function quarantineBatchGroup(group, ctx){
+    try {
+        verifyBatchPriceGroup(group, ctx);
+        return null;
+    } catch(e) {
+        return { first_round: group.proof.batch.first_round, last_round: group.proof.batch.last_round,
+                 rows: group.rows, reason: e.message };
+    }
+}
+
 function verifyPrices(rows, ctx){
+    let quarantined = [];
     for(let group of signatureGroups(rows)){
         if(group.batch){
-            verifyBatchPriceGroup(group, ctx);
+            let skipped = quarantineBatchGroup(group, ctx);
+            if(skipped) quarantined.push(skipped);
             continue;
         }
         let first = group.rows[0];
@@ -205,6 +225,7 @@ function verifyPrices(rows, ctx){
         if(!ctx.quorumVerified(canonical, sigs, set, weighted))
             fail('price round', first.round_number, 'fails quorum against the archived price set');
     }
+    return quarantined;
 }
 
 function verifyArchive(archive, ctx){
@@ -214,8 +235,14 @@ function verifyArchive(archive, ctx){
     if(!Array.isArray(checkpoints) || !Array.isArray(prices) || !Array.isArray(tombstones))
         throw new Error('malformed checkpoint or price archive rows');
     verifyCheckpoints(checkpoints, ctx);
-    verifyPrices(prices, ctx);
+    let quarantined = verifyPrices(prices, ctx);
     for(let row of tombstones) validateTombstone(row);
+    if(quarantined.length === 0) return [];
+    let dropped = new Set();
+    for(let group of quarantined) for(let row of group.rows) dropped.add(row);
+    archive.price_snapshots = prices.filter(row => !dropped.has(row));
+    return quarantined.map(group => ({ first_round: group.first_round, last_round: group.last_round,
+        rows: group.rows.length, reason: group.reason }));
 }
 
 function comparable(column, value){
@@ -229,6 +256,9 @@ function checkpointDiffers(existing, row){
     return CHECKPOINT_COLUMNS.some(column => comparable(column, existing[column]) !== comparable(column, row[column]));
 }
 
+// The archived hub id is per-hub provenance (every hub numbers its own rows), so recovery
+// never binds it: a collision with a different row would drop or fail a signed row. Rows land
+// on their natural UNIQUE key under a local surrogate id, as the live mirror writes them.
 async function writeCheckpoint(db, row){
     let existing = await db.doQuery(
         `SELECT ${CHECKPOINT_COLUMNS.join(', ')} FROM state_checkpoints
@@ -239,13 +269,13 @@ async function writeCheckpoint(db, row){
         return;
     }
     await db.doQuery(
-        `INSERT IGNORE INTO state_checkpoints
-            (id, chain, network, block_index, block_hash, ledger_hash, actions_hash,
+        `INSERT INTO state_checkpoints
+            (chain, network, block_index, block_hash, ledger_hash, actions_hash,
              contract_hash, checkpoint_seq, snapshot_block, supersedes_from, rules_digest,
              state_root, state_root_version, block_merkle_root, block_merkle_version,
              validator_signatures)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [Number(row.id), row.chain, row.network, Number(row.block_index), row.block_hash,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [row.chain, row.network, Number(row.block_index), row.block_hash,
          row.ledger_hash, row.actions_hash, row.contract_hash, Number(row.checkpoint_seq),
          Number(row.snapshot_block), row.supersedes_from == null ? null : Number(row.supersedes_from),
          row.rules_digest == null ? null : row.rules_digest, row.state_root,
@@ -284,12 +314,12 @@ async function writePrice(db, row){
     }
     await db.doQuery(
         `INSERT INTO price_snapshots
-            (id, round_number, coin_pair, price, reference_block, reference_chain,
+            (round_number, coin_pair, price, reference_block, reference_chain,
              block_timestamp, validator_count, consensus_round, consensus_proof, status,
              source_chain, source_action_index, batch_block_time,
              admit_block_btc, admit_block_ltc, admit_block_doge)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [Number(row.id), Number(row.round_number), row.coin_pair].concat(priceValues(row)));
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [Number(row.round_number), row.coin_pair].concat(priceValues(row)));
 }
 
 async function writeArchive(db, archive, report){

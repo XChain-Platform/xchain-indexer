@@ -223,8 +223,8 @@ module.exports = {
     },
 
     // Whether the CONSUMER side of the admission flag day is armed for this chain at block B.
-    // Inert (which is every network in this train) means every predicate below reduces to the
-    // clock form it has today, byte for byte.
+    // Below activation every predicate reduces to its clock form, byte for byte. Activation
+    // heights are pinned per network in shared_rows_2.js.
     admissionActiveAt(blockHeight) {
         if (blockHeight === null || blockHeight === undefined) return false;
         return isMirrorAdmissionConsumerActive(this.coin, this.network, blockHeight);

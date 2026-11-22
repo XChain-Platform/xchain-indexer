@@ -25,7 +25,7 @@
  * block can reach a price read at all; the caller skips the barriers when it
  * cannot. The caller is evaluatePriceBarrier (XChainIndexer/barrier_clock.js),
  * called from deferOnSyncBarriers (XChainIndexer/price_barriers.js), which passes
- * the verdict to the price and oracle barriers there.
+ * the verdict to the price, price-landing and oracle barriers there.
  *
  * *** NO FLAG-DAY GATE, and this is deliberate. *** Every sibling module in this
  * directory gates a consensus value and therefore needs an activation height.

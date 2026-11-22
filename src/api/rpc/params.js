@@ -15,6 +15,14 @@
 const CANONICAL_UNSIGNED_INTEGER = /^(0|[1-9][0-9]*)$/;
 const CANONICAL_UNSIGNED_DECIMAL = /^(0|[1-9][0-9]*)(\.[0-9]+)?$/;
 
+// A bound a handler forgot to pass would otherwise be dropped silently: Math.min(n, undefined)
+// is NaN and `length > undefined` is never true. Failing at call time surfaces the omission on
+// the first request instead of serving an unbounded read.
+function requireBound(bound, label) {
+    if (!Number.isSafeInteger(bound) || bound < 1)
+        throw new TypeError('rpcParams ' + label + ' must be a positive safe integer');
+}
+
 function integer(value, { name, min = 0 } = {}) {
     let parsed = value;
     // Accept only canonical digit strings so JSON coercions cannot turn another type into an index.
@@ -37,6 +45,9 @@ function optionalInteger(value, options) {
 }
 
 function limit(value, { defaultValue, max, name = 'limit' } = {}) {
+    requireBound(max, 'limit max');
+    requireBound(defaultValue, 'limit defaultValue');
+    if (defaultValue > max) throw new TypeError('rpcParams limit defaultValue must not exceed max');
     // Apply the route default only when the caller omitted the page size.
     if (value === undefined || value === null)
         return { value: defaultValue };
@@ -46,6 +57,7 @@ function limit(value, { defaultValue, max, name = 'limit' } = {}) {
 }
 
 function string(value, { name, maxLength, required = false } = {}) {
+    requireBound(maxLength, 'string maxLength');
     // Preserve an omitted optional filter and report an omitted required field.
     if (value === undefined || value === null) {
         if (required) return { error: name + ' is required' };
@@ -67,4 +79,8 @@ function decimal(value, { name, maxLength = 80 } = {}) {
     return { value };
 }
 
-module.exports = { integer, optionalInteger, limit, string, decimal };
+function isHexId(value) {
+    return typeof value === 'string' && /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+module.exports = { integer, optionalInteger, limit, string, decimal, isHexId };

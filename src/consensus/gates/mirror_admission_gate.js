@@ -17,11 +17,13 @@ const { get, copy, activeAt } = require('../gate_registry');
  * vendored into the explorer beside hub_db_sync.js, so it requires only ../gate_registry, which
  * every consumer carries (price_batching_floor_gate.js is the precedent). Threading an
  * admission bound through eleven predicate signatures was considered and rejected.
+ * Price landing is the twelfth clock-keyed hold point, outside this admission family.
  *
  * WHAT THIS IS FOR
  *
- * Eleven barrier hold points in the indexer block loop key on the block's protocol timestamp
- * t(B). Bitcoin accepts a block stamped up to 7200 s ahead of network-adjusted time, so a VALID
+ * Twelve barrier hold points in the indexer block loop key on the block's protocol timestamp
+ * t(B): this family's eleven plus price landing. Bitcoin accepts a block stamped up to 7200 s
+ * ahead of network-adjusted time, so a VALID
  * block holds a hub-connected indexer's block loop for that distance plus grace, while /status
  * reports the healthy 'future_block_wait' verdict throughout.
  *

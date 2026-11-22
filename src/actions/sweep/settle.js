@@ -55,7 +55,7 @@ module.exports = {
         // excludes it; the end-of-action updateTokens recomputes GAS supply from the ledger so the
         // per-block sanityCheck (ledger == supply == balances) holds.
         if(this.util.bcgt(guardFee, 0)){
-            debits.push([gasTick, guardFee, data['SOURCE']]);
+            this.util.billGuardGas(debits, gasTick, guardFee, data['SOURCE'], data);
             this.util.addAddressTicker(data['SOURCE'], gasTick);
         }
 

@@ -45,6 +45,11 @@ const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version')
                 return rows.filter(r => r.status === 'finalized' && Number(r.round_number) > Number(args[0]))
                            .map(r => ({ id: r.id }));
             }
+            if (/^SELECT id FROM price_snapshots WHERE status = 'skipped' AND round_number < \?/.test(sql)) {
+                seen.selects.push('skipped-floor');
+                return rows.filter(r => r.status === 'skipped' && Number(r.round_number) < Number(args[0]))
+                           .map(r => ({ id: r.id }));
+            }
             if (/^SELECT MAX\(reference_block\)/.test(sql)) {
                 const fin = rows.filter(r => r.status === 'finalized');
                 return [{ h: fin.length ? Math.max.apply(null, fin.map(r => Number(r.reference_block) || 0)) : null,
@@ -258,5 +263,98 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         assert.ok(!rows.some(r => Number(r.round_number) === 900), 'round 900 is above the ceiling');
         assert.ok(rows.some(r => Number(r.round_number) === 1),
             'the fallback must not reach below the ceiling');
+    });
+});
+
+function skipped(id, round, pair) {
+    return { id: id, round_number: round, coin_pair: pair, price: null,
+             reference_block: round, block_timestamp: 1000 + round, status: 'skipped' };
+}
+
+// A rebuilt hub whose rounds start higher than the previous hub's leaves that hub's
+// skipped placeholders in the mirror at keys the new hub will never serve. The upsert
+// cannot converge a key that is never addressed, so a complete re-page must remove
+// every local skipped row below the lowest round the hub holds, or the mirror grows to
+// several times the hub and the explorer serves rounds the hub does not have.
+describe('HubDbSync price mirror repoint: prior-lineage skipped rounds @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    it('clears skipped rows below the lowest round a complete re-page served', async function () {
+        const { sync, rows } = makeSync([
+            skipped(39, 1840, 'BTC/CAD'),
+            skipped(14429, 52296, 'DOGE/KRW'),
+            // At a key the hub serves: the hub's own row, converged in place.
+            skipped(60000, 124727, 'BTC/USD'),
+            // Above the hub's ceiling: a later hub round addresses this key, so it stays.
+            skipped(60001, 200000, 'BTC/USD')
+        ]);
+        stubHub(sync, [
+            skipped(1, 124726, 'BTC/CAD'),
+            finalized(2, 124726, 'BTC/USD', 124726),
+            skipped(3, 124727, 'BTC/USD'),
+            finalized(4, 124728, 'BTC/USD', 124728)
+        ]);
+
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000, 'drain should complete');
+
+        assert.ok(!rows.some(r => Number(r.round_number) < 124726),
+            'no row below the hub\'s lowest round may survive a complete re-page');
+        assert.ok(rows.some(r => Number(r.round_number) === 124727 && r.status === 'skipped'),
+            'a skipped row at a served key is the hub\'s own row');
+        assert.ok(rows.some(r => Number(r.round_number) === 200000),
+            'a skipped row above the served ceiling is converged by a later round, not deleted');
+        assert.ok(rows.some(r => Number(r.round_number) === 124726 && r.coin_pair === 'BTC/CAD'),
+            'the hub\'s skipped row at its own floor stays');
+        assert.ok(rows.some(r => Number(r.round_number) === 124728 && r.status === 'finalized'),
+            'the hub\'s finalized rows stay');
+    });
+
+    it('removes a below-floor skipped row through the overflow fallback', async function () {
+        // The below-floor rule needs no key set: a complete drain saw the hub's lowest
+        // round whatever the finalized-key cap did. A live hub serves more finalized
+        // rows than that cap, so gating on it would leave the defect in place.
+        const { sync, rows, seen } = makeSync([skipped(39, 1840, 'BTC/CAD'), skipped(40, 130000, 'BTC/USD')]);
+        await sync.reconcileForeignPriceRounds(new Set(), false, 154360, 0, 124726);
+        assert.ok(seen.selects.includes('skipped-floor'), 'the below-floor read must run');
+        assert.ok(!rows.some(r => Number(r.round_number) === 1840), 'round 1840 is below the hub floor');
+        assert.ok(rows.some(r => Number(r.round_number) === 130000), 'round 130000 is inside the served range');
+    });
+});
+
+// The cases where the lowest served round is not proof of the hub's lowest round.
+describe('HubDbSync price mirror repoint: skipped rounds stay without proof @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    it('leaves skipped rows alone after a floor-started re-page', async function () {
+        // A drain that started at the mirror floor did not see the hub's oldest rows, so
+        // the lowest round it served is not the hub's lowest round.
+        const { sync, rows, seen } = makeSync([skipped(39, 1840, 'BTC/CAD')]);
+        await sync.reconcileForeignPriceRounds(new Set(['124726 BTC/USD']), true, 154360, 1700000000, 124726);
+        assert.ok(!seen.selects.includes('skipped-floor'), 'a floor-started drain must not judge skipped rows');
+        assert.ok(rows.some(r => Number(r.round_number) === 1840));
+    });
+
+    it('leaves skipped rows alone when the drain served no rows to fix a floor', async function () {
+        const { sync, rows, seen } = makeSync([skipped(39, 1840, 'BTC/CAD')]);
+        await sync.reconcileForeignPriceRounds(new Set(), true, 0, 0, null);
+        assert.ok(!seen.selects.includes('skipped-floor'));
+        assert.ok(rows.some(r => Number(r.round_number) === 1840));
+    });
+
+    it('leaves skipped rows alone when the finalized pass refused', async function () {
+        // A key-derivation refusal means this drain's view of the mirror is not trusted.
+        const { sync, seen } = makeSync([]);
+        sync.hubDb.doQuery = sinon.stub().callsFake(async (sql) => {
+            if (/^SELECT id, round_number, coin_pair FROM price_snapshots/.test(sql))
+                return [{ id: 9, round_number: 124726, coin_pair: 'btc/usd' }];
+            if (/^SELECT id FROM price_snapshots WHERE status = 'skipped'/.test(sql)) {
+                seen.selects.push('skipped-floor');
+                return [{ id: 39 }];
+            }
+            if (/^DELETE FROM price_snapshots/.test(sql)) { seen.deletes.push(1); return { affectedRows: 1 }; }
+            return [];
+        });
+        await sync.reconcileForeignPriceRounds(new Set(['124726 BTC/USD']), true, 124726, 0, 124726);
+        assert.strictEqual(seen.deletes.length, 0, 'a refused pass deletes nothing');
     });
 });

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-22
+
+### Added
+- Added uncapped multipart FILE indexing for up to 65,535 parts with incremental assembly and bounded indexed reads.
+- Accepted multipart FILE manifests in formats 1 and 2, with manifest, part and completion storage and automatic schema migrations.
+- Added EXECUTE_NATIVE_METERED_GAS_ACTIVATION to meter native-paid EXECUTE gas from its fee output; it ships unarmed on testnet and mainnet.
+
+### Changed
+- Armed multipart FILE on testnet while leaving mainnet unarmed, with transaction cost as the practical file-size limit.
+- Moved the CAPABILITY_SNAPSHOT_PROOF_ACTIVATION gate to the testnet tip on BTC testnet, with mainnet unarmed.
+- Armed STATE_KEY_STORABLE, ORDER_GET_ADDRESS_COIN, STATE_VALUE_ASTRAL_ESCAPE and LINT_REGEX_GROUP_DEPTH on testnet only.
+- Refused contract state keys the indexer cannot store under the new storability rule, on testnet only.
+- Armed CAPABILITY_SNAPSHOT_PROOF_ACTIVATION on BTC:testnet at 162658.
+
+### Fixed
+- Answered malformed JSON-RPC calls, empty batches, rate-limit refusals and oversized legal payloads with proper JSON-RPC errors.
+- Made stored wire values fit their database columns and refused valid actions whose values cannot be stored.
+- Kept block processing alive across bounded statement timeouts and strengthened hub mirror bootstrap and drain recovery.
+- Ran batched balance reads without MariaDB subquery caching so collation-equivalent keys cannot share sums.
+- Corrected multi-destination SEND preflight so any refused leg makes the overall transfer invalid.
+
+### Security
+- Updated vulnerable runtime and development dependencies, including express, express-rate-limit, ws, mariadb, zod, qs, serialize-javascript and minimatch.
+
 ## [0.27.7] - 2026-11-02
 
 ### Fixed

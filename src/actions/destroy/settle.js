@@ -23,6 +23,7 @@
 'use strict';
 
 const { getLogger } = require('../../observability/index.js');
+const { recordProbeLegVerdict } = require('../send/leg_verdicts.js');
 
 // One leg's final STATUS, its destroys row and address bookkeeping, and on the valid
 // path its debits: the burned AMOUNT, plus the guard gas, which also comes off the
@@ -31,6 +32,9 @@ async function recordLeg(data, destroy, error, guardFee, gas, debits){
     // Determine final status
     let status = (error) ? error : 'valid';
     data['STATUS'] = destroy['STATUS'] = status;
+
+    // Read-only pre-flight only: keep this leg's own verdict (see recordProbeLegVerdict)
+    recordProbeLegVerdict(data, destroy, status);
 
     // Print status message
     getLogger().info("\t DESTROY : " + destroy['TICK'] + ' : ' + this.util.logAmount(destroy['AMOUNT']) + ' : ' + destroy['MEMO'] + ' : '+ data['STATUS']);
@@ -50,7 +54,7 @@ async function recordLeg(data, destroy, error, guardFee, gas, debits){
         // Bill the controller-guard gas to SOURCE (in GAS). Reduce the in-memory GAS
         // balance so a later controlled leg in this same multi-destroy sees the spend.
         if(this.util.bcgt(guardFee, 0)){
-            debits.push([gas.gasTick, guardFee, destroy['SOURCE']]);
+            this.util.billGuardGas(debits, gas.gasTick, guardFee, destroy['SOURCE'], data);
             this.util.addAddressTicker(destroy['SOURCE'], gas.gasTick);
             if(gas.gasInfo)
                 gas.gasBalances = this.util.debitBalances(gas.gasBalances, gas.gasInfo['TICK_ID'], guardFee);

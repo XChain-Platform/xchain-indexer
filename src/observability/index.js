@@ -57,7 +57,7 @@
 const crypto = require('crypto');
 const util = require('util');
 const { Registry, collectDefaultMetrics, DEFAULT_DURATION_BUCKETS } = require('./metrics');
-const { createLogShipper, readLogEnv } = require('./logShipper');
+const { createLogShipper, readLogEnv, toBool } = require('./logShipper');
 
 // Process-wide handles. A service is one process loading exactly one vendored
 // copy of this module, so module scope is the right scope: a globalThis key
@@ -90,11 +90,6 @@ const UNMATCHED_ROUTE_LABEL_CAP = 20;
 const _unmatchedRouteLabels = new Set();
 
 const CONSOLE_METHODS = { log: 'info', info: 'info', warn: 'warn', error: 'error', debug: 'debug' };
-
-function toBool(v, fallback = false) {
-    if (v === undefined || v === null || v === '') return fallback;
-    return /^(1|true|yes|on)$/i.test(String(v));
-}
 
 function readObservabilityEnv(env = process.env) {
     const enabled = toBool(env.METRICS_ENABLED, false);
@@ -217,7 +212,7 @@ function installObservability(app, opts = {}) {
 
     const httpRequests = registry.counter({
         name: 'http_requests_total',
-        help: 'HTTP requests handled, by method, route and status class',
+        help: 'HTTP requests handled, by method, route and status code',
         labelNames: ['method', 'route', 'status']
     });
     const httpDuration = registry.histogram({
@@ -239,7 +234,7 @@ function installObservability(app, opts = {}) {
             const stop = process.hrtime.bigint();
             inFlight.inc({}, 1);
             let done = false;
-            const finish = () => {
+            const finish = (status) => {
                 if (done) return;
                 done = true;
                 inFlight.dec({}, 1);
@@ -248,13 +243,13 @@ function installObservability(app, opts = {}) {
                 const method = (req.method || 'GET').toUpperCase();
                 try {
                     httpDuration.observe({ method, route }, seconds);
-                    httpRequests.inc({ method, route, status: String(res.statusCode) }, 1);
+                    httpRequests.inc({ method, route, status }, 1);
                 } catch { /* instrumentation must never break a response */ }
             };
-            // 'close' covers a client that hangs up before 'finish' fires, which
-            // would otherwise leak the in-flight gauge upward forever.
-            res.on('finish', finish);
-            res.on('close', finish);
+            // 'close' also covers a client hangup. An incomplete response has no
+            // HTTP status, but it must still release the in-flight gauge once.
+            res.on('finish', () => finish(String(res.statusCode)));
+            res.on('close', () => finish(res.writableFinished ? String(res.statusCode) : 'aborted'));
             next();
         };
         app.use(timing);

@@ -107,6 +107,7 @@ set the token or bind the scrape behind the reverse proxy.
   `nodejs_external_memory_bytes`, `nodejs_active_handles_total`
 - `http_requests_total{method,route,status}`,
   `http_request_duration_seconds{method,route}`, `http_requests_in_flight`
+  (`status` is the HTTP code, or `aborted` when the response did not complete)
 - `log_lines_emitted_total{level}`, `log_lines_shipped_total`,
   `log_lines_dropped_total`, `log_ship_failures_total`, `log_ship_buffer_lines`
 - `xchain_metrics_series_dropped_total{metric}` (cardinality guard tripped)

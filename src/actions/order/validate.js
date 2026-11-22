@@ -78,7 +78,7 @@ function validateTickAndCoin(handler, st){
 // Formats: GIVE_AMOUNT and GET_AMOUNT against their decimals, a positive ask, GET_ADDRESS
 // presence and shape, and an EXPIRATION the expiration column can hold.
 function validateFormats(handler, st){
-    let { format, data, isNativeCoinGive, isNativeCoinGet, isOwnershipGet, isCrossChain, giveTokenInfo, getTokenInfo } = st;
+    let { format, data, isNativeCoinGive, isNativeCoinGet, isOwnershipGet, isCrossChain, getAddressOnGetCoin, giveTokenInfo, getTokenInfo } = st;
     let error = st.error;
 
     // Verify GIVE_AMOUNT format (use COIN_DECIMALS for native coin, token DECIMALS for tokens)
@@ -111,7 +111,10 @@ function validateFormats(handler, st){
     // token (not native coin): token proceeds settle on the XChain ledger (order_match
     // instant settlement) and a contract is a valid balance holder. A contract cannot
     // receive native coin at a synthetic address, so reject it for a native-coin GET.
-    if(!error && format==0 && !handler.util.isNull(data['GET_ADDRESS']) && !handler.util.isCryptoAddress(data['GET_ADDRESS'])){
+    // Below ORDER_GET_ADDRESS_COIN the address was checked against this chain's format
+    // (no coin passed), which refused a foreign payout address; that stays the rule there.
+    let getAddressCoin = getAddressOnGetCoin ? data['GET_COIN'] : undefined;
+    if(!error && format==0 && !handler.util.isNull(data['GET_ADDRESS']) && !handler.util.isCryptoAddress(data['GET_ADDRESS'], getAddressCoin)){
         if(!handler.util.isContractAddress(data['GET_ADDRESS']))
             error = "invalid: GET_ADDRESS (format)";
         else if(isNativeCoinGet)

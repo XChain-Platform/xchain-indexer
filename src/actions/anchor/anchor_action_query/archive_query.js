@@ -26,6 +26,9 @@
 'use strict';
 
 const gateRegistry = require('../../../consensus/gate_registry.js');
+const rpcParams = require('../../../api/rpc/params.js');
+const { ANCHOR_KEY_MAX_LENGTH } = require('../../../db/anchor_sql.js');
+const { anchorKeyTextOk } = require('./action_query.js');
 
 const ARCHIVE_ORPHAN_GEOMETRY_GATE =
     'archive_orphan_geometry_activation.ARCHIVE_ORPHAN_GEOMETRY_ACTIVATION';
@@ -88,6 +91,11 @@ function archiveChunkCoverage(chunks, totalChunks, ignoreMismatchedTotal = true)
     return ordered;
 }
 
+// An author is a string no wider than the address column it is compared with.
+function authorTextOk(author) {
+    return !rpcParams.string(author, { name: 'author', maxLength: ANCHOR_KEY_MAX_LENGTH.author }).error;
+}
+
 // Validate a getarchiveanchor request.
 //
 // An author-only request returns {ok:true, author, author_only:true}. Every
@@ -108,38 +116,30 @@ function validateArchiveAnchorParams({ chain, network, block_index, checkpoint_s
     // Accept the publisher-only request only when every content-key field is omitted.
     let authorOnly = chain === undefined && network === undefined && block_index === undefined &&
                      checkpoint_seq === undefined && batch_crc32 === undefined && match_count === undefined;
-    if (authorOnly && typeof author === 'string' && author !== '')
+    if (authorOnly && typeof author === 'string' && author !== '') {
+        if (!authorTextOk(author)) return { ok: false, error: 'author must be a string address' };
         return { ok: true, author, author_only: true };
-    if (typeof chain !== 'string' || !chain || typeof network !== 'string' || !network)
+    }
+    if (!anchorKeyTextOk(chain, network))
         return { ok: false, error: 'chain and network are required strings' };
-    let bi = Number(block_index);
-    let cs = Number(checkpoint_seq);
-    if (!Number.isInteger(bi) || bi < 0 || !Number.isInteger(cs) || cs < 0)
+    let bi = rpcParams.integer(block_index, { name: 'block_index', min: 0 });
+    let cs = rpcParams.integer(checkpoint_seq, { name: 'checkpoint_seq', min: 0 });
+    if (bi.error || cs.error)
         return { ok: false, error: 'block_index and checkpoint_seq must be non-negative integers' };
     if (typeof batch_crc32 !== 'string' || !ARCHIVE_CRC_RE.test(batch_crc32.toLowerCase()))
         return { ok: false, error: 'batch_crc32 must be an 8-character hex string' };
-    let mc = Number(match_count);
-    if (!Number.isInteger(mc) || mc < 0)
+    let mc = rpcParams.integer(match_count, { name: 'match_count', min: 0 });
+    if (mc.error)
         return { ok: false, error: 'match_count must be a non-negative integer' };
     let wantAuthor = null;
     if (author !== undefined && author !== null && author !== '') {
-        if (typeof author !== 'string') return { ok: false, error: 'author must be a string address' };
+        if (!authorTextOk(author)) return { ok: false, error: 'author must be a string address' };
         wantAuthor = author;
     }
-    return { ok: true, block_index: bi, checkpoint_seq: cs,
-             batch_crc32: batch_crc32.toLowerCase(), match_count: mc, author: wantAuthor };
+    return { ok: true, block_index: bi.value, checkpoint_seq: cs.value,
+             batch_crc32: batch_crc32.toLowerCase(), match_count: mc.value, author: wantAuthor };
 }
 
-// Pick the archive head a caller asked for from an ARCHIVE_ANCHOR_BY_CONTENT_SQL
-// result. Rows arrive action_index ASC, so with no author filter the EARLIEST head
-// wins, the same canonical-head rule getAnchorV1ByBatchSeq and ARCHIVE_HEAD_AUTHOR_SQL
-// use (a later copy of a batch never supersedes the row that first published it).
-// A supplied author narrows to that publisher's own head; a row whose author could
-// not be resolved (source null) compares unequal and is skipped, which is fail-closed
-// (the caller sees "absent" and publishes, rather than adopting a head it cannot
-// attribute). Address comparison is exact, not case-folded: base58/bech32 addresses
-// are case-significant in the first form and canonically lowercase in the second, so
-// folding could equate two different addresses.
 function sameStoredSignatures(left, right) {
     return left.validator_signatures != null && right.validator_signatures != null &&
         String(left.validator_signatures) === String(right.validator_signatures);
@@ -162,6 +162,16 @@ function deriveFoldWrapper(rows, archive) {
     });
 }
 
+// Pick the archive head a caller asked for from an ARCHIVE_ANCHOR_BY_CONTENT_SQL
+// result. Rows arrive action_index ASC, so with no author filter the EARLIEST head
+// wins, the same canonical-head rule getAnchorV1ByBatchSeq and ARCHIVE_HEAD_AUTHOR_SQL
+// use (a later copy of a batch never supersedes the row that first published it).
+// A supplied author narrows to that publisher's own head; a row whose author could
+// not be resolved (source null) compares unequal and is skipped, which is fail-closed
+// (the caller sees "absent" and publishes, rather than adopting a head it cannot
+// attribute). Address comparison is exact, not case-folded: base58/bech32 addresses
+// are case-significant in the first form and canonically lowercase in the second, so
+// folding could equate two different addresses.
 function selectArchiveHeadRow(rows, filter) {
     let f = filter || {};
     let allRows = Array.isArray(rows) ? rows : [];
@@ -173,14 +183,31 @@ function selectArchiveHeadRow(rows, filter) {
 
 // The continuation-chunk indexes present for a head, as a sorted array. `chunkRows`
 // is a deduped ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL result (v2 rows only; chunk 0 rides in
-// the head itself, so it is reported present whenever the head is).
+// the head itself, so it is reported present whenever the head is). Indexes at or
+// above a valid head total are not part of the batch and are left out, the same
+// range archiveChunkCoverage counts.
 function presentChunkIndexes(head, chunkRows) {
+    let total = Number(head && head.total_chunks);
+    let bounded = Number.isInteger(total) && total > 0;
     let present = new Set([0]);
     for (let r of (chunkRows || [])) {
         let i = Number(r.chunk_index);
-        if (Number.isInteger(i) && i > 0) present.add(i);
+        if (Number.isInteger(i) && i > 0 && (!bounded || i < total)) present.add(i);
     }
     return Array.from(present).sort((a, b) => a - b);
+}
+
+// Whether every declared index of the head's batch is on-chain. Chunk 0 rides in the
+// head, so a one-chunk batch is complete with the head alone; otherwise the verdict
+// is archiveChunkCoverage under the same geometry rule the consensus gates apply at
+// the head's DOGE height, so the RPC and the reassembly paths cannot disagree. A
+// non-integer or non-positive total_chunks (a malformed head) is never complete.
+function archiveBatchComplete(config, head, chunkRows) {
+    let total = Number(head.total_chunks);
+    if (!Number.isInteger(total) || total < 1) return false;
+    if (total === 1) return true;
+    let ignoreMismatchedTotal = archiveOrphanGeometryActive(config, head.block_index_doge);
+    return archiveChunkCoverage(chunkRows, total, ignoreMismatchedTotal) !== null;
 }
 
 // Map a content-addressed head row (or null) plus its chunk set into the RPC response.
@@ -206,10 +233,7 @@ function buildArchiveAnchorResponse(config, latest, head, chunkRows) {
         ? (latestNum - dogeBlock + 1) : 0;
     let total   = Number(head.total_chunks);
     let present = presentChunkIndexes(head, chunkRows);
-    // Complete only when EVERY declared index is accounted for. A non-finite /
-    // non-positive total_chunks (a malformed head) can never be complete.
-    let complete = Number.isInteger(total) && total > 0 && present.length >= total &&
-                   present[present.length - 1] === total - 1;
+    let complete = archiveBatchComplete(config, head, chunkRows);
     return {
         coin, network,
         exists:             true,

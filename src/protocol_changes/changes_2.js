@@ -103,12 +103,26 @@ module.exports = [
     // millions of blocks above any BTC-derived threshold, so a height gate
     // carrying a BTC value would already be satisfied there and would ship
     // the rule live instead of inert (the ATTEST_ADMISSION_ACTIVATION plane
-    // trap, documented in attest_admission_activation.js). The mainnet
-    // timestamp is ARMED to the same ratified contract-era cohort anchor
-    // 1786060800; a divergent value is a fork. The BTC-anchored half of
-    // Phase 5 (accepting v3/v4 on the wire) rides ATTEST_RELAY_ACTIVATION in
-    // attest_relay_activation.js; either order of the two is safe, see the
-    // note there. testnet/regtest activate at genesis.
+    // trap, documented on the attest_admission_activation row in gates_1.js).
+    // The mainnet timestamp is ARMED to the same ratified contract-era cohort
+    // anchor 1786060800; a divergent value is a fork. The BTC-anchored half of
+    // Phase 5 (accepting v3/v4 on the wire) rides the
+    // attest_relay_activation.ATTEST_RELAY_ACTIVATION row in shared_rows_1.js,
+    // resolved on the carried BTC-anchored SNAPSHOT_BLOCK. testnet/regtest
+    // activate at genesis.
+    //
+    // ACTIVATION ORDER. Either order of the two flags is safe:
+    // - ORIGIN first: an off-BTC request is admitted 'pending'
+    //   (isRelayOriginRequest) with an empty pinned responsible set, but the
+    //   hub relay proposer will not materialize it and BTC refuses any v3 while
+    //   the snapshot is below ATTEST_RELAY_ACTIVATION (relayRequestArmed). The
+    //   request therefore expires through ATTEST v2 (actions/attest/expire.js):
+    //   status 'expired', fee refunded to FEE_PAYER by settleRequestFee, no
+    //   validator charged a miss, and the expired callback fires on the origin
+    //   chain.
+    // - RELAY first: off-BTC requests are still rejected at admission (their
+    //   responsible set is empty there), so nothing is pending for the armed
+    //   v3/v4 legs to carry and no state changes.
     ['ATTEST_RELAY_ORIGIN', '0.2.0',1786060800,0,0,0,0,0],
 
     // VM xchain.attestation.getResponse(requestId) reader. Below this
@@ -180,7 +194,7 @@ module.exports = [
     ['DISPENSER_CLOSE_PER_UNIT', '0.2.0',1786060800,0,0,0,0,0],
 
     // Mode B (user PRICE v1 oracle) dispenser settlement prices one TOKEN, not
-    // one FILL. Below this activation actions/dispense.js takes the affordable
+    // one FILL. Below this activation actions/dispense/pricing_paths.js takes the affordable
     // token count straight from utility.reverseOraclePriceMatch and uses it as
     // the FILL multiplier, then credits multiplier x GIVE_AMOUNT tokens, so a
     // dispenser giving N tokens per fill sold every token at 1/N of the price

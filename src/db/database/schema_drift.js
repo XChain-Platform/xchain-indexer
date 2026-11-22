@@ -29,6 +29,7 @@
 const fs      = require('fs');
 const path    = require('path');
 const { getLogger } = require('../../observability/index.js');
+const { tableNameOf } = require('./schema/table_files.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { recordShapeDrift } = require('../shared.js');
@@ -47,7 +48,7 @@ async function addMissingColumn(db, table, expected, i, liveByName){
     // it" (attest_validator_stats.id, 2026-08-19). Pinned by
     // test/unit/migration/schema_drift_column_order.test.js.
     if(exp.notNull && !exp.hasDefault){
-        getLogger().info('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. Skipping; add manually.');
+        getLogger().warn('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. SKIPPING add; add it in a dated migration.');
         return;
     }
     // Place the column where the SQL source puts it, not at the tail. A bare
@@ -156,7 +157,7 @@ module.exports = {
             let line = raw.replace(/--[^\n\r]*/g, '').trim();
             if(!line) continue;
             // Skip constraint/index/key lines - column definitions only
-            if(/^(PRIMARY|UNIQUE|INDEX|KEY|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
+            if(/^(PRIMARY|UNIQUE|INDEX|KEY|FULLTEXT|SPATIAL|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
             const tokens = line.split(/\s+/);
             if(tokens.length < 2) continue;
             const name = tokens[0].replace(/`/g, '');
@@ -309,7 +310,7 @@ module.exports = {
     async alterTableForDrift(file, db){
         const dir      = path.join(__dirname, '..', '..', 'sql');
         const data     = fs.readFileSync(dir + '/' + file, "utf8");
-        const table    = file.substring(0, file.indexOf('.sql'));
+        const table    = tableNameOf(file);
         const expected = this.parseExpectedColumns(data);
         if(!expected){
             // parseExpectedColumns returns null when the file has no recognizable

@@ -18,6 +18,8 @@
 
 'use strict';
 
+const { LIST_META_GATE_KEY } = require('../gates/list_meta_gate.js');
+
 class ListShareHaltError extends Error {
     constructor(reason, snapshotId, detail) {
         const suffix = detail ? ': ' + detail : '';
@@ -40,8 +42,6 @@ const LIST_SHARE_HALT_REASON = Object.freeze({
     NO_OWNER:        'NO_OWNER',
     META_HASH:       'META_HASH',
 });
-
-const LIST_META_GATE_KEY = 'list_meta_activation.LIST_META_ACTIVATION';
 
 const LIST_SHARE_LEG_FORMAT = Object.freeze({
     CREATE:          '0',

@@ -72,7 +72,7 @@ async function settleValidMint(ctx){
     // Bill the controller-guard gas to SOURCE (GAS burn, no offsetting credit). updateTokens
     // below already recomputes GAS supply so the per-block sanityCheck stays balanced.
     if(this.util.bcgt(guardFee, 0)){
-        debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+        this.util.billGuardGas(debits, this.config['GAS'], guardFee, data['SOURCE'], data);
         this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
     }
 

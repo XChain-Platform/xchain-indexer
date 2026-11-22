@@ -39,7 +39,8 @@ function rowWith(overrides){
         admit_block_doge: null,
         finalizing_view: 0,
         validator_signatures: '["signature"]',
-        status: 'finalized'
+        status: 'finalized',
+        meta_hash: ''
     }, overrides || {});
     if(!overrides || !Object.prototype.hasOwnProperty.call(overrides, 'snapshot_id')){
         row.snapshot_id = canonical.deriveListSnapshotId(

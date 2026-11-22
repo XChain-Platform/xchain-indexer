@@ -144,9 +144,10 @@ module.exports = {
         if (range.fenced) {
             // 2. Our own chain: only a rollback WE performed can legitimately retract
             //    rows sourced from this chain, and it always carries a pre-bump
-            //    generation. Refuse anything at/above our current generation. Fail
-            //    closed on a read error: for our own chain this delete is only the
-            //    idempotent backstop behind rollback.js's local pre-delete.
+            //    generation. Refuse anything at/above our current generation. The
+            //    oracle and cross-chain rows have local pre-deletes in
+            //    src/rollback/sweeps.js. Off BTC, price_snapshots does not, so refusing
+            //    its delete owes a re-page instead of applying the untrusted event.
             if (ownChain) {
                 let own = null;
                 try { own = Number(await this.getOwnRollbackGeneration()); } catch (e) { own = null; }
@@ -154,11 +155,67 @@ module.exports = {
                     getLogger().error('HubDbSync: refusing retraction of ' + event.table + ' for OWN chain ' +
                         this.coin + ' at generation ' + range.gen + ' (own rollback generation ' + own +
                         '): no local rollback produced this fence');
+                    if (event.table === 'price_snapshots') this.owePriceRepageAfterRefusedRetraction(event, range);
                     return false;
                 }
             }
         }
         return true;
+    },
+
+    // A full price re-page is the trusted repair for an own-chain delete the
+    // generation guard refused. Every refusal takes a fresh mark. Before the mirror
+    // certifies, the mark is enough: a bootstrap pass will not certify while a table is
+    // owed and re-arms its own retry. A certified mirror has no such pass, so the
+    // refusal drains price_snapshots itself, one drain at a time.
+    owePriceRepageAfterRefusedRetraction(event, range) {
+        if (typeof this.markRepageOwed !== 'function' || typeof this.repageOwedSeq !== 'function' ||
+            typeof this.bootstrapTable !== 'function') return;
+        try {
+            this.markRepageOwed(['price_snapshots']);
+            this._refusedPriceRepageSeq = this.repageOwedSeq('price_snapshots');
+            getLogger().warn('HubDbSync: refused own-chain ' + event.table + ' retraction from ' +
+                range.from + ' at generation ' + range.gen + '; a price_snapshots re-page is owed');
+            if (this._refusedPriceRetractionRepage || !this.refusedPriceRepageIsOurs()) return;
+            this._refusedPriceRetractionRepage = this.drainRefusedPriceRepage();
+        } catch (error) {
+            this.reportRefusedPriceRepageFailure(error);
+        }
+    },
+
+    // Only a certified mirror with no bootstrap pass running drains for a refusal; any
+    // other state leaves the owed mark to the bootstrap loop.
+    refusedPriceRepageIsOurs() {
+        return this._bootstrapDrained === true && this._bootstrapping !== true;
+    },
+
+    // Drain price_snapshots until no refusal mark newer than the last drain's start is
+    // owed. A drain settles only the mark it opened under, so a refusal that lands mid-drain
+    // leaves its own mark and runs the loop again; a mark from any other source (a
+    // reconnect, a resync) belongs to the bootstrap loop. The exit test and the slot clear
+    // run in one synchronous step, so no refusal can find the slot held by a loop that has
+    // already decided to stop. A failed drain with no newer refusal leaves the debt owed
+    // for the next bootstrap pass. Never rejects.
+    async drainRefusedPriceRepage() {
+        for (;;) {
+            let openedUnder = Number(this.repageOwedSeq('price_snapshots')) || 0;
+            try {
+                await this.bootstrapTable('price_snapshots');
+            } catch (error) {
+                this.reportRefusedPriceRepageFailure(error);
+            }
+            let owed = this.repageOwedSeq('price_snapshots');
+            if (owed === undefined || !(this._refusedPriceRepageSeq > openedUnder) ||
+                !this.refusedPriceRepageIsOurs()) {
+                this._refusedPriceRetractionRepage = null;
+                return;
+            }
+        }
+    },
+
+    reportRefusedPriceRepageFailure(error) {
+        getLogger().warn('HubDbSync: refused price_snapshots re-page failed; the debt stays owed for ' +
+            'the next bootstrap pass: ' + ((error && error.message) || error));
     },
 
     // 4. Signed retractions (full fix): once this mirror's own

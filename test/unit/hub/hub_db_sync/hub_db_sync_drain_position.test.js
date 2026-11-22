@@ -11,6 +11,8 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 const { HUB_SCHEMA_VERSION } = require('../../../../src/hub/hub_schema_version');
+const observability = require('../../../../src/observability/index.js');
+const fakeMirror = require('./reconnect_repage/helpers/fake_mirror.js');
 
 function makeSync() {
     const queries = [];
@@ -90,5 +92,67 @@ describe('HubDbSync per-connection drain positions @regression @tier1', function
         assert.match(httpGet.firstCall.args[0], /since_id=0/);
         assert.strictEqual(sync._drainPositions.state_checkpoints, 3);
         assert.ok(!queries.some(q => /MAX\(id\)/.test(q)));
+    });
+});
+
+// The ready frame's max_ids is a snapshot taken at subscribe time, and the hub keeps
+// appending price rounds after it. A drain on the live socket therefore ends above that
+// snapshot, and a later pass on the SAME socket must resume from its position instead of
+// judging it against the stale ceiling and re-paging the whole price table from id 0.
+describe('HubDbSync same-connection position above a stale ready ceiling @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
+
+    const CEILING = 3;          // what the ready frame advertised
+    const APPENDED = 5;         // what the hub holds by the time the first drain ends
+
+    async function drainedAboveCeiling() {
+        const ctx = fakeMirror.makeSync();
+        fakeMirror.seedHub(ctx.hub, 'price_snapshots', APPENDED);
+        ctx.sync.adoptReadyFrame({}, { type: 'ready', hub_instance_id: 'hub-a',
+                                       max_ids: { price_snapshots: CEILING } });
+        assert.strictEqual(await ctx.sync.bootstrapTable('price_snapshots'), 9000);
+        assert.strictEqual(ctx.seen.pages[0].since, 0, 'the owed per-connection re-page starts at zero');
+        assert.strictEqual(ctx.sync._drainPositions.price_snapshots, APPENDED);
+        assert.strictEqual(ctx.sync.repageOwedSeq('price_snapshots'), undefined, 'the owed mark settled');
+        // One more round lands after the drain, still with no new ready frame.
+        ctx.hub.price_snapshots.push(Object.assign(fakeMirror.FIXTURES.price_snapshots(APPENDED + 1),
+                                                   { id: APPENDED + 1 }));
+        ctx.seen.pages.length = 0;
+        return ctx;
+    }
+
+    it('a second pass on the same socket resumes from its position, not from id 0', async function () {
+        const ctx = await drainedAboveCeiling();
+        const warn = sinon.stub(observability.getLogger(), 'warn');
+
+        assert.strictEqual(await ctx.sync.bootstrapTable('price_snapshots'), 9000);
+
+        assert.strictEqual(ctx.seen.pages[0].since, APPENDED, 'the retry pass pages from its wire position');
+        assert.ok(!warn.args.some(a => /sits above the hub ceiling/.test(String(a[0]))),
+                  'no stale-ceiling reset is logged');
+        assert.strictEqual(ctx.sync._drainPositions.price_snapshots, APPENDED + 1);
+        assert.strictEqual(ctx.local.price_snapshots.length, APPENDED + 1);
+    });
+
+    it('still resets the same position once the connection that read it is gone', async function () {
+        const ctx = await drainedAboveCeiling();
+        // The socket closes (the epoch bumps) and the position is carried, with the old
+        // ceiling still in place: nothing proves the position belongs to the hub now.
+        ctx.sync._wsEpoch++;
+        const warn = sinon.stub(observability.getLogger(), 'warn');
+
+        const cursor = await ctx.sync.resolveDrainCursor('price_snapshots', null);
+
+        assert.strictEqual(cursor.lastId, 0);
+        assert.strictEqual(ctx.sync._drainPositions.price_snapshots, 0);
+        assert.ok(warn.args.some(a => /drain position 5 sits above the hub ceiling 3/.test(String(a[0]))));
+    });
+
+    it('still resets a position some other writer set on this connection', async function () {
+        const ctx = await drainedAboveCeiling();
+        ctx.sync._drainPositions.price_snapshots = APPENDED + 40;
+        const cursor = await ctx.sync.resolveDrainCursor('price_snapshots', null);
+        assert.strictEqual(cursor.lastId, 0);
+        assert.strictEqual(ctx.sync._drainPositions.price_snapshots, 0);
     });
 });

@@ -95,6 +95,11 @@ module.exports = {
         if (Number.isFinite(rowId) && rowId > drain.lastId) {
             drain.lastId = rowId;
             this._drainPositions[drain.table] = rowId;
+            // Remember which connection read this id. The hub keeps appending after its ready
+            // frame, so a position read on the live connection may sit above that frame's
+            // max_ids and is still inside the hub's id space (see restartCursorAboveHubCeiling).
+            if (!this._drainPositionReads) this._drainPositionReads = Object.create(null);
+            this._drainPositionReads[drain.table] = { wireId: rowId, epoch: drain.connectionEpoch };
         }
         if (this._bootstrapping) {
             this._bootstrapLastProgressAt = Date.now();
@@ -152,6 +157,10 @@ module.exports = {
         if (drain.servedPriceKeys) {
             let rn = Number(row.round_number);
             if (Number.isFinite(rn) && rn > drain.maxServedRound) drain.maxServedRound = rn;
+            // Any status: on a drain from zero this is the hub's own lowest round, so a
+            // local skipped row below it sits at a key no later page can address.
+            if (Number.isFinite(rn) && (drain.minServedRound == null || rn < drain.minServedRound))
+                drain.minServedRound = rn;
             // Only FINALIZED rows are recorded: every consensus read of this
             // table filters status='finalized' (getLatestPrice, getPrice's
             // MAX(round_number) join, refreshPriceSyncHeight), so that is

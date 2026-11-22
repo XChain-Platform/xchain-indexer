@@ -22,6 +22,15 @@
 
 const { memoizedVmSnapshot } = require('../vm_snapshot_memo.js');
 
+function pollSnapshotKey(bound, includeTick){
+    return 'polls:' + bound + ':' + (includeTick ? 'tick' : 'plain');
+}
+
+function isPollSnapshotVariant(key, includeTick){
+    return typeof key === 'string' && key.startsWith('polls:') &&
+        key.endsWith(includeTick ? ':tick' : ':plain');
+}
+
 // The finalized set's option rows grouped by poll, in the order the read returned them.
 function groupOptionsByPoll(optionRows){
     // String keys on both sides: the pool runs bigIntAsNumber, so both BIGINT
@@ -63,8 +72,39 @@ module.exports = {
     // from-genesis replay of a pre-flag block identical on every node.
     async getPollResultsForVM(block_index, includeTick=false){
         let bound = Number(block_index) || 0;
-        let key   = 'polls:' + bound + ':' + (includeTick ? 'tick' : 'plain');
-        return memoizedVmSnapshot(this, key, bound, () => this.buildPollResultsForVM(bound, includeTick));
+        let key   = pollSnapshotKey(bound, includeTick);
+        return memoizedVmSnapshot(this, key, bound,
+            async () => (await this.reusePollSnapshot(bound, includeTick)) ||
+                this.buildPollResultsForVM(bound, includeTick));
+    },
+
+    // A cached snapshot from an earlier bound is exact until another poll resolves.
+    // Keep the tick-visible and legacy entry shapes separate because their keys are a
+    // consensus gate, and discard all candidates if the block tip moved backwards.
+    async reusePollSnapshot(bound, includeTick=false){
+        let memo = this._vmSnapshotMemo;
+        let cache = this._vmSnapshotCache;
+        if(!(memo instanceof Map) || !cache || !(bound <= Number(this.blockIndex)))
+            return null;
+        let tip = Number(this.blockIndex);
+        if(cache.lastBlock !== null && tip < cache.lastBlock){
+            cache.entries.clear();
+            cache.lastBlock = tip;
+            return null;
+        }
+        let best = null;
+        for(let [key, entry] of cache.entries){
+            if(isPollSnapshotVariant(key, includeTick) && entry.bound < bound &&
+               (!best || entry.bound > best.bound))
+                best = entry;
+        }
+        if(!best)
+            return null;
+        let resolved = await this.doQuery(
+            `SELECT 1 FROM polls
+             WHERE resolved_block >= ? AND resolved_block < ? LIMIT 1`,
+            [best.bound, bound]);
+        return (resolved && resolved.length) ? null : best.snapshot;
     },
 
     // Build the poll snapshot above uncached; getPollResultsForVM memoizes it per block pass.

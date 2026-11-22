@@ -41,7 +41,7 @@
 const fs       = require('fs');
 const path     = require('path');
 const dotenv   = require('dotenv');
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const Database = require('..');
 const config   = require('../../config.js');
@@ -51,6 +51,8 @@ const { CONFIG_ENV } = require('../../config.js');
 const { migrationChecksum, classifyAppliedChecksum } = require('./checksum_verdict.js');
 const { MIGRATION_CHECKSUM_REBASELINES } = require('./checksum_rebaselines.js');
 const { orphanedLedgerNames, MIGRATION_LEDGER_RENAMES } = require('../database/migration_registry.js');
+const { backdatingVerdict, describeReorder } = require('../database/migration_reorder.js');
+const sqlText = require('../database/sql_text.js');
 // Spelled out for an operator reading it mid-incident: the difference between a
 // blanket run and a scoped one is the whole risk of this command, so each mode
 // says what it applies rather than naming a flag.
@@ -174,15 +176,34 @@ async function reportStatus(db, dbName, json){
     const rows = files.map(file => {
         const record = applied.get(file);
         const raw = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-        if(!record) return { file, applied: false, mode: db.migrationMode(raw), appliedAt: null, changed: false };
+        const fileMode = db.migrationMode(raw);
+        if(!record) return { file, applied: false, mode: fileMode, fileMode, appliedAt: null, changed: false };
         const current = migrationChecksum(raw);
         const verdict = classifyAppliedChecksum(file, record.checksum, current, MIGRATION_CHECKSUM_REBASELINES);
         verdicts.set(file, { verdict, recorded: String(record.checksum || ''), current });
-        return { file, applied: true, mode: record.mode, appliedAt: record.appliedAt, changed: verdict === 'changed' };
+        return { file, applied: true, mode: record.mode, fileMode, appliedAt: record.appliedAt,
+            changed: verdict === 'changed' };
     });
     const pendingCount = rows.filter(r => !r.applied).length;
     const changedCount = rows.filter(r => r.changed).length;
     const orphaned     = orphanedStatusRows(applied, files, rows);
+    const backdated = [];
+    const backdatedByFile = new Map();
+    for(const row of rows){
+        if(row.applied || row.mode !== 'auto') continue;
+        const raw = fs.readFileSync(path.join(MIGRATIONS_DIR, row.file), 'utf8');
+        const analysis = backdatingVerdict({
+            file: row.file, raw, appliedNames: applied.keys(),
+            readApplied: name => fs.readFileSync(path.join(MIGRATIONS_DIR, name), 'utf8'),
+            split: sql => sqlText.splitSqlStatements.call(sqlText, sql),
+        });
+        if(!analysis) continue;
+        const { frontier, jumpedCount, verdict } = analysis;
+        const entry = { file: row.file, frontier, divergent: verdict.divergent, tables: verdict.tables,
+            shared: verdict.shared.map(s => s.file), opaque: verdict.opaque.map(o => o.file) };
+        backdated.push(entry);
+        backdatedByFile.set(row.file, { entry, verdict, jumpedCount });
+    }
 
     // Exit 0 whenever the report was produced: drift is data each consumer judges, and a
     // scoped `--file` run deliberately ignores unrelated files, so it must not read as unreadable.
@@ -195,12 +216,13 @@ async function reportStatus(db, dbName, json){
             changed: changedCount,
             migrations: rows,
             orphaned,
+            backdated,
         }, null, 2));
         return;
     }
 
     console.log('migrate: status for ' + dbName + ' (read-only; nothing applied)');
-    for(const r of rows) console.log(statusLine(r, verdicts.get(r.file)));
+    for(const r of rows) console.log(statusLine(r, verdicts.get(r.file), backdatedByFile.get(r.file)));
     for(const o of orphaned) console.log(orphanLine(o));
     console.log('migrate: ' + rows.length + ' migration(s), ' + (rows.length - pendingCount) + ' applied, ' + pendingCount + ' pending, ' +
         changedCount + ' changed.');
@@ -211,6 +233,10 @@ async function reportStatus(db, dbName, json){
     if(orphaned.some(o => o.sameContentAs)){
         console.log('migrate: a blanket `npm run migrate` will refuse until each renamed file has a ' +
             'MIGRATION_LEDGER_RENAMES entry from its ledger name.');
+    }
+    if(backdated.some(row => row.divergent)){
+        console.log('migrate: a blanket `npm run migrate` (or a --file run naming it) will refuse until each ' +
+            'BACKDATED file is renamed after its listed frontier.');
     }
 }
 
@@ -245,13 +271,24 @@ function orphanLine(o){
 }
 
 // One text status line: PENDING, CHANGED with both hash prefixes, or applied (noting a pending heal).
-function statusLine(r, v){
+function statusLine(r, v, backdated){
+    if(!r.applied && backdated){
+        const detail = describeReorder(backdated.verdict, backdated.jumpedCount);
+        if(backdated.entry.divergent)
+            return '  [BACKDATED, mode=' + r.mode + '] ' + r.file + ' (dated before applied ' + backdated.entry.frontier + ': ' + detail + ')';
+        return '  [PENDING, mode=' + r.mode + '] ' + r.file + ' (out of order behind ' + backdated.entry.frontier +
+            ', provably harmless: applies in place)';
+    }
     if(!r.applied) return '  [PENDING, mode=' + r.mode + '] ' + r.file;
+    const retag = r.fileMode !== r.mode
+        ? ' (recorded mode=' + r.mode + '; file now tagged ' + r.fileMode + ')'
+        : '';
     if(r.changed){
-        return '  [CHANGED, mode=' + r.mode + '] ' + r.file + ' (recorded ' + v.recorded.slice(0, 12) + ', current ' + v.current.slice(0, 12) + ')';
+        return '  [CHANGED, mode=' + r.mode + '] ' + r.file + ' (recorded ' + v.recorded.slice(0, 12) +
+            ', current ' + v.current.slice(0, 12) + ')' + retag;
     }
     return '  [applied, mode=' + r.mode + '] ' + r.file + (r.appliedAt ? ' (applied_at=' + r.appliedAt + ')' : '') +
-        (v.verdict === 'rebaseline' ? ' (reviewed rebaseline; the next run heals its checksum)' : '');
+        (v.verdict === 'rebaseline' ? ' (reviewed rebaseline; the next run heals its checksum)' : '') + retag;
 }
 
 async function main(){

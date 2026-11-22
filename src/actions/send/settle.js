@@ -20,6 +20,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const { recordProbeLegVerdict } = require('./leg_verdicts.js');
 
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
@@ -37,6 +38,9 @@ module.exports = {
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = send['STATUS'] = status;
+
+        // Read-only pre-flight only: keep this leg's own verdict (see recordProbeLegVerdict)
+        recordProbeLegVerdict(data, send, status);
 
         getLogger().info("\t SEND : " + send['TICK'] + ' : ' + this.util.logAmount(send['AMOUNT']) + ' : ' + send['DESTINATION'] + ' : '+ data['STATUS']);
 
@@ -60,7 +64,7 @@ module.exports = {
             // in-memory GAS balance so a later controlled leg in this same
             // multi-send sees the spend when it re-checks its reservation.
             if(this.util.bcgt(guardFee, 0)){
-                ctx.debits.push([ctx.gasTick, guardFee, send['SOURCE']]);
+                this.util.billGuardGas(ctx.debits, ctx.gasTick, guardFee, send['SOURCE'], data);
                 this.util.addAddressTicker(send['SOURCE'], ctx.gasTick);
                 if(ctx.gasInfo){
                     // When the sent tick IS the gas tick, debit the guard fee out of the same
@@ -90,7 +94,7 @@ module.exports = {
         // controller guardFee is burned as a GAS debit with no offsetting credit (above);
         // tokens.supply (GAS) must be recomputed from the ledger or the per-block sanityCheck
         // (ledger == supply == balances) trips and halts the indexer. Mirrors the other
-        // guarded handlers (order.js/swap.js/dispenser.js) and execute.js.
+        // guarded handlers (order.js/swap.js/dispenser/settle.js) and execute.js.
         await this.indexerDb.updateBalances(addresses);
         await this.indexerDb.updateTokens(tickers);
 

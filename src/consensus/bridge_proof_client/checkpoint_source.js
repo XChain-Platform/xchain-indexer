@@ -154,13 +154,9 @@ async function verifyCheckpointQuorum(cp, indexerDb){
 }
 
 async function assertCheckpointNotSuperseded(cp, heldRows, indexerDb){
-    let rows = heldRows;
-    if(typeof indexerDb.getMirroredCheckpointSuperseders === 'function'){
-        const superseders = await indexerDb.getMirroredCheckpointSuperseders(
-            cp.chain, cp.network, cp.checkpoint_seq, cp.block_index);
-        rows = heldRows.concat(superseders || []);
-    }
-    assertNotSuperseded(cp, rows);
+    const superseders = await indexerDb.getMirroredCheckpointSuperseders(
+        cp.chain, cp.network, cp.checkpoint_seq, cp.block_index);
+    assertNotSuperseded(cp, heldRows.concat(superseders || []));
 }
 
 /**

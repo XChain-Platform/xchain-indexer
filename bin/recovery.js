@@ -64,7 +64,7 @@
 // Run as a CLI, load .env before any local require: src/config.js captures the
 // environment once at module load, and a module required below may pull it in.
 // Required as a module (the tests), the caller's environment is left alone.
-if(require.main === module) require('dotenv').config();
+if(require.main === module) require('dotenv').config({ quiet: true });
 
 const zlib    = require('zlib');
 const crypto  = require('crypto');
@@ -81,6 +81,7 @@ const { assertNotSuperseded } = require('../src/consensus/retroactive/checkpoint
 const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
 const srb     = require('../src/consensus/snapshot_reorg_buffer.js');
 const cmsh    = require('../src/consensus/capability_min_stake_history.js');
+const slashAddBack = require('../src/db/stakes/slash_add_back.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
         archiveChunkCoverage } = require('../src/actions/anchor/anchor_action_query.js');
@@ -174,13 +175,13 @@ class AnchorRecovery {
         // Restrict to the SAME statuses every other reader of anchor_actions accepts
         // (getArchiveReplayWatermarks / getMaxAnchorCheckpointSeq: archive-head or
         // checkpoint-bearing versions AND status IN ('valid','unverified')). anchor_actions stores
-        // a row for EVERY parsed ANCHOR, valid or not (anchor.js records the verdict in STATUS
+        // a row for EVERY parsed ANCHOR, valid or not (src/actions/anchor/ records the verdict in STATUS
         // rather than dropping the row), so without
         // this join recovery replayed batches the on-chain parse recorded as invalid - e.g.
         // 'insufficient valid signatures' or a stale CHECKPOINT_SEQ / MATCH_BATCH_SEQ replay -
         // into cross_chain_matches / cross_chain_calls that a normally-synced indexer never
         // derived, diverging a recovery-fed node from a mirror-fed one. The INNER JOIN also drops
-        // any row with a NULL status_id, which every production row resolves (anchor.js defaults
+        // any row with a NULL status_id, which every production row resolves (src/actions/anchor/ defaults
         // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
         // match_batch_seq is NOT unique: the parseCheckpoint replay guard admits an EQUAL
         // MATCH_BATCH_SEQ (a permissionless re-broadcast or failover double-publish stores a
@@ -413,7 +414,7 @@ class AnchorRecovery {
         });
         let checkpoints = archive.state_checkpoints || [];
         for(let row of checkpoints) assertNotSuperseded(row, checkpoints);
-        checkpointPrice.verifyArchive(archive, {
+        let quarantinedPrices = checkpointPrice.verifyArchive(archive, {
             network: v1.network,
             setFor,
             parseSigs: raw => this.parseSigs(raw),
@@ -421,6 +422,9 @@ class AnchorRecovery {
             quorumVerified: (canonical, sigs, set, weighted) =>
                 this.quorumVerified(canonical, sigs, set, weighted)
         });
+        for(let group of quarantinedPrices)
+            this.log('recovery: price batch ' + group.first_round + '-' + group.last_round + ' skipped, ' +
+                     group.rows + ' rows left to chain restore (' + group.reason + ')');
 
         // 4. Shape-check archived anchor-publish rewards (absent pre-rewards
         // archives, treated as empty). Reward rows carry no per-row signatures; they are
@@ -672,11 +676,11 @@ class AnchorRecovery {
     //
     //   2. THE WEIGHTS. The archived per-source `amount` is the quorum denominator S, and it
     //      was taken entirely on trust, because the obvious check - compare it to a
-    //      re-resolution - false-rejects honest archives: slashCapabilityStake rewrites
-    //      `stakes.amount` IN PLACE, so re-resolving a historical block after a slash reports
-    //      the POST-slash weight, not the weight the hub saw. slashRestoresAfter() removes
-    //      that objection by unwinding every capability_slash_debits row recorded AFTER the
-    //      resolve block, so the archived weight is compared to the weight as of the snapshot.
+    //      re-resolution - false-rejects honest archives in the legacy regime:
+    //      slashCapabilityStake rewrites `stakes.amount` IN PLACE, so the legacy resolver
+    //      reports the POST-slash weight. slashRestoresAfter() reconstructs the historical
+    //      amount there. Once slashHistoricalSetActive is armed, the resolver already returns
+    //      the as-of-block weight and recovery must not add the same debits again.
     //      A forged archive can no longer deflate other sources' weights to shrink S.
     //
     // Both reconstructions degrade to the earlier local-floor behaviour rather than failing
@@ -746,10 +750,11 @@ class AnchorRecovery {
     //      is the quorum denominator S, so a deflated `amount` on other sources lowers the
     //      bar a forged signature set has to clear.
     //
-    // Check 2 needs the slash-debit reconstruction; when it is unavailable the check is
-    // skipped and check 1 stands alone, which is exactly the earlier behaviour.
+    // Check 2 needs recovery's slash-debit reconstruction only in the legacy regime. Once
+    // the historical-set gate is armed, the resolver itself returns as-of-block weights.
     //
-    // KNOWN RESIDUAL, deliberately not closed here: a source whose weight the re-resolution
+    // KNOWN LEGACY RESIDUAL, deliberately not closed here: below the historical-set gate, a
+    // source whose weight the re-resolution
     // cannot report AT ALL because a post-snapshot slash took it under the threshold is
     // invisible to check 1, so dropping it from the archive is still undetected. Catching it
     // needs a key-complete candidate set - every source with ANY stake AND an effective key at
@@ -774,7 +779,9 @@ class AnchorRecovery {
                                 ' weights (' + archived.get(src) + ' and ' + amt + ') across its keys');
             if(!archived.has(src)) archived.set(src, amt);
         }
-        let restores = await this.slashRestoresAfter(resolveBlock);
+        let historicalSet = slashAddBack.slashHistoricalSetActive(
+            this.btcDb && this.btcDb.config, resolveBlock);
+        let restores = historicalSet ? new Map() : await this.slashRestoresAfter(resolveBlock);
 
         // 1. Source-level completeness: no qualifying staking source may be absent.
         let resolvedSources = new Map();
@@ -803,11 +810,10 @@ class AnchorRecovery {
         }
     }
 
-    // Per-source stake SLASHED AFTER `atBlock`, so a historical weight can be restored to
+    // Legacy-regime stake SLASHED AFTER `atBlock`, which restores a historical weight to
     // what it was AT that block. slashCapabilityStake rewrites `stakes.amount` in place and
-    // records the exact per-row delta in capability_slash_debits, so a source's as-of-block
-    // aggregate is (the aggregate the resolver reports for that block today) + (every debit
-    // against its stake rows recorded after it).
+    // records the exact per-row delta in capability_slash_debits. Once the historical-set
+    // gate is armed, the resolver performs this reconstruction and this helper is not called.
     //
     // Scoped to `target_table = 'stakes'`: only active stake rows carry capability weight -
     // an `unstakes` row is cooldown-locked tokens, outside the weight sum by construction
@@ -992,12 +998,9 @@ class AnchorRecovery {
     }
 
     async writeBatch(archive, report, network, anchorTxid, rewards){
-        // Parity carve-out (documented): unlike cross_chain_matches/calls below,
-        // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
-        // cannot carry one (hub ids are hub-local; every hub persists these rows
-        // independently), so the table is a NATURAL-KEY mirror on uq_cap_snap and
-        // hub_db_sync strips wire ids + bootstraps it from since_id=0.
-        // Local AUTO_INCREMENT numbering here is therefore harmless by design.
+        // Archived ids are hub-local provenance, so recovery never binds them into
+        // mirror primary keys. Each table lands on its natural key under a local
+        // AUTO_INCREMENT surrogate, matching hub_db_sync and the modular writers.
         for(let s of (archive.capability_snapshots || [])){
             await this.db.doQuery(
                 'INSERT IGNORE INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source) VALUES (?, ?, ?, ?, ?)',
@@ -1052,15 +1055,9 @@ class AnchorRecovery {
                         [m.status, anchorTxid, m.match_id]);
                 }
             } else {
-                // Rebuild under the ORIGINAL hub-assigned id as provenance only.
-                // Settlement order is (snapshot_block, match_id), so replay does
-                // not depend on this value; keeping it preserves archive
-                // byte-parity. Archives published before the field was added carry
-                // no id; those rows fall back to AUTO_INCREMENT.
-                let hasId = Number.isFinite(Number(m.id)) && Number(m.id) > 0;
-                let idCol  = hasId ? 'id, ' : '';
-                let idMark = hasId ? '?, ' : '';
-                let idVal  = hasId ? [Number(m.id)] : [];
+                // The archived id is per-hub provenance and is never bound. Rows
+                // land on uq_match_id under a local surrogate id, matching the live
+                // mirror and preventing collisions when archive leadership rotates.
                 // finalizing_view rides the archive (MATCH_KEYS) and feeds the EQUIV
                 // signing canonical (matchCanonical) exactly as for calls below.
                 // Dropping it lands view>0 matches at view 0 and forks re-verification.
@@ -1070,12 +1067,12 @@ class AnchorRecovery {
                 // dropping finalizing_view. Pre-royalty archives carry no key → null.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_matches
-                        (${idCol}match_id, snapshot_block, network,
+                        (match_id, snapshot_block, network,
                          a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr, a_payout_legs,
                          b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr, b_payout_legs,
                          effective_time, validator_signatures, status, finalizing_view, anchor_txid)
-                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [...idVal, m.match_id, Number(m.snapshot_block), m.network,
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [m.match_id, Number(m.snapshot_block), m.network,
                      m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr, (m.a_payout_legs != null ? String(m.a_payout_legs) : null),
                      m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr, (m.b_payout_legs != null ? String(m.b_payout_legs) : null),
                      Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0, anchorTxid]);
@@ -1206,9 +1203,9 @@ class AnchorRecovery {
                         [c.status, c.call_id, c.phase]);
                 }
             } else {
-                // Rebuild under the ORIGINAL hub-assigned id as provenance only.
-                // Injection order is (snapshot_block, call_id), so replay does not
-                // depend on this value; keeping it preserves archive byte-parity.
+                // The archived id is per-hub provenance and is never bound. Rows
+                // land on (call_id, phase) under a local surrogate id, matching the
+                // live mirror and preventing cross-leader primary-key collisions.
                 // finalizing_view is signed into the EQUIV canonical (the equivocation header):
                 // the indexer rebuilds the XCALL signing canonical from this column
                 // to re-verify the hub's 2f+1 sigs. Omitting it lets the NOT NULL
@@ -1218,13 +1215,13 @@ class AnchorRecovery {
                 // the archive (CALL_KEYS) and the verifier already trusts it.
                 await this.db.doQuery(
                     `INSERT INTO cross_chain_calls
-                        (id, call_id, phase, snapshot_block, network,
+                        (call_id, phase, snapshot_block, network,
                          source_chain, source_action_index, source_contract_index,
                          target_chain, target_contract_index, method, params_json,
                          gas_limit, cross_hops, effective_time, status, result_status,
                          return_payload_b64, validator_signatures, finalizing_view)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [Number(c.id), c.call_id, c.phase, Number(c.snapshot_block), c.network,
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [c.call_id, c.phase, Number(c.snapshot_block), c.network,
                      c.source_chain, Number(c.source_action_index), Number(c.source_contract_index),
                      c.target_chain, Number(c.target_contract_index), c.method, c.params_json,
                      Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.status,
@@ -1237,7 +1234,7 @@ class AnchorRecovery {
 
     // ── Canonicals (byte-identical to their producers) ──────────────────────────
 
-    // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
+    // Hub StateCheckpointEngine canonical + the v1 archive extension (src/actions/anchor/).
     // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, so each batch in a block signs its own round);
     // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor.canonical.
     rawCheckpointCanonical(cp){
@@ -1374,7 +1371,7 @@ class AnchorRecovery {
             let pk = String(s.pubkey).toLowerCase();
             if(seen.has(pk) || !qualified.has(pk)) continue;
             if(!ed25519.verify(canonical, String(s.sig), pk)) continue;
-            // Mark seen only AFTER the signature verifies, matching anchor.js and the
+            // Mark seen only AFTER the signature verifies, matching src/actions/anchor/ and the
             // hub/SDK verifiers: marking on first encounter lets a garbage-then-valid
             // pair for one qualified validator suppress the real signature and fail
             // recovery of an on-chain-valid batch (order-dependent quorum under-count).

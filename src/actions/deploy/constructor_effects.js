@@ -29,6 +29,7 @@ const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 // time and a suite can substitute the writer at that one seam.
 const slashEmission = require('../execute/slash_emission.js');
 const { boundedAt, bankUnusedGas } = require('../execute/nested_gas_sum.js');
+const { stateValueTexts } = require('../execute/state_value_text.js');
 
 /**
  * Apply a successful constructor's state and emissions under a savepoint.
@@ -80,11 +81,12 @@ async function applyConstructorEffects(deploy, run){
  */
 async function writeConstructorState(deploy, run){
     let data = run.data;
-    for(let change of run.constructorResult.stateChanges){
+    let texts = await stateValueTexts(() => deploy.actions.protocolChanges, data['BLOCK_INDEX'], run.constructorResult.stateChanges);
+    for(let [i, change] of run.constructorResult.stateChanges.entries()){
         await deploy.indexerDb.createContractState({
             CONTRACT_INDEX: data['ACTION_INDEX'],
             STATE_KEY:      change.key,
-            STATE_VALUE:    JSON.stringify(change.value),
+            STATE_VALUE:    texts[i],
             BLOCK_INDEX:    data['BLOCK_INDEX'],
             ACTION_INDEX:   data['ACTION_INDEX']
         });

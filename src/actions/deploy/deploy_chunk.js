@@ -34,9 +34,9 @@
 
 const crypto = require('crypto');
 
-// Vendored single source of truth: ../protocol/constants.js
+// Registry-backed values from ../../protocol/constants.js
 // (MAX_DEPLOY_CHUNKS / MAX_DEPLOYCHUNK_PART_BYTES); kept in lockstep with the SDK
-// validator + splitter by the cross-service regression suite.
+// validator and splitter by the cross-service regression suite.
 const PROTO = require('../../protocol/constants.js');
 const MAX_DEPLOY_CHUNKS         = PROTO.MAX_DEPLOY_CHUNKS;
 const MAX_DEPLOYCHUNK_PART_BYTES = PROTO.MAX_DEPLOYCHUNK_PART_BYTES;
@@ -179,8 +179,11 @@ class DeployChunk {
         // Debit gas fee from SOURCE (XCHAIN deduction mode only); mirrors deploy.js exactly
         // (!error && feePaymentMode === 2) so a rejected chunk never burns gas the source
         // never had (which would trip the per-block supply SanityError).
-        if(!error && tokenInfo && feePaymentMode === 2)
+        if(!error && tokenInfo && feePaymentMode === 2){
             debits.push([gas, fee, data['SOURCE']]);
+            if(data['DRY_RUN'] === true)
+                data['PROBE_SETTLED_GAS_FEE'] = String(fee);
+        }
 
         // A carrier that completes a pending group has its ledger written by the deployment
         // it runs (completePendingGroup below), so it must not write one of its own.

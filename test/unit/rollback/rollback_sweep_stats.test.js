@@ -23,7 +23,15 @@ const Rollback = require('../../../src/rollback/index.js');
 // Rollback maintenance reports each operation's time and row count on the
 // completion line, and a later rollback reports only its own operations.
 
-const SWEEP_ROWS = { balances: 7, markets: 2, pubkeys: 1, icons: 3 };
+const SWEEP_ROWS = {
+    balances: 7,
+    markets: 2,
+    pubkeys: 1,
+    icons: 3,
+    token_bridged: 1,
+    coinpay_match_demote: 3,
+    coinpay_match_promote: 1,
+};
 
 // The swept table a query deletes from, or null for any other statement.
 function sweptTable(query) {
@@ -40,6 +48,12 @@ function fakeDoQuery(rows, withActions, escrowRows = 0) {
         if (/^SELECT DISTINCT tk\.tick FROM tokens/.test(query)) {
             return Array.from({ length: escrowRows }, (_, i) => ({ tick: 'T' + i }));
         }
+        if (/^UPDATE tokens SET bridged=0/.test(query))
+            return { affectedRows: rows.token_bridged || 0 };
+        if (/^UPDATE order_matches SET status_id=\(SELECT id FROM index_statuses WHERE status='pending_coinpay'/.test(query))
+            return { affectedRows: rows.coinpay_match_demote || 0 };
+        if (/^UPDATE order_matches SET status_id=\(SELECT id FROM index_statuses WHERE status='valid'/.test(query))
+            return { affectedRows: rows.coinpay_match_promote || 0 };
         return table ? { affectedRows: rows[table] } : [];
     };
 }

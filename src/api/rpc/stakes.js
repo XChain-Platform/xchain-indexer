@@ -35,7 +35,7 @@ function ownStakeRpc({ indexer }){
         // state in sync with on-chain stake without needing direct DB access.
         // Body: { pubkey }
         async getownstake({pubkey}){
-            if(!pubkey || !/^[0-9a-fA-F]{64}$/.test(String(pubkey)))
+            if(!rpcParams.isHexId(pubkey))
                 return { error: 'pubkey must be a 64-char hex string' };
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };

@@ -161,7 +161,7 @@ async function openIndexerDb(opts){
 }
 
 async function main(argv){
-    require('dotenv').config();
+    require('dotenv').config({ quiet: true });
     const opts = parseArgs(argv);
     const db = await openIndexerDb(opts);
     let result;

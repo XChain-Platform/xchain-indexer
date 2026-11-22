@@ -100,8 +100,40 @@ function makeDb({ network = 'regtest', staged = [], addressBlock = 1 } = {}) {
         applyPendingRewardsDueAtBlock: Database.prototype.applyPendingRewardsDueAtBlock,
         maybeApplyPendingRewards:      Database.prototype.maybeApplyPendingRewards
     };
+    db.doQueryStrict = db.doQuery;
     return db;
 }
+
+describe('recovery reward pending probe failures @regression @tier1', function () {
+    it('does not cache a transient strict-read failure', async function () {
+        const earn = 800000;
+        const db = makeDb({ staged: [{ block_index: earn }] });
+        const query = db.doQueryStrict.bind(db);
+        let first = true;
+        db.doQueryStrict = async function (sql, params) {
+            if (first && /SELECT COUNT/.test(sql)) {
+                first = false;
+                throw Object.assign(new Error('connection lost'), { errno: 2013 });
+            }
+            return query(sql, params);
+        };
+        await assert.rejects(() => db.applyPendingRewardsDueAtBlock(earn + MATURITY), /connection lost/);
+        assert.strictEqual(db._recoveryPendingChecked, false);
+        assert.strictEqual(await db.applyPendingRewardsDueAtBlock(earn + MATURITY), 1);
+    });
+
+    it('caches a missing recovery schema as no pending work', async function () {
+        const db = makeDb();
+        let calls = 0;
+        db.doQueryStrict = async function () {
+            calls++;
+            throw Object.assign(new Error('missing table'), { errno: 1146 });
+        };
+        assert.strictEqual(await db.probeRecoveryPending(), false);
+        assert.strictEqual(await db.probeRecoveryPending(), false);
+        assert.strictEqual(calls, 1);
+    });
+});
 
 // The reorg-scoping delete rollback.js issues against validator_rewards, as one predicate:
 // the block_index (earn) sweep of blockTables, then the derive_block_index sweep. Kept
@@ -206,8 +238,8 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
     it('costs one COUNT(*) for the process lifetime when nothing is staged', async function () {
         const db = makeDb({ staged: [] });
         let probes = 0;
-        const inner = db.doQuery.bind(db);
-        db.doQuery = async function (sql, params) {
+        const inner = db.doQueryStrict.bind(db);
+        db.doQueryStrict = async function (sql, params) {
             if(/SELECT COUNT\(\*\) AS c FROM recovery_pending_rewards/.test(sql)) probes++;
             return inner(sql, params);
         };

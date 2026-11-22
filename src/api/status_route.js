@@ -15,10 +15,10 @@
  * XChain Indexer - GET /status parts
  *
  * The decoder tip read, the hub mirror snapshot, the clock-derived stall
- * verdict and the response body of the plain REST status endpoint. The route
- * itself stays in src/api.js: it owns the committed-only indexer height read,
- * the in-flight block and the 503 decision, and calls these in the order the
- * route always evaluated them.
+ * verdict and the response body of the plain REST status endpoint. The routes
+ * live in status_endpoint.js, where statusSnapshot() owns the committed-only
+ * indexer height read, the in-flight block and the 503 decision. GET /status
+ * and GET /ready are both served from that snapshot; src/api.js only mounts it.
  *
  * XChainIndexer is passed in rather than required: src/api.js loads it by its
  * own request path, and these parts use exactly the class it loaded.
@@ -30,9 +30,10 @@
 const { hubConsensusHashFields } = require('./health/hub_fields');
 // Pure verdict modules, required directly rather than through the XChainIndexer class
 // the route is handed, so a stub class in a test still gets the real rule.
-const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass } = require('../XChainIndexer/stall_health.js');
+const { barrierHoldMs, barrierCeilingExceeded, publishedStallClass,
+        stallWindowSince } = require('../XChainIndexer/stall_health.js');
 const { attributedStallReason, trainActivationReport } = require('./health/stall_fields');
-const { blocksBehind, nextBehindSince, readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
+const { episodeBehind, nextBehindSince, readinessVerdict } = require('../XChainIndexer/readiness/verdict.js');
 
 // The coin node tip for chainLag, or the empty shape when the indexer cannot read one
 // (no tracker configured, or a stub without the method). Never throws.
@@ -59,12 +60,16 @@ function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexer
     let decoderLag = (decoderBlock != null && indexerBlock != null) ? decoderBlock - indexerBlock : null;
     let chainLag   = (Number.isFinite(tip.height) && indexerBlock != null) ? tip.height - indexerBlock : null;
     let verdictChainLag = tip.stale === true ? null : chainLag;
-    let behind = blocksBehind(decoderLag, verdictChainLag);
+    let behind = episodeBehind(decoderLag, chainLag, tip.stale === true);
     indexer.readyBehindSince = nextBehindSince(indexer.readyBehindSince, behind, now,
                                                 indexer.lastBlockCommittedAt);
     let pollSilent = (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false;
     let holdMs     = barrierHoldMs(indexer.barrierHold, now);
     let exceeded   = barrierCeilingExceeded(indexer.barrierHold, indexer.barrierHoldCeilingMs, now);
+    let futureWaitClearsAt = Number.isFinite(indexer.stallClearsAt) ? indexer.stallClearsAt : null;
+    let rememberedWait = indexer.futureWaitClearsAt;
+    if(rememberedWait && rememberedWait.block === indexer.stallBlock && Number.isFinite(rememberedWait.at))
+        futureWaitClearsAt = Math.max(futureWaitClearsAt || 0, rememberedWait.at);
     let readiness  = readinessVerdict({
         now:                    now,
         indexerDbUnreachable:   !!indexerDbUnreachable,
@@ -77,6 +82,7 @@ function readinessFields(indexer, { indexerBlock, decoderBlock, verdict, indexer
         chainTipStale:          tip.stale === true,
         chainTipStaleSince:     tip.staleSince,
         waitingOnFutureBlock:   !!verdict.futureWait,
+        futureWaitClearsAt:     futureWaitClearsAt,
         lastBlockCommittedAt:   indexer.lastBlockCommittedAt,
         startedAt:              indexer.startedAt,
         behindSince:            indexer.readyBehindSince,
@@ -145,16 +151,16 @@ function statusVerdict(XChainIndexer, indexer){
     let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
                                               indexer.healthStallGraceMs, now,
                                               indexer.stallClearsAt, indexer.priceLandingGraceMs,
-                                              indexer.barrierHold && indexer.barrierHold.since,
-                                              indexer.proofWaitGraceMs);
+                                              stallWindowSince(indexer),
+                                              indexer.proofWaitGraceMs, indexer.rollbackGraceMs);
     // Discriminate the healthy future-stamped-block wait from real degradation. One
     // clock read for all three so the fields can never disagree with each other.
     let futureWait  = XChainIndexer.waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now);
     let stallClass  = XChainIndexer.stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
                                                  indexer.healthStallGraceMs, now, indexer.stallClearsAt,
                                                  indexer.priceLandingGraceMs,
-                                                 indexer.barrierHold && indexer.barrierHold.since,
-                                                 indexer.proofWaitGraceMs);
+                                                 stallWindowSince(indexer),
+                                                 indexer.proofWaitGraceMs, indexer.rollbackGraceMs);
     return { now, stalled, wedged, futureWait, stallClass,
              lastHubConfigFetchAt, hubConfigAgeSeconds, hubConfigStale };
 }
@@ -175,7 +181,6 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
     // A halted decoder's tip is frozen, so an indexer level with it is not synced: it
     // is level with a chain that stopped. isSynced keeps its decoder-parity meaning
     // otherwise, and atProcessableTip follows it.
-    let halted = indexer.decoderReorgHalted === true;
     let gateHeld = indexer.decoderReorgHalted === true || indexer.decoderReorgHalted === null;
     let synced = indexer.isSynced() && !gateHeld;
     return {
@@ -210,10 +215,11 @@ function statusSyncFields(XChainIndexer, indexer, { indexerBlock, inFlightBlock,
         // true when a sync barrier is deferring blocks but the counter is still
         // advancing (healthy-degraded, stays 200); distinct from a wedge, which is
         // stalled AND making no progress inside the grace window (503).
-        // NOTE it stays true during the future-stamped-block wait too, deliberately:
-        // consumers keyed on `degraded === false` treat that as the wedge case, so
-        // flipping it would UPGRADE a healthy wait to a critical alert. Read
-        // waitingOnFutureBlock / stallClass to tell the two apart.
+        // NOTE degraded is a legacy field: false both when nothing is stalled and when
+        // the stall is wedged, so it is not a wedge signal. It stays true through a
+        // healthy future-block wait for the dashboard fallback used by payloads without
+        // stallClass. Wedge, restart and refusal decisions must key on
+        // stallClass === 'wedged'; waitingOnFutureBlock distinguishes the wait.
         degraded:     stalled && !wedged,
         // true when the stall is only a wait for wall clock to reach a future-stamped
         // block (stallClearsAt still ahead). Healthy and self-clearing: the indexer has

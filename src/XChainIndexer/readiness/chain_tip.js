@@ -22,9 +22,9 @@
  *
  * Cached with a short TTL, with concurrent readers sharing one request and every
  * read bounded by a timeout: /status is the container healthcheck, and a slow or
- * absent tracker must never make it slow. A failed refresh keeps the last known tip
- * only for a bounded age, and chainTipAt says when it was last refreshed. HEALTH
- * REPORTING ONLY: nothing here reaches a hashed value or a barrier.
+ * absent tracker must never make it slow. An unusable or tracker-flagged stale refresh
+ * keeps the last known tip only for a bounded age, and chainTipAt says when it was last
+ * refreshed. HEALTH REPORTING ONLY: nothing here reaches a hashed value or a barrier.
  *
  * Installed onto XChainIndexer.prototype by ../../XChainIndexer.js.
  *
@@ -74,7 +74,8 @@ module.exports = {
     // from the utxo tracker when the cached reading is older than chainTipTtlMs. Waits at most
     // chainTipTimeoutMs for a refresh; a slower one finishes in the background and
     // lands in the next read. { height: null } when no tracker is configured or it has
-    // never answered with a usable node_height (the tracker reports -1 when unknown).
+    // never answered with a numeric node_height that was not flagged stale (the tracker
+    // reports -1 when unknown).
     // Never throws.
     async readChainTip(now = Date.now()){
         let tracker = this.utxoTracker;
@@ -86,7 +87,9 @@ module.exports = {
             this._chainTipInFlight = Promise.resolve()
                 .then(() => tracker.getSyncStatus())
                 .then((sync) => {
-                    let height = Number(sync && sync.node_height);
+                    let usable = sync && typeof sync === 'object'
+                        && sync.node_height_stale !== true && sync.node_rpc_stale !== true;
+                    let height = usable && typeof sync.node_height === 'number' ? sync.node_height : NaN;
                     if(Number.isSafeInteger(height) && height >= 0){
                         this.chainTip   = height;
                         this.chainTipAt = Date.now();

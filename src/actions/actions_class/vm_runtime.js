@@ -203,6 +203,50 @@ function assertConsensusRuntime(vmModule){
         throw new Error(vmModule.describeRuntimeMismatch(rt));
 }
 
+// Report platform coverage without routing host data into a gate or bound.
+// Keep this advisory: matching engine strings do not prove libc parity.
+function classifyHostPlatform({ platform, arch, glibcVersionRuntime, probeFailed = false }){
+    const libc = probeFailed
+        ? 'unknown'
+        : platform === 'linux'
+            ? (glibcVersionRuntime ? 'glibc ' + glibcVersionRuntime : 'musl/non-glibc')
+            : 'n/a';
+    const supportedArch = arch === 'x64' || arch === 'arm64';
+    const tier = platform === 'linux' && supportedArch && glibcVersionRuntime && !probeFailed
+        ? 'confirmed'
+        : platform === 'linux' && supportedArch && !glibcVersionRuntime && !probeFailed
+            ? 'ci-only'
+            : 'unconfirmed';
+    const message = 'VM host platform ' + platform + '/' + arch + ' (' + libc + '): ' +
+        (tier === 'confirmed' ? 'confirmed consensus matrix.' :
+            tier === 'ci-only' ? 'CI differential-fuzz coverage only.' : 'unconfirmed consensus platform.') +
+        ' Engine pin passed. Confirmed matrix: glibc linux/x64 and glibc linux/arm64. ' +
+        'This advisory changes no validation.';
+    return { platform, arch, libc, tier, message };
+}
+
+function logHostPlatformNotice(logger, probe){
+    let report = null;
+    let probeFailed = false;
+    try {
+        report = (probe || (() => process.report && typeof process.report.getReport === 'function'
+            ? process.report.getReport() : null))();
+    } catch(e) {
+        probeFailed = true;
+    }
+    const classification = classifyHostPlatform({
+        platform: process.platform,
+        arch: process.arch,
+        glibcVersionRuntime: report && report.header && report.header.glibcVersionRuntime,
+        probeFailed
+    });
+    try {
+        const level = classification.tier === 'confirmed' ? 'info' : 'warn';
+        if(logger && typeof logger[level] === 'function') logger[level](classification.message);
+    } catch(e) {}
+    return classification;
+}
+
 // The VM consensus epoch this indexer runs contracts under; the one copy the boot gate
 // below and the CI coupling test both read. It moves only with a coordinated xchain-vm
 // CONSENSUS_VERSION bump, together with the frozen surface digests in vm_coupling.test.js.
@@ -259,6 +303,8 @@ module.exports = {
     describeVmLoadFailure,
     assertVmRuntimeLoadable,
     assertConsensusRuntime,
+    classifyHostPlatform,
+    logHostPlatformNotice,
     EXPECTED_VM_CONSENSUS_VERSION,
     assertVmConsensusEpoch,
     assertConsensusDependencies

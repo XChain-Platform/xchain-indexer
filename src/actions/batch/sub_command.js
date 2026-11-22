@@ -26,8 +26,8 @@ const { readAirdropLegs } = require('../airdrop/legs');
 
 const AIRDROP_LEG_WEIGHT_GATE = 'batch_airdrop_leg_weight_activation.BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION';
 
-// Normalize a sub-action the same way the top-level dispatcher (actions/index.js)
-// does: rewrite ACTION aliases, then (when params are given) inject the
+// Normalize a sub-action like normalizeTransactionAction in actions_class/transaction.js:
+// rewrite ACTION aliases, then (when params are given) inject the
 // implied legacy VERSION 0 for BTNS-style ISSUE/MINT/SEND params so FORMAT
 // derivation sees a version field. Mutates params in place; returns the
 // canonical ACTION name. Callers only invoke this at/after the
@@ -127,8 +127,8 @@ function subCommandTick(action, command, normalize){
 //
 // `action` arrives already alias-normalized by the caller, matching the dispatch loop.
 // The fan-out classes (AIRDROP, DIVIDEND) take the table weight that installFanOutWeights
-// sets in limits.js (see its header for why it is not 1 + recipients), so no path here reads
-// the database.
+// sets in limits.js (flat, not 1 + recipients: see the recipient note
+// below), so no path here reads the database.
 //
 // After BATCH_AIRDROP_LEG_WEIGHT_ACTIVATION, AIRDROP is weighed PER LEG: the table weight
 // times the number of legs, because every leg of a multi-leg AIRDROP (FORMATs 1 to 3)
@@ -159,8 +159,8 @@ async function subCommandWeight(action, command, data, normalize){
         // DEPLOY's VM weight: since DEPLOY_DEFERRED_ASSEMBLY the carrier that completes a
         // group does run the constructor, but the one-DEPLOY-per-batch name cap already
         // bounds a batch to one constructor whichever piece completes it. The format comes from the same
-        // util.getFormatVersion(params[0]) derivation the dispatcher uses (see the
-        // commandWeights['DEPLOY'] note in limits.js); anything unparseable falls through to the
+        // util.getFormatVersion(params[0]) derivation processTransaction uses
+        // (actions_class/transaction.js); anything unparseable gets the
         // full weight, which is the safe (over-charging) direction.
         if(action === 'DEPLOY' && this.util.getFormatVersion(String(command).split('|')[1]) === 4)
             return 1;

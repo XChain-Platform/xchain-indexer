@@ -181,9 +181,14 @@ describe('Database.createAirdrop() @regression @tier1', function () {
 
     it('UPDATEs when exists', async function () {
         const db = makeAirdropDb([{ action_index: 80 }]);
-        await db.createAirdrop({ ACTION_INDEX: 80, TICK: 'FOO', AMOUNT: '5', LIST_ACTION_INDEX: null, MEMO: null, STATUS: 'valid' });
-        assert.ok(String(db.doQuery.args[1][0]).includes('UPDATE'));
+        await db.createAirdrop({ ACTION_INDEX: 80, TICK: 'FOO', AMOUNT: '5', LIST_ACTION_INDEX: 1234, MEMO: 'hello', STATUS: 'valid' });
+        const sql = String(db.doQuery.args[1][0]);
+        assert.ok(sql.includes('UPDATE'));
+        assert.match(sql, /SET\s+status_id=\?/);
+        assert.match(sql, /WHERE\s+action_index=\? AND\s+tick_id=\? AND\s+memo_id=\? AND\s+list_action_index=\? AND\s+amount=\?/);
+        assert.deepStrictEqual(db.doQuery.args[1][1], [3, 80, 1, 2, 1234, '5']);
     });
+
 });
 
 // ---------------------------------------------------------------------------

@@ -109,10 +109,11 @@ describe('Dispense action handler @regression @tier2', function () {
     beforeEach(freshSuite);
     afterEach(function () { sinon.restore(); });
 
-    // Regression for the dead 'invalid: Dispenser unknown' branch: getDispenserInfo
-    // returning falsy for a matched action_index must not throw a TypeError out of
-    // the settlement loop (dispenserInfo[...] is never populated for it).
-    // It is skipped with no dispense recorded.
+    // Verify priceDispenseForDispenser skips a falsy getDispenserInfo result
+    // before it records a dispense row.
+
+    // Keep the settlement loop unreachable when dispenserInfo lacks the entry,
+    // avoiding a TypeError and any partial settlement.
     it('unknown dispenser (getDispenserInfo returns false): does not throw, no dispense recorded for it', async function () {
         indexer.indexerDb.findMatchingDispensers.resolves([10]);
         indexer.indexerDb.getDispenserInfo.resolves(false);

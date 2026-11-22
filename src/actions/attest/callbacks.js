@@ -23,28 +23,11 @@
 
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../../consensus/exec_context.js');
 const gateRegistry = require('../../consensus/gate_registry');
+const { callbackParamsOf } = require('../callback_params.js');
 const { getLogger } = require('../../observability/index.js');
 
 const CALLBACK_BATCH_POSITION_GATE =
     'attest_callback_batch_position_activation.ATTEST_CALLBACK_BATCH_POSITION_ACTIVATION';
-
-// The callback params the request carries, or none when the stored JSON cannot be
-// read as an array.
-function callbackParamsOf(request){
-    let callbackParams = [];
-    if(request.callback_params_json){
-        try {
-            let parsed = JSON.parse(request.callback_params_json);
-            if(Array.isArray(parsed)) callbackParams = parsed;
-        } catch(e){
-            getLogger().warn('_injectCallbackExecute: malformed callback_params_json for request ' +
-                         String(request.request_id).substring(0,16) + '..., using empty params:', e.message);
-            callbackParams = [];
-        }
-    }
-
-    return callbackParams;
-}
 
 module.exports = {
     // Inject the contract callback for a relayed response. The 'ok' path is the v1
@@ -62,7 +45,7 @@ module.exports = {
     async injectCallbackExecute(request, responseData){
         if(!this.actions.actionExecute) return null;
 
-        let callbackParams = callbackParamsOf(request);
+        let callbackParams = callbackParamsOf(request, '_injectCallbackExecute');
         let actionParams   = this.callbackActionParams(request, responseData['RESPONSE_STATUS'],
                                                        responseData['RESPONSE_PAYLOAD'] || '', callbackParams);
 
@@ -111,17 +94,8 @@ module.exports = {
     async injectExpiredCallback(request, expireData){
         if(!this.actions.actionExecute) return null;
 
-        let callbackParams = [];
-        if(request.callback_params_json){
-            try {
-                let parsed = JSON.parse(request.callback_params_json);
-                if(Array.isArray(parsed)) callbackParams = parsed;
-            } catch(_) {
-                callbackParams = [];
-            }
-        }
-
-        let actionParams = this.callbackActionParams(request, 'expired', '', callbackParams);
+        let callbackParams = callbackParamsOf(request, 'injectExpiredCallback');
+        let actionParams   = this.callbackActionParams(request, 'expired', '', callbackParams);
 
         let chain = this.config['CHAIN'];
         let emissionActionIndex = await this.indexerDb.createActionIndex({

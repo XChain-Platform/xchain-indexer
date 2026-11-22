@@ -144,7 +144,7 @@ function armAnchor() {
     swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     // these cases assert the LEGACY DOGE-side reward derivation (still the
     // behavior below the derive-relocation flag-day / on mainnet, where the gate is an
-    // inert placeholder). Pin the derive gate OFF so anchor.js runs the DOGE-side write;
+    // inert placeholder). Pin the derive gate OFF so src/actions/anchor/ runs the DOGE-side write;
     // the at/above-gate skip + BTC-side relocation are covered by anchor_reward_derive.test.js
     // and the dedicated 'derive-relocation flag-day' describe below.
     deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);

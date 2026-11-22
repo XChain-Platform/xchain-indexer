@@ -39,6 +39,8 @@ const {
     STAKE_SNAPSHOT_DECIMAL_STRINGS_TESTNET_TIME,
     ITER_SET_METER_MAINNET_TIME,
     ITER_SET_METER_TESTNET_TIME,
+    LINT_REGEX_GROUP_DEPTH_MAINNET_TIME,
+    LINT_REGEX_GROUP_DEPTH_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
     STAKE_DELEGATED_SIGNING_KEY_MAINNET_TIME,
@@ -63,6 +65,12 @@ const {
     STRING_RECEIVER_METER_TESTNET_TIME,
     TOSTRING_SIZE_METER_MAINNET_TIME,
     TOSTRING_SIZE_METER_TESTNET_TIME,
+    FILE_MULTIPART_TESTNET_TIME,
+    STATE_KEY_STORABLE_MAINNET_TIME,
+    STATE_KEY_STORABLE_TESTNET_TIME,
+    ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
+    ORDER_GET_ADDRESS_COIN_TESTNET_TIME,
+    STATE_VALUE_ASTRAL_ESCAPE_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -84,6 +92,8 @@ const CHANGES = [
         exactIntegerWireRegtestTime, 0, 0, 0],
     ['ITER_SET_METER','0.2.0', ITER_SET_METER_MAINNET_TIME,
         ITER_SET_METER_TESTNET_TIME, 0, 0, 0, 0],
+    ['LINT_REGEX_GROUP_DEPTH', '0.2.0', LINT_REGEX_GROUP_DEPTH_MAINNET_TIME,
+        LINT_REGEX_GROUP_DEPTH_TESTNET_TIME, 0, 0, 0, 0],
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
         regtestTimeOverride('CONTROLLER_CUSTODY_GUARD_REGTEST_TIME'), 0, 0, 0],
@@ -107,6 +117,8 @@ const CHANGES = [
     // STAKE_SNAPSHOT_SLASH_WINDOW: from the flag day the VM stake snapshot caps a (pubkey, tick)'s
     // mid-UNSTAKE contract_stakes rows at what its open contract_unstakes rows still hold, the
     // place SLASH debits during the activation delay (db/contracts/vm_stake_snapshot.js).
+    // This also drops the stake view when a short cooldown refunds before deactivation. Without
+    // the rule, released stake remains visible but unslashable for delay - cooldown - 1 blocks.
     // This rule and DELEGATION_ROTATE_IN_WINDOW below: mainnet is UNARMED, testnet is armed at
     // the instant in each row, and regtest is inert unless a venue sets the row's
     // *_REGTEST_TIME override.
@@ -223,10 +235,32 @@ const CHANGES = [
     // TICK, giving that name a dense ticker id; a later 'ISSUE ^<id>' then resolves a
     // name with no token row and lands valid, creating a token through the id form. At/
     // above the flag a caret TICK that resolves to no existing token is 'invalid: TICK
-    // (unknown)'; an owner's caret edit of an existing token is untouched. UNARMED on
-    // every network until the operator sizes the instant from the read-only per-chain
-    // count of tokens created through a caret TICK; regtest arms at genesis.
+    // (unknown)'; an owner's caret edit of an existing token is untouched. Unarmed on
+    // mainnet until the operator sizes the instant from the read-only per-chain count
+    // of tokens created through a caret TICK; armed on testnet at the instant in its row
+    // (2026-10-22T13:00Z, the v0.26.2 cut); active from genesis on regtest.
     ['ISSUE_CARET_TICK_NO_CREATE', '0.2.0', UNARMED, 1792674000, 0, 0, 0, 0],
+    // STATE_KEY_STORABLE: the twin of xchain-vm STATE_KEY_STORABLE_ACTIVATION, under which
+    // StateManager.set() refuses a key contract_state.state_key cannot hold. Regtest is a
+    // fixed 0 because the VM table is, and the coupling tests hold the two equal.
+    ['STATE_KEY_STORABLE', '0.2.0', STATE_KEY_STORABLE_MAINNET_TIME,
+        STATE_KEY_STORABLE_TESTNET_TIME, 0, 0, 0, 0],
+    ['FILE_MULTIPART', '0.2.0', UNARMED, FILE_MULTIPART_TESTNET_TIME,
+        regtestTimeOverride('FILE_MULTIPART_REGTEST_TIME'), 0, 0, 0],
+    // ORDER_GET_ADDRESS_COIN: a cross-chain ORDER's GET_ADDRESS must be a valid address on
+    // GET_COIN's network, as a SWAP's is. Below the flag it is checked against the local
+    // chain's format, which refuses a foreign payout address. Judged by the ORDER's block.
+    // Unarmed on mainnet until the mainnet activation work names an instant, armed on testnet
+    // at ORDER_GET_ADDRESS_COIN_TESTNET_TIME, and active from genesis on regtest.
+    ['ORDER_GET_ADDRESS_COIN', '0.2.0', ORDER_GET_ADDRESS_COIN_MAINNET_TIME,
+        ORDER_GET_ADDRESS_COIN_TESTNET_TIME, 0, 0, 0, 0],
+    // STATE_VALUE_ASTRAL_ESCAPE: every contract_state writer stores a value's JSON text with
+    // each character above U+FFFF written as its \uXXXX\uXXXX escape pair, so the utf8mb3
+    // state_value column accepts it instead of halting the block (actions/execute/
+    // state_value_text.js). JSON.parse gives the same value either way, and text with no such
+    // character is byte-identical on both sides. Judged by the block that writes the state.
+    // Unarmed on mainnet, armed on testnet at 2026-11-17T00:00Z, active from genesis on regtest.
+    ['STATE_VALUE_ASTRAL_ESCAPE', '0.2.0', UNARMED, STATE_VALUE_ASTRAL_ESCAPE_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

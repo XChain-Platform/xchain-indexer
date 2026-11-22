@@ -168,8 +168,9 @@ module.exports = {
         // Ignore empty memo and return NULL
         if(this.util.isNull(memo))
             return null;
-        // Truncate memos to 250 characters
-        memo = String(memo).substring(0,250);
+        // Clip memos to 250 code points. substring counts UTF-16 units, which halves a
+        // supplementary-plane memo and can cut a surrogate pair in two.
+        memo = clipCodePoints(memo, 250);
         var id = await this.getMemoId(memo);
         // Handle creating record
         if(id==null){

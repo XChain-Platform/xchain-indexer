@@ -51,6 +51,29 @@ describe('JSON-RPC scalar parameters @regression @tier1', function () {
             { error: 'provider_id must be a string of at most 255 characters' });
         assert.deepStrictEqual(rpcParams.string('', { name: 'tick', maxLength: 255, required: true }),
             { error: 'tick must be a string of at most 255 characters' });
+        assert.strictEqual(rpcParams.isHexId('a'.repeat(64)), true);
+        for(const value of ['a'.repeat(63), 'g'.repeat(64), 7, { toString: null }, ['a'.repeat(64)]])
+            assert.strictEqual(rpcParams.isHexId(value), false, typeof value);
+    });
+
+    it('throws when a limit omits or mis-sizes its bounds instead of dropping them', function () {
+        for(const options of [{ defaultValue: 100 }, { defaultValue: 100, max: 0 }, { defaultValue: 100, max: 1.5 },
+                              { defaultValue: 100, max: '500' }, { max: 500 }, { defaultValue: 0, max: 500 },
+                              { defaultValue: 501, max: 500 }, {}]){
+            assert.throws(() => rpcParams.limit(undefined, options), TypeError, JSON.stringify(options));
+            assert.throws(() => rpcParams.limit(7, options), TypeError, JSON.stringify(options));
+        }
+        assert.throws(() => rpcParams.limit(7), TypeError);
+    });
+
+    it('throws when a string omits or mis-sizes its maxLength instead of skipping the check', function () {
+        for(const options of [{ name: 'x' }, { name: 'x', maxLength: 0 }, { name: 'x', maxLength: -1 },
+                              { name: 'x', maxLength: 2.5 }, { name: 'x', maxLength: '255' },
+                              { name: 'x', maxLength: Infinity }]){
+            assert.throws(() => rpcParams.string('abc', options), TypeError, JSON.stringify(options));
+            assert.throws(() => rpcParams.string(undefined, options), TypeError, JSON.stringify(options));
+        }
+        assert.throws(() => rpcParams.string('abc'), TypeError);
     });
 
     it('accepts configured stake thresholds and refuses non-canonical decimals', function () {

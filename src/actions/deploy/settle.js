@@ -120,6 +120,14 @@ async function writeLedger(deploy, run){
     if((!run.error || run.landedPending) && run.tokenInfo && run.feePaymentMode === 2)
         debits.push([gas, run.fee, data['SOURCE']]);
 
+    // Dry-run disclosure only: the GAS this action debits its source, carried pending debits
+    // included, so the fee quote reports what the ledger write below actually charges.
+    if(data['DRY_RUN'] === true){
+        let charged = debits.filter(d => d[0] === gas && d[2] === data['SOURCE']);
+        if(charged.length)
+            data['PROBE_SETTLED_GAS_FEE'] = String(charged.reduce((sum, d) => deploy.util.bcadd(sum, d[1], 8), '0'));
+    }
+
     // Process any transaction ledger changes (credits / debits)
     await deploy.util.processTransactionLedgerChanges(deploy.indexerDb, data, credits, debits);
 

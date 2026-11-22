@@ -44,15 +44,15 @@
  ********************************************************************/
 
 const crypto  = require('crypto');
-const ed25519 = require('../../consensus/ed25519.js');
 const swq     = require('../../consensus/stake_weighted_quorum.js');
 const eq      = require('../../consensus/equivocation_header.js');
 const ah      = require('../../consensus/gates/mirror_admission_gate.js');
+const { collectValidSigners, parseSignatureList } = require('../cross_settle/quorum.js');
 
-// Vendored from ../protocol/constants.js (byte-identical to xchain-documentation/
-// protocol/constants.js; same convention as the VM_MAX_CALL_DEPTH /
-// VM_MIN_CALL_GAS mirrors in execute.js). The VM enforces these at emit time;
-// this handler re-validates host-side (defense in depth).
+// Registry-backed values from ../../protocol/constants.js, kept in value parity
+// with the canonical declarations and the VM call limits used by execute.js.
+// The VM enforces these at emit time; this handler re-validates host-side as
+// defense in depth.
 const PROTO = require('../../protocol/constants.js');
 // Handler parts. Each is called with this handler as the receiver, so the rows
 // written and their order do not depend on which file the code sits in.
@@ -224,28 +224,9 @@ class Xcall {
         let N = (validators && validators.length) ? validators.length : 0;
         if(N === 0) return { synced: false, quorumMet: false, N: 0, validSigners: [], weighted };
 
-        let sigs;
-        try { sigs = JSON.parse(r.validator_signatures || '[]'); }
-        catch(_) { sigs = []; }
-
+        let sigs = parseSignatureList(r.validator_signatures);
         let canonical = this.resultCanonical(r);
-        let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
-        let validSigners = [], seen = new Set();
-        for(let s of sigs){
-            let pk  = String(s.pubkey || '').toLowerCase();
-            let sig = String(s.sig || '').toLowerCase();
-            if(seen.has(pk)) continue;
-            if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
-            if(!snapPubkeys.has(pk)) continue;
-            if(!ed25519.verify(canonical, sig, pk)) continue;
-            // Mark seen only AFTER the signature verifies, matching the hub
-            // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
-            // marking on first encounter lets a garbage-then-valid pair for one
-            // qualified validator suppress the real signature (order-dependent
-            // quorum under-count, flipping a quorate result verdict closed).
-            seen.add(pk);
-            validSigners.push(pk);
-        }
+        let validSigners = collectValidSigners(validators, sigs, canonical);
         let quorumMet = weighted
             ? swq.meetsStakeThreshold(validators, validSigners)
             : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));

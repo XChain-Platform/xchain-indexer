@@ -105,7 +105,8 @@ describe('HubDbSync price re-page starts at the mirror floor on a same-instance 
     });
 
     it('retries failed pages at their cursor and restarts only for a new connection', async function () {
-        this.timeout(30000);
+        // It pages 10005 rows through two connections, and 30 s is too tight on a loaded CI venue.
+        this.timeout(120000);
         const ctx = makeSync();
         ctx.sync.running = true;                     // as start() leaves it
         const rows = 10005;

@@ -14,7 +14,8 @@
  * BELOW-THE-FLAG REPLAY WITNESS for the MIRROR-ADMISSION family (BF4 and AB4).
  *
  * WHY THIS EXISTS. The family re-keys eleven barrier predicates and six binding
- * rules off the block's own stamp and onto a per-table admission HEIGHT. Every
+ * rules off the block's own stamp and onto a per-table admission HEIGHT. Price landing
+ * is the twelfth clock-keyed hold point in the wider chain and is outside this family. Every
  * one of those changes is gated by MIRROR_ADMISSION_CONSUMER_ACTIVATION (and, for
  * the anchor member, ANCHOR_ATTEST_BARRIER_ACTIVATION), and the whole train rests
  * on one claim: BELOW the activation the new code commits exactly what the old

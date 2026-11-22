@@ -212,8 +212,10 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             assert.ok(refused.reason && /5000/.test(refused.reason), 'a refusal must say what it disproved');
             assert.strictEqual((await db.verifyCapabilitySnapshotRow(
                 snapshotRow({ capability: 'not_a_capability' }))).verdict, 'unknown');
-            assert.strictEqual((await db.verifyCapabilitySnapshotRow(
-                snapshotRow({ snapshot_block: 'soon' }))).verdict, 'unknown');
+            const malformed = await db.verifyCapabilitySnapshotRow(
+                snapshotRow({ snapshot_block: 'soon' }));
+            assert.strictEqual(malformed.verdict, 'refused');
+            assert.match(malformed.reason, /non-canonical snapshot_block/);
         });
 
         it('re-derives at minStake 0, so a hub MIN_STAKE above ours cannot cause a refusal', async function () {

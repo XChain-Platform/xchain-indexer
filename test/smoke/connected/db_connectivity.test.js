@@ -27,7 +27,7 @@
 
 // Load .env BEFORE setting test env vars
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '..', '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '..', '.env'), quiet: true });
 
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';

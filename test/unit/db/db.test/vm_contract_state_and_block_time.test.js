@@ -45,6 +45,12 @@ describe('Database.isCapabilityConfigured() @regression @tier1', function () {
         assert.strictEqual(db.isCapabilityConfigured.call(db, 'oracle_publish'), false);
     });
 
+    it('returns false for inherited Object.prototype names', function () {
+        const db = dbWith({ attestation: { MIN_STAKE: '10000' } });
+        for(const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf'])
+            assert.strictEqual(db.isCapabilityConfigured.call(db, name), false, name);
+    });
+
     it('returns false when STAKING.CAPABILITIES is missing entirely', function () {
         const db = dbWith(undefined);
         assert.strictEqual(db.isCapabilityConfigured.call(db, 'attestation'), false);

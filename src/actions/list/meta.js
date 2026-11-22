@@ -1,11 +1,21 @@
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md. A commercial
+// license (without AGPL source-disclosure terms) is available -
+// contact legal@dankest.llc.
+
 'use strict';
 
 const gateRegistry = require('../../consensus/gate_registry');
+const { LIST_META_GATE_KEY: LIST_META_GATE } = require('../../consensus/gates/list_meta_gate');
 const { metaFieldVerdict, isNoChange } = require('./meta_rules.js');
 
 const LIST_META_NAME_MAX_BYTES = 64;
 const LIST_META_DESCRIPTION_MAX_BYTES = 512;
-const LIST_META_GATE = 'list_meta_activation.LIST_META_ACTIVATION';
 
 module.exports = {
     installFormat(spec){

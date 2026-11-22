@@ -19,6 +19,10 @@
  *
  ********************************************************************/
 
+const { fitColumnText } = require('../column_text.js');
+
+const DEPLOY_CHUNK_CODE_HASH_CHARS = 64;
+
 module.exports = {
 
     // Record one DEPLOY v4 carrier (a base64 slice of a chunked contract's source). Upsert keyed
@@ -35,6 +39,10 @@ module.exports = {
         let total_chunks = Number(data['TOTAL_CHUNKS']);
         let code_part    = data['CODE_PART'];
         let block_index  = data['BLOCK_INDEX'];
+        if(data['STATUS'] !== 'valid'){
+            code_hash = fitColumnText(code_hash ?? '', DEPLOY_CHUNK_CODE_HASH_CHARS, true);
+            code_part = code_part ?? '';
+        }
         let query   = "SELECT action_index FROM deploy_chunks WHERE action_index=? LIMIT 1";
         let results = await this.doQuery(query, [action_index]);
         if(results.length > 0){

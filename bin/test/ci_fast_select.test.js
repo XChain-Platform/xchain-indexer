@@ -235,7 +235,7 @@ describe('ci fast selector', function () {
     const script = fs.readFileSync('bin/ci-full.sh', 'utf8');
     const workflow = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
     const sdkRefs = Array.from(workflow.matchAll(/\|\| '([0-9a-f]{40})'\) \}\}/g), (match) => match[1]);
-    assert.deepStrictEqual(sdkRefs, ['58732583fc1f11eb1c19ac304a12b8c3f7c23961']);
+    assert.deepStrictEqual(sdkRefs, ['7949fc3e950ae1ce2bd3f9dfddca44dc02c334bc']);
     assert(script.includes('ci_fast_select.js --plan'));
     assert(script.includes('CI_TIER'));
     assert(script.includes('run_tier "integration (test:integration:ci)"'));

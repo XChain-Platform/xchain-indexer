@@ -14,13 +14,20 @@
  *
  * XChain Platform Action - EXECUTE : gas fee pricing and payment
  *
- * Prices the base execution gas and decides HOW the fee is paid (native coin
+ * Prices execution admission and decides HOW the fee is paid (native coin
  * output or XCHAIN balance), which is what the settlement phase later bills
- * and debits. Called with the EXECUTE handler as `this` (see ./index.js).
+ * and debits. Native payment buys a bounded gas budget after its height gate;
+ * the ledger lane retains base admission. Called with the EXECUTE handler as
+ * `this` (see ./index.js).
  *
  ********************************************************************/
 
 'use strict';
+
+const gateRegistry = require('../../consensus/gate_registry');
+
+const EXECUTE_NATIVE_METERED_GAS_KEY =
+    'execute_native_metered_gas_activation.EXECUTE_NATIVE_METERED_GAS_ACTIVATION';
 
 /*****************************************************************
  * Gas Fee Calculation
@@ -29,7 +36,7 @@
 // Native-coin payment: the fee is covered by a coin output on the transaction
 // rather than a GAS balance, so the validated amount and the oracle round it
 // was priced at are stamped onto data for the ledger writer.
-async function payFeeFromNativeCoin(ctx){
+async function payFeeFromNativeCoin(ctx, limits, meteredNativeGas){
     let data = ctx.data;
     let tempFees = { AMOUNT: ctx.fee };
     let validation = await this.util.validateNativeCoinFee(data, tempFees, this.indexerDb, data['TX_OUTPUTS']);
@@ -40,10 +47,21 @@ async function payFeeFromNativeCoin(ctx){
         data['NATIVE_COIN_AMOUNT'] = validation.nativeCoinAmount;
         data['NATIVE_COIN']        = validation.nativeCoin;
         data['ORACLE_ROUND']       = validation.oracleRound;
+        if(meteredNativeGas){
+            // validateNativeCoinFee accepts the output at minAcceptableAmount, so invert
+            // that same lower edge of the tolerance band. A payment accepted for N gas
+            // therefore always buys at least N gas, while every extra satoshi increases
+            // the budget through the identical oracle-price path.
+            let paidGas = this.util.bcmuldivfloor(
+                validation.nativeCoinAmount, ctx.gasCost,
+                validation.minAcceptableAmount, 0);
+            ctx.paidGasCeiling = Math.min(
+                Math.max(Number(ctx.gasCost), this.util.bcfloor(paidGas)), limits.GAS_CEILING);
+        }
     }
 }
 
-async function chargeGasFee(ctx){
+async function chargeGasFee(ctx, limits){
     let data = ctx.data;
 
     let schedule = this.config['GAS_SCHEDULE'];
@@ -67,7 +85,9 @@ async function chargeGasFee(ctx){
     if(!ctx.error && !ctx.skipFee && ctx.tokenInfo && this.util.bcgt(ctx.fee, 0)){
         let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
         if(pmMode === 'native'){
-            await payFeeFromNativeCoin.call(this, ctx);
+            let meteredNativeGas = gateRegistry.activeAt(EXECUTE_NATIVE_METERED_GAS_KEY,
+                this.config['NETWORK'], this.config['COIN'], Number(data['BLOCK_INDEX']), null);
+            await payFeeFromNativeCoin.call(this, ctx, limits, meteredNativeGas);
         } else if(pmMode === 'rejected'){
             ctx.error = 'invalid: insufficient fee (native coin output required)';
         } else {

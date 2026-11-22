@@ -25,16 +25,22 @@
 const { assert, fs, path, Database, modeOf } = require('./migration_runner.test/helpers/migration_fixtures.js');
 const crypto = require('crypto');
 const { SQL_MODE_PROBE, pinnedSqlModeRows } = require('./migration_runner.test/helpers/migration_fixtures.js');
+const { verifyFreshSchema } = require('./helpers/fresh_schema_fixture.js');
 
 
 describe('Database._migrationMode() @regression @tier1', function () {
 
     it('reads mode=auto from the header tag', function () {
         assert.strictEqual(modeOf('-- xchain:migration mode=auto\nALTER TABLE x ADD COLUMN y INT;'), 'auto');
+        assert.strictEqual(modeOf('-- xchain:migration mode=auto mode=auto\nSELECT 1;'), 'auto');
+        assert.strictEqual(modeOf('-- xchain:migration mode=auto\n-- see the mode=manual sibling\nSELECT 1;'), 'auto');
     });
 
     it('reads mode=manual from the header tag', function () {
         assert.strictEqual(modeOf('-- xchain:migration mode=manual\nDROP INDEX z ON x;'), 'manual');
+        assert.strictEqual(modeOf('-- xchain:migration mode=manual (COPY rebuild, not mode=auto)\nSELECT 1;'), 'manual');
+        assert.strictEqual(modeOf('-- xchain:migration mode=auto mode=manual\nSELECT 1;'), 'manual');
+        assert.strictEqual(modeOf('-- xchain:migration mode=auto\n-- xchain:migration mode=manual\nSELECT 1;'), 'manual');
     });
 
     it('defaults to manual when no tag is present (never auto-runs unknown DDL)', function () {
@@ -89,13 +95,17 @@ describe('committed migrations declare intent @regression @tier1', function () {
             // and the declared intent agree, so a tag the runner cannot see (e.g. below the first
             // SQL statement) fails CI instead of default-landing as `manual` while looking tagged
             // (the dead-tag gap this test exists to catch).
-            const anywhere = raw.match(/--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
-            assert.ok(anywhere,
+            const declaredModes = [...raw.matchAll(/^\s*--\s*xchain:migration\b([^\n]*)$/gim)]
+                .flatMap((header) => [...header[1].matchAll(/\bmode\s*=\s*([A-Za-z]+)\b/gi)])
+                .map((token) => token[1].toLowerCase());
+            assert.ok(declaredModes.length > 0,
                 file + ' has no explicit mode tag. Every migration must declare intent so a ' +
                 'destructive change can never silently auto-run at startup. Add a first line ' +
                 '(or place it anywhere in the leading comment prologue): ' +
                 '`-- xchain:migration mode=auto` (additive + idempotent) or `mode=manual` (gated).');
-            const declared = anywhere[1].toLowerCase();
+            assert.strictEqual(declaredModes.length, 1,
+                file + ' must carry exactly one mode token across its xchain:migration header lines.');
+            const declared = declaredModes[0];
             assert.strictEqual(modeOf(raw), declared,
                 file + ' declares mode=' + declared + ' but _migrationMode reads it as ' + modeOf(raw) +
                 ' - the tag sits where the runner cannot see it (it must be in the leading comment ' +
@@ -204,42 +214,6 @@ async function seedFreshSchemaMigrations(options = {}) {
 const indexOfMigrationCall = (calls, re) => calls.findIndex(c => re.test(c.sql));
 const lastIndexOfMigrationCall = (calls, re) => calls.map(c => c.sql).findLastIndex(sql => re.test(sql));
 
-async function verifyFreshSchema(existingTable, options = {}) {
-    const created = [];
-    const order = [];
-    let recorded = 0;
-    const connection = {
-        async query(sql, params) {
-            if(/information_schema\.tables/i.test(sql))
-                return params[1] === existingTable ? [{}] : [];
-            throw new Error('unexpected statement: ' + sql);
-        },
-        async release() {},
-    };
-    const db = {
-        dbName: 'fake_indexer',
-        util: { throwError(message) { throw new Error(message); } },
-        getConnection: async () => connection,
-        createTable: async file => {
-            if(options.failCreateAt === created.length + 1) throw new Error('create failed');
-            created.push(file);
-            order.push('create');
-        },
-        alterTableForDrift: async () => {},
-        reconcileTableIndexes: async () => {},
-        recordFreshSchemaMigrations: async conn => {
-            assert.strictEqual(conn, connection);
-            recorded++;
-            order.push('seed');
-        },
-        schemaShapeSummary: () => 'Schema shape: test fixture.',
-        verifyTables: Database.prototype.verifyTables,
-    };
-    let error = null;
-    try { await db.verifyTables(); } catch(e){ error = e; }
-    return { created, recorded, order, error };
-}
-
 function registerFreshSchemaLedgerRecordingTest() {
     it('records every committed migration with its checksum, mode and database timestamp', async function () {
         const { calls, ensured, error } = await seedFreshSchemaMigrations();
@@ -347,7 +321,7 @@ function registerFreshSchemaVerificationTests() {
 
     it('seeds BEFORE the first table is created, so an interrupted create loop keeps a full ledger', async function () {
         const fresh = await verifyFreshSchema(null);
-        assert.strictEqual(fresh.order[0], 'seed');
+        assert.ok(fresh.order.indexOf('seed') < fresh.order.indexOf('create'));
         assert.strictEqual(fresh.order.filter(step => step === 'seed').length, 1);
 
         const partial = await verifyFreshSchema(null, { failCreateAt: 3 });

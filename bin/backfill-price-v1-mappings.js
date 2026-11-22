@@ -38,7 +38,7 @@
 // Run as a CLI, load .env before any local require (src/config.js captures the
 // environment once at module load). Required as a module (the tests), the caller's
 // environment is left alone; see bin/recovery.js for the same convention.
-if(require.main === module) require('dotenv').config();
+if(require.main === module) require('dotenv').config({ quiet: true });
 
 const priceV1MappingBackfill = require('../src/db/prices/price_v1_mapping_backfill.js');
 

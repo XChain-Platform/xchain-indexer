@@ -135,6 +135,8 @@ describe('VOTE v2 writes only the poll_results rows their column stores @regress
     const stored = OPTIONS_PAST_INDEX.split(',').map(o => o.trim());
 
     it('the finalize of a poll storing 65537 entries writes indexes 0 to 65535', async function () {
+        // It builds 65537 rows, and the 30 s default is too tight on a loaded CI venue.
+        this.timeout(120000);
         const inserts = await finalizeInserts(stored);
         assert.strictEqual(inserts.length, 65536);
         assert.strictEqual(inserts[inserts.length - 1][OPTION_INDEX_AT], 65535);
@@ -144,6 +146,8 @@ describe('VOTE v2 writes only the poll_results rows their column stores @regress
     });
 
     it('getPollResult reads the unwritten option 65536 at weight 0 and no voters', async function () {
+        // It builds 65537 rows, and the 30 s default is too tight on a loaded CI venue.
+        this.timeout(120000);
         const rows = (await finalizeInserts(stored)).map(a => ({ option_index: a[3], total_weight: a[4], voter_count: a[5] }));
         const db = Object.assign({}, pollsDb, {
             util: new Utility(),

@@ -126,7 +126,7 @@ module.exports = {
         // isOwnershipGive is format-0 only, so a format-2 edit of an ownership
         // dispenser fell through as an ordinary refill: it debited GIVE_ESCROW
         // (below) while both terminal paths take the GIVE_OWNERSHIP branch that
-        // credits nothing back (dispenser_close.js / dispenser_expire.js), stranding
+        // credits nothing back (dispenser_close/settle.js / dispenser_expire/settle.js), stranding
         // the balance and breaking deposit = dispensed + remaining + refunded.
         // Mirrors the create-time rule verbatim rather than widening
         // isOwnershipGive, which would route these edits through the create-time
@@ -158,7 +158,7 @@ module.exports = {
 
         // MAX_REFILLS cap (the dispenser_caps_activation row). A refill is a
         // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW; each refill resets the
-        // dispense count (derived since the last refill in dispense.js), and the 6th
+        // dispense count (derived since the last refill by getDispenserDispenseCount), and the 6th
         // refill is rejected (Counterparty parity). Rate/give-quantity are inherently
         // unchanged (format-2 edits carry only give_escrow/expiration/lists, never
         // give_amount/get_amount) and owner authority is enforced above. Gated with the

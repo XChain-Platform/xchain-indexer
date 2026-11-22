@@ -237,6 +237,7 @@ function makeLedgerDouble(config, state, o, counter, mirror){
     // the shipped SQL; a missing method would throw a TypeError that now propagates as a fault.
     db.getEarliestValidAnchorCheckpoint = anchorsMixin.getEarliestValidAnchorCheckpoint.bind(db);
     db.getMirroredStateCheckpointCandidates = anchorsMixin.getMirroredStateCheckpointCandidates.bind(db);
+    db.getMirroredCheckpointSuperseders = anchorsMixin.getMirroredCheckpointSuperseders.bind(db);
     return db;
 }
 
@@ -250,8 +251,7 @@ function makeCtx(opts){
         GAS:     'XCHAIN',
         ADDRESS: { GAS: 'nGasOwnerXXXXXXXXXXXXXXXXXXXXXXXXX',
                    BRIDGE_BTC:  ESCROW_BTC_ON_DOGE,
-                   BRIDGE_DOGE: ESCROW_DOGE_ON_BTC },
-        BTC_CHAIN_ID: o.chainId || null
+                   BRIDGE_DOGE: ESCROW_DOGE_ON_BTC }
     };
     const state = {
         credits: [], debits: [], settlements: [], actions: [], mappings: [],
@@ -309,6 +309,8 @@ function selectorCtx(anchorRows, mirrorRows){
         anchorsMixin.getEarliestValidAnchorCheckpoint.bind(ctx.indexerDb);
     ctx.indexerDb.getMirroredStateCheckpointCandidates =
         anchorsMixin.getMirroredStateCheckpointCandidates.bind(ctx.indexerDb);
+    ctx.indexerDb.getMirroredCheckpointSuperseders =
+        anchorsMixin.getMirroredCheckpointSuperseders.bind(ctx.indexerDb);
     return ctx;
 }
 

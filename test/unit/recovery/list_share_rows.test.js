@@ -18,6 +18,7 @@ const assert = require('assert');
 
 const listShare = require('../../../bin/recovery/list_share.js');
 const canonical = require('../../../src/consensus/list_share_settle/canonical.js');
+const { listMetaHash } = require('../../../src/consensus/list_share_hash.js');
 
 function rowWith(overrides){
     let row = Object.assign({
@@ -37,7 +38,8 @@ function rowWith(overrides){
         admit_block_ltc: null,
         finalizing_view: 0,
         validator_signatures: '[]',
-        status: 'finalized'
+        status: 'finalized',
+        meta_hash: ''
     }, overrides || {});
     if(!overrides || !Object.prototype.hasOwnProperty.call(overrides, 'snapshot_id')){
         row.snapshot_id = canonical.deriveListSnapshotId(
@@ -72,6 +74,18 @@ function registerShapeValidationTests(){
 
         assert.doesNotThrow(() => listShare.validateListSnapshot(full, 'regtest'));
         assert.doesNotThrow(() => listShare.validateListSnapshot(delta, 'regtest'));
+        assert.doesNotThrow(() => listShare.validateListSnapshot(rowWith({
+            name: 'Alpha list', description: 'Members of alpha',
+            meta_hash: listMetaHash('Alpha list', 'Members of alpha')
+        }), 'regtest'));
+        rejects(rowWith({ name: 'Alpha list', meta_hash: '' }));
+        rejects(rowWith({ name: 'x'.repeat(65), meta_hash: listMetaHash('x'.repeat(65), null) }));
+        rejects(rowWith({ name: 'Alpha list', meta_hash: 'a'.repeat(64) }));
+        let belowGate = rowWith({
+            network: 'mainnet', name: 'Alpha list',
+            meta_hash: listMetaHash('Alpha list', null)
+        });
+        assert.throws(() => listShare.validateListSnapshot(belowGate, 'mainnet'), /meta_below_gate/);
     });
 
     it('rejects malformed shape, hashes, integer fields, and archive binding', function () {
@@ -163,12 +177,13 @@ function registerSnapshotWriteTests(){
 
         await listShare.writeListSnapshot(db, row);
         assert.strictEqual(queries.length, 3);
-        assert.match(queries[2].sql, /INSERT IGNORE INTO list_snapshots/);
-        assert.strictEqual(queries[2].args.length, 19);
+        assert.match(queries[2].sql, /INSERT INTO list_snapshots/);
+        assert.doesNotMatch(queries[2].sql, /IGNORE|\(\s*id\b/);
+        assert.strictEqual(queries[2].args.length, 21);
         assert.deepStrictEqual(queries[2].args, [
-            7, row.snapshot_id, 100, 'regtest', 'DOGE', 5, 2, 1, 'full', 90,
+            row.snapshot_id, 100, 'regtest', 'DOGE', 5, 2, 1, 'full', 90,
             'a'.repeat(64), JSON.stringify(['addr-a', 'addr-b']), '[]', 104,
-            null, null, 0, '[]', 'finalized'
+            null, null, 0, '[]', 'finalized', null, null, ''
         ]);
     });
 }
@@ -178,7 +193,7 @@ function registerArchiveWriteTests(){
         let inserts = [];
         let db = {
             doQuery: async (sql, args) => {
-                if(/INSERT IGNORE INTO list_snapshots/.test(sql)) inserts.push(args);
+                if(/INSERT INTO list_snapshots/.test(sql)) inserts.push(args);
                 return [];
             }
         };

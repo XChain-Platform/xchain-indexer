@@ -106,7 +106,7 @@ describe('list share pure settle parts', function () {
         const screen = screenListSnapshot;
         assert.strictEqual(screen.name, 'screenListSnapshot');
         assert.strictEqual(screen.length, 2);
-        const ctx = { coin: 'BTC', network: 'regtest', config: { BTC_CHAIN_ID: 'chain-a' } };
+        const ctx = { coin: 'BTC', network: 'regtest', config: {} };
         const full = screen(fixture({ btc_chain_id: 'chain-a' }), ctx);
         assert.deepStrictEqual(full.fields.added, ['a', 'b']);
         assert.deepStrictEqual(full.fields.removed, []);
@@ -136,7 +136,7 @@ describe('list share pure settle parts', function () {
         const throwingAdmission = {
             columnsAdmitBlocks() { throw new Error('bad admission column'); },
         };
-        const ctx = { coin: 'BTC', network: 'regtest', config: { BTC_CHAIN_ID: 'chain-a' } };
+        const ctx = { coin: 'BTC', network: 'regtest', config: {} };
         const cases = [
             [fixture({ snapshot_block: '01' }), ctx],
             [fixture({ home_list_index: -1 }), ctx],
@@ -146,7 +146,6 @@ describe('list share pure settle parts', function () {
             [fixture({ home_chain: 'BTC' }), ctx],
             [fixture({ network: 'testnet' }), ctx],
             [fixture({ snapshot_id: 'wrong' }), ctx],
-            [fixture({ btc_chain_id: 'chain-b' }), ctx],
             [fixture({ status: 'pending' }), ctx],
             [fixture({ list_type: 3 }), ctx],
             [fixture({ kind: 'delta' }), ctx],

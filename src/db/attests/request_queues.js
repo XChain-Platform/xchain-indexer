@@ -28,6 +28,7 @@ const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
         CROSS_SETTLE_MAX_PER_BLOCK,
         ORACLE_VM_ROUND_WINDOW,
         ORACLE_VM_MAX_ROWS } = require('../../protocol/constants.js');
+const { fitsUtf8mb3 } = require('../utf8mb3.js');
 
 module.exports = {
 
@@ -123,7 +124,13 @@ module.exports = {
     // payload is the UTF-8 DECODE of the bytes that were hashed, so a non-UTF-8
     // attested body cannot be re-encoded to the same bytes. The caller compares the
     // two and refuses to relay a body it cannot reproduce (see AttestationRelay).
+    //
+    // attests.request_id is utf8mb3, so no row holds a supplementary-plane character and
+    // binding one throws errno 1267 instead of matching nothing; such a filter answers the
+    // empty page an unknown ASCII id gets, without reaching the database.
     async getRelayedAttestationRequests(coin, requestId, limit, cursor){
+        if(requestId && !fitsUtf8mb3(requestId))
+            return [];
         let validStatusId = await this.getStatusId('valid');
         let where = `req.version = 0
                        AND req.origin_chain IS NOT NULL

@@ -39,7 +39,9 @@
  * (DOGE ~6.3M / LTC ~3.16M against BTC ~962K) has no deterministic anchor. Once
  * materialized, the existing v0/v1 machinery services it unchanged. v4 carries
  * the BTC response back so the origin chain can fire the contract callback.
- * Both legs are flag-day gated; see attest_relay_activation.js.
+ * Both legs are gated on the attest_relay_activation.ATTEST_RELAY_ACTIVATION
+ * row in src/protocol_changes/shared_rows_1.js; the ATTEST_RELAY_ORIGIN note in
+ * src/protocol_changes/changes_2.js says why the two may activate in either order.
  *
  * Spec: xchain-documentation/protocol/actions/ATTEST.md
  *

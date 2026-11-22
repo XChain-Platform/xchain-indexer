@@ -219,7 +219,9 @@ module.exports = {
     // complete.
     waitForAttestationResponseSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
-        if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.streamWatermark);
+        if (!this.enabled) return Promise.resolve(this.streamWatermark);
+        if (!Number.isFinite(blockTime) && !this.admissionActiveAt(blockHeight))
+            return Promise.resolve(this.streamWatermark);
         if (this.attestResponseSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.streamWatermark);
 
         let ms = parseInt(timeoutMs);

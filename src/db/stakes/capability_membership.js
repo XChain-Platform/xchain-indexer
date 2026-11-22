@@ -23,7 +23,7 @@
 
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
-const { usesCapabilitySnapshot } = require('../shared.js');
+const { capabilityConfig, usesCapabilitySnapshot } = require('../shared.js');
 const slashAddBack = require('./slash_add_back.js');
 
 // Stake-key path: per-pubkey aggregate of active, non-revoked stakes. From
@@ -88,8 +88,7 @@ module.exports = {
         // for every signer while the capable-set read answered from the mirror.
         if(usesCapabilitySnapshot(this.config, capability))
             return await this.isPubkeyInCapabilitySnapshot(pubkey, capability, blockIndex);
-        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
-        let capConfig = caps[capability];
+        let capConfig = capabilityConfig(this.config, capability);
         if(!capConfig) return false;
         // A caller-supplied threshold (the hub's authoritative MIN_STAKE) is
         // honoured VERBATIM (see getValidatorsByCapability). The local floor is

@@ -271,6 +271,78 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
     });
 });
 
+describe('HubDbSync drain progress while a page is in flight @regression @tier2', function () {
+    let clock;
+    afterEach(function () { if (clock) clock.restore(); clock = null; sinon.restore(); });
+
+    // A hub whose first page resolves only after `delayMs` of fake time.
+    function slowHub(sync, delayMs) {
+        return sinon.stub(sync, 'httpGet').callsFake(() => new Promise(resolve =>
+            setTimeout(() => resolve({ schema_version: HUB_SCHEMA_VERSION, rows: hubTable(5), watermark: 5000 }), delayMs)));
+    }
+
+    it('logs progress at least every 2 x interval while a slow page is pending', async function () {
+        clock = sinon.useFakeTimers({ now: 1750000000000 });
+        const stamps = [];
+        sinon.stub(console, 'log').callsFake((...a) => {
+            if (/bootstrapping price_snapshots/.test(a.join(' '))) stamps.push(Date.now());
+        });
+        const { sync } = makeSync({ bootstrapProgressMs: 15000 });
+        slowHub(sync, 90000);
+        const started = Date.now();
+        const drain = sync.bootstrapTable('price_snapshots');
+        await clock.tickAsync(90000);
+        await drain;
+
+        assert.ok(stamps.length >= 3, 'a 90 s page must not leave the drain silent, got ' + stamps.length);
+        let prev = started;
+        for (const t of stamps) {
+            assert.ok(t - prev <= 30000, 'gap ' + (t - prev) + ' ms exceeds 2 x the interval');
+            prev = t;
+        }
+    });
+
+    it('clears the timer when the drain ends or fails and logs nothing afterwards', async function () {
+        clock = sinon.useFakeTimers({ now: 1750000000000 });
+        const logged = [];
+        sinon.stub(console, 'log').callsFake((...a) => logged.push(a.join(' ')));
+        const { sync } = makeSync({ bootstrapProgressMs: 15000 });
+        slowHub(sync, 20000);
+        const drain = sync.bootstrapTable('price_snapshots');
+        await clock.tickAsync(20000);
+        await drain;
+        assert.strictEqual(clock.countTimers(), 0, 'no timer may outlive a finished drain');
+        const n = logged.length;
+        await clock.tickAsync(120000);
+        assert.strictEqual(logged.length, n, 'no line after completion');
+
+        const bad = makeSync({ bootstrapProgressMs: 15000 });
+        sinon.stub(bad.sync, 'httpGet').rejects(new Error('boom'));
+        await bad.sync.bootstrapTable('price_snapshots').catch(() => null);
+        assert.strictEqual(clock.countTimers(), 0, 'no timer may outlive a failed drain');
+    });
+
+});
+
+describe('HubDbSync drain progress switched off @regression @tier2', function () {
+    let clock;
+    afterEach(function () { if (clock) clock.restore(); clock = null; sinon.restore(); });
+
+    it('stays silent with bootstrapProgressMs = 0', async function () {
+        clock = sinon.useFakeTimers({ now: 1750000000000 });
+        const logged = [];
+        sinon.stub(console, 'log').callsFake((...a) => logged.push(a.join(' ')));
+        const { sync } = makeSync();
+        sync.bootstrapProgressMs = 0;   // the constructor maps a falsy option to its default
+        sinon.stub(sync, 'httpGet').callsFake(() => new Promise(resolve => setTimeout(() => resolve(
+            { schema_version: HUB_SCHEMA_VERSION, rows: hubTable(5), watermark: 5000 }), 90000)));
+        const drain = sync.bootstrapTable('price_snapshots');
+        await clock.tickAsync(90000);
+        await drain;
+        assert.strictEqual(logged.filter(l => /bootstrapping price_snapshots/.test(l)).length, 0);
+    });
+});
+
 describe('HubDbSync price bootstrap throughput and progress @regression @tier2', function () {
     afterEach(function () { sinon.restore(); });
 

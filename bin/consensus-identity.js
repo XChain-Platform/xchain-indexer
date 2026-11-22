@@ -80,6 +80,8 @@
  * named gate instead of two opaque hashes. A reading records that environment as
  * `env` (a flat reading with none was taken bare), and --compare refuses (exit
  * 2) a pin block or reading taken under another, so exit 1 only means drift.
+ * The recorded environment also includes change-table *_REGTEST_TIME levers,
+ * because those rows move the armed-map fingerprint without moving the digest.
  *
  * READING THE TIP AGAINST A REGTEST RAIL, READ-ONLY. Run it on the host that
  * runs the regtest stack, as a user whose grants are SELECT only, with the
@@ -106,6 +108,11 @@
  *                                                     non-negative integer is
  *                                                     refused (exit 2)
  *   node bin/consensus-identity.js --network testnet  default regtest
+ *   node bin/consensus-identity.js --chain LTC        coin config for the state
+ *                                                     read: BTC, LTC or DOGE;
+ *                                                     default BTC
+ *   node bin/consensus-identity.js --db <name>        database for the state read,
+ *                                                     overriding INDEXER_DB_NAME
  *   node bin/consensus-identity.js --assert-no-absent exit 1 if any shared gate
  *                                                     reads the absent sentinel;
  *                                                     a missing registry row is
@@ -118,13 +125,17 @@
  *                                                     side lacks being a
  *                                                     MISMATCH; a pin block
  *                                                     missing network or a
- *                                                     cross-repo value, or a
+ *                                                     required identity value or a
  *                                                     pin block or
  *                                                     flat reading taken under
  *                                                     another regtest arming
  *                                                     environment is refused
- *                                                     (exit 2)
- *   node bin/consensus-identity.js --out <file>       write the identity as JSON
+ *                                                     (exit 2); an UNREADABLE
+ *                                                     fresh armed map exits 1
+ *                                                     even against a pin that
+ *                                                     holds the same sentinel
+ *   node bin/consensus-identity.js --out <file>      write the identity as JSON
+ *   node bin/consensus-identity.js --help             print this usage banner
  *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
  *     node bin/consensus-identity.js
@@ -196,9 +207,9 @@ function codeIdentity(network) {
     const gates = projectGates(rules.gates);
     const armedMapV2 = computeArmedMapFingerprintV2();
     const gatesField = knownGateKeys().join(',');
-    // The shape of the measurement, beside the number it produced. A digest taken over a
-    // list in which some gate read ABSENT is a different question answered, and nothing
-    // about the hash itself says so: 87637dfa and 26ba9cce are equally plausible on sight.
+    // A missing shared gate never reaches this line: loadGateValue throws naming
+    // the key and the tool exits 2 with no pin. Keep absent_gates as a backstop for
+    // the ABSENT peer-diff sentinel the rules module no longer emits.
     const absent = Object.keys(gates).filter(k => gates[k] === ABSENT).sort();
     return {
         network,
@@ -255,6 +266,7 @@ const ARMING_READERS = {
     XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION: (env) => env.XC_BRIDGE_POLICY_APPLY_ORDER_REGTEST_ACTIVATION,
     XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION: (env) => env.XC_VM_EMISSION_AMOUNT_FORMAT_REGTEST_ACTIVATION,
     XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION: (env) => env.XC_EXECUTE_FEE_CAP_REGTEST_ACTIVATION,
+    XC_EXECUTE_NATIVE_METERED_GAS_REGTEST_ACTIVATION: (env) => env.XC_EXECUTE_NATIVE_METERED_GAS_REGTEST_ACTIVATION,
     XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION: (env) => env.XC_VOTE_V3_TICK_EXISTENCE_REGTEST_ACTIVATION,
     XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION: (env) => env.XC_MATCH_ORIGIN_OPEN_REGTEST_ACTIVATION,
     XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION: (env) => env.XC_MATCH_EQUAL_PRICE_OLDEST_FIRST_REGTEST_ACTIVATION,
@@ -264,19 +276,46 @@ const ARMING_READERS = {
     XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION: (env) => env.XC_DIVIDEND_EMPTY_ALLOW_LIST_DENIES_REGTEST_ACTIVATION,
     XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION: (env) => env.XC_AIRDROP_ZERO_LEGS_OMITTED_REGTEST_ACTIVATION,
     XC_TICK_NORMALIZE_REGTEST_ACTIVATION: (env) => env.XC_TICK_NORMALIZE_REGTEST_ACTIVATION,
+    CALLBACK_ARGS_EXACT_REGTEST_TIME: (env) => env.CALLBACK_ARGS_EXACT_REGTEST_TIME,
+    CONTROLLER_CUSTODY_GUARD_REGTEST_TIME: (env) => env.CONTROLLER_CUSTODY_GUARD_REGTEST_TIME,
+    CROSS_CHAIN_ROYALTY_REGTEST_TIME: (env) => env.CROSS_CHAIN_ROYALTY_REGTEST_TIME,
+    DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME: (env) => env.DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME,
+    DISPENSER_REFILL_REGTEST_TIME: (env) => env.DISPENSER_REFILL_REGTEST_TIME,
+    EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME: (env) => env.EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME,
+    FILE_MULTIPART_REGTEST_TIME: (env) => env.FILE_MULTIPART_REGTEST_TIME,
+    GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME: (env) => env.GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME,
+    OWNER_WITHDRAW_OPT_IN_REGTEST_TIME: (env) => env.OWNER_WITHDRAW_OPT_IN_REGTEST_TIME,
+    STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME: (env) => env.STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME,
 };
 
+// Change-table rows read these at module load and feed their resolved values into
+// armed_map_fingerprint. REGTEST_ARMING cannot name them because they are not gates.
+const INDEXER_ONLY_ARMING = Object.freeze([
+    'CALLBACK_ARGS_EXACT_REGTEST_TIME',
+    'CONTROLLER_CUSTODY_GUARD_REGTEST_TIME',
+    'CROSS_CHAIN_ROYALTY_REGTEST_TIME',
+    'DELEGATION_ROTATE_IN_WINDOW_REGTEST_TIME',
+    'DISPENSER_REFILL_REGTEST_TIME',
+    'EXACT_INTEGER_WIRE_FIELDS_REGTEST_TIME',
+    'FILE_MULTIPART_REGTEST_TIME',
+    'GUARD_STAKE_SNAPSHOT_DECIMAL_STRINGS_REGTEST_TIME',
+    'OWNER_WITHDRAW_OPT_IN_REGTEST_TIME',
+    'STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME',
+]);
+
 /**
- * Every variable REGTEST_ARMING names, mapped to its raw value, null when unset.
+ * Every variable REGTEST_ARMING or INDEXER_ONLY_ARMING names, mapped to its raw
+ * value, null when unset.
  * @param {object} env the environment to read
  * @returns {Object<string, string|null>}
  */
 function armingEnv(env) {
     const { REGTEST_ARMING } = require('../src/protocol_changes/shared_rows.js');
     const out = {};
-    for (const name of Array.from(new Set(Object.values(REGTEST_ARMING).map((rule) => rule.env))).sort()) {
+    const names = Object.values(REGTEST_ARMING).map((rule) => rule.env).concat(INDEXER_ONLY_ARMING);
+    for (const name of Array.from(new Set(names)).sort()) {
         // A variable with no reader would arm the digest unrecorded, so it is a refusal.
-        if (!ARMING_READERS[name]) throw new Error(`REGTEST_ARMING names ${name}, which armingEnv has no reader for`);
+        if (!ARMING_READERS[name]) throw new Error(`arming environment names ${name}, which armingEnv has no reader for`);
         const raw = ARMING_READERS[name](env);
         out[name] = raw === undefined ? null : String(raw);
     }
@@ -301,7 +340,10 @@ function armingRefusal(where, moved) {
         + 'take both readings under the same environment');
 }
 
-// The network and the three cross-repo values, which a pin block must hold as strings to be compared at all.
+// Require network, the two cross-repo digests (consensus_rules_digest and gates_field_hash),
+// and repo-local carrier_logic_digest.
+// Keep gates_field, the comparable signed key list behind gates_field_hash, optional for
+// pin-block comparison.
 const REQUIRED_BLOCK_FIELDS = ['network', 'consensus_rules_digest', 'gates_field_hash', 'carrier_logic_digest'];
 
 // The block of a two-block pin whose whole arming env equals this run's (a block with no env was taken bare).
@@ -509,6 +551,11 @@ async function main() {
     if (opts.help) { console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]); return; }
 
     const identity = codeIdentity(opts.network);
+    // Fail an unresolvable armed map before --compare too, so a sentinel pin under the same failure never passes.
+    if (identity.armed_map_fingerprint_unreadable_reason !== null) {
+        console.error(`armed_map_fingerprint UNREADABLE: ${identity.armed_map_fingerprint_unreadable_reason}`);
+        process.exitCode = 1;
+    }
     if (opts.compare) {
         runComparison(opts.compare, identity);
         return;
@@ -518,18 +565,12 @@ async function main() {
     if (opts.stateHash) identity.tip = await readStateHash(opts);
 
     // Checked before either output branch, so --json, --out and the human summary
-    // all carry the same exit code: matching the hub's --assert-no-absent, the check
-    // a restructure that moves a gate carrier out from under this build has to
-    // survive, not just the ability to print a lower resolved count.
+    // all carry the same exit code, matching the hub's --assert-no-absent. This is
+    // a backstop: a moved gate carrier already exits 2 inside codeIdentity().
     if (opts.assertNoAbsent && identity.absent_gates.length) {
         console.error(`ABSENT GATES (${identity.absent_gates.length}): the digest is over a rules set `
             + 'this build has lost:');
         for (const key of identity.absent_gates) console.error(`  ${key}`);
-        process.exitCode = 1;
-    }
-    // Fail an unresolvable armed map like an unread tip, so a sentinel pin never reads as a pass.
-    if (identity.armed_map_fingerprint_unreadable_reason !== null) {
-        console.error(`armed_map_fingerprint UNREADABLE: ${identity.armed_map_fingerprint_unreadable_reason}`);
         process.exitCode = 1;
     }
     // Fail an unread tip in every output mode, so a scripted --json reading never takes a missing ledger read for a pass.
@@ -563,8 +604,8 @@ async function main() {
     console.log(`gates_field_hash:              ${identity.gates_field_hash}`);
     console.log(`  shared gates:                ${identity.gate_key_count - identity.absent_gates.length} resolved, `
                 + `${identity.absent_gates.length} absent`);
-    // Named, not just counted: an absent gate is a legitimate reading of a build that
-    // lacks the carrier, so the reader has to be able to tell that from a wrong one.
+    // Named for parity with the hub readout. This build never emits ABSENT: a missing
+    // carrier is an exit-2 refusal naming the key, not an absent row here.
     for (const key of identity.absent_gates) {
         console.log(`    absent:                    ${key}`);
     }
@@ -581,9 +622,15 @@ async function main() {
     console.log(`tip state_hash:                ${identity.tip.state_hash}`);
 }
 
+function refusalLine(error) {
+    const message = error && error.message ? error.message : String(error);
+    return `consensus-identity: ${String(message).split(/\r?\n/, 1)[0]}`;
+}
+
 if (require.main === module) {
     main().catch((e) => {
-        console.error(e instanceof CliUsageError ? e.message : `consensus-identity: ${e.message}`);
+        // Shared with the hub copy: exit 2 and one prefixed stderr line.
+        console.error(refusalLine(e));
         process.exitCode = 2;
     });
 }
@@ -596,5 +643,7 @@ module.exports = {
     compareIdentity,
     selectedPinBlock,
     armingEnv,
+    refusalLine,
+    INDEXER_ONLY_ARMING,
     REPO_ROOT,
 };

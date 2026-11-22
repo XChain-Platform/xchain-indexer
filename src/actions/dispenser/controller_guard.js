@@ -39,7 +39,7 @@ module.exports = {
         // KNOWN GAP: unlike ORDER and SWAP sales of a controller-bound token
         // (which persist payout_legs at create and apply the royalty split at match
         // time via applyProceedsSplit), DISPENSER sales apply NO royalty/proceeds
-        // split. dispense.js has no royalty path: it credits the give token to the
+        // split. dispense/ has no royalty path: it credits the give token to the
         // buyer directly, and dispense proceeds are native coin paid directly
         // on-chain. So a controller cannot veto or take a cut per buy at dispense
         // time. Honoring the royalty split for dispenser sales would need
@@ -50,7 +50,8 @@ module.exports = {
         // A refill (format-2 edit that tops up GIVE_ESCROW) moves more of the bound
         // token into escrow, so from the DISPENSER_REFILL activation it consults the
         // same `trade` controller as the create. Below it the refill is unguarded,
-        // byte-identically; the protocol change is absent from the table until armed.
+        // byte-identically. The row is registered; mainnet stays UNARMED until the
+        // operator arms it, while testnet and regtest are already armed.
         let isRefill = format==2 && dispenserInfo && giveTokenInfo &&
                        !this.util.isNull(data['GIVE_ESCROW']) && this.util.bcgt(data['GIVE_ESCROW'], 0);
         if(!error && isRefill && await this.actions.protocolChanges.isEnabled('DISPENSER_REFILL', data['BLOCK_INDEX'])){

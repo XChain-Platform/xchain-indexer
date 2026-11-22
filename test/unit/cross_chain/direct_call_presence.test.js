@@ -367,8 +367,8 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
             XChainIndexer.prototype.directCallBarrierClearsAt.call(self, bt, height);
 
         it('keeps the clock verdict below the admission activation when handed a height', function(){
-            // Inert on every network in this train unless the regtest env arms it; the armed
-            // arm (null verdict) is driven in admission_binding.test.js.
+            // Mainnet has no activation, so the clock verdict holds here. The armed arm
+            // (null verdict) is driven in admission_binding.test.js.
             const bt = NOW_S() + 3600;
             const self = ctx({ graceS: 120 });
             self.config = { COIN: 'BTC', NETWORK: 'mainnet' };

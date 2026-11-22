@@ -182,6 +182,7 @@ describe('isMirrorBarrierReason @regression @tier1', function () {
     const SITES = stallReasonSites(INDEXER_SRC, { REMOTE_TOKEN_RETRY_STALL_REASON, BRIDGE_PROOF_BARRIER });
     const REASONS = [...new Set(SITES.map(s => s.reason))];
 
+    // list_share_snapshot_barrier is absent because an unmirrored snapshot is resync-able.
     const HOST_FAULTS = ['vm_executor_unavailable', 'anchor_reward_proof_unavailable',
                          'rollcall_proof_unavailable', 'list_share_halt',
                          'decoder_block_time_unavailable'];

@@ -25,7 +25,8 @@
 'use strict';
 
 const assert = require('assert');
-const { assertConsensusRuntime, assertVmConsensusEpoch, EXPECTED_VM_CONSENSUS_VERSION } = require('../../../../src/actions/index.js');
+const { assertConsensusRuntime, assertVmConsensusEpoch, EXPECTED_VM_CONSENSUS_VERSION,
+    classifyHostPlatform, logHostPlatformNotice } = require('../../../../src/actions/index.js');
 const { skipOrFail } = require('../../../helpers/sibling_checkout.js');
 
 describe('consensus-runtime gate: fail closed on an off-pin engine @regression @tier1', function () {
@@ -46,6 +47,23 @@ describe('consensus-runtime gate: fail closed on an off-pin engine @regression @
             checkConsensusRuntime: () => ({ ok: true, mismatches: [] }),
             describeRuntimeMismatch: () => { throw new Error('must not be described on a match'); }
         };
+        assertConsensusRuntime(vmModule);
+        assert.strictEqual(classifyHostPlatform({ platform: 'linux', arch: 'x64',
+            glibcVersionRuntime: '2.36' }).tier, 'confirmed');
+        assert.strictEqual(classifyHostPlatform({ platform: 'linux', arch: 'arm64',
+            glibcVersionRuntime: null }).tier, 'ci-only');
+        assert.strictEqual(classifyHostPlatform({ platform: 'darwin', arch: 'arm64',
+            glibcVersionRuntime: null }).tier, 'unconfirmed');
+
+        const calls = [];
+        const logger = { info: (msg) => calls.push(['info', msg]), warn: (msg) => calls.push(['warn', msg]) };
+        const confirmed = logHostPlatformNotice(logger, () => ({ header: { glibcVersionRuntime: '2.36' } }));
+        assert.strictEqual(confirmed.tier, process.platform === 'linux' ? 'confirmed' : 'unconfirmed');
+        assert.strictEqual(calls.length, 1);
+        calls.length = 0;
+        assert.doesNotThrow(() => logHostPlatformNotice(logger, () => { throw new Error('probe failed'); }));
+        assert.deepStrictEqual(calls.map(([level]) => level), ['warn']);
+        assert.match(calls[0][1], /advisory changes no validation/);
         assertConsensusRuntime(vmModule);
     });
 

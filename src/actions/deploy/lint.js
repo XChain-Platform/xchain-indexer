@@ -105,6 +105,9 @@ async function resolveLintFlags(deploy, data){
     // The syntax-depth bound: at its height the VM also enforces the delimiter rule on
     // deploy (the execute-time lint always has), so the nesting row above stops mattering.
     let enforceLintSyntaxDepth = gateRegistry.activeAt('vm_lint_syntax_depth_heights.VM_LINT_SYNTAX_DEPTH_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
+    // Regex group nesting is a block-time gate. Before its activation the VM uses
+    // the historical tokenizer and produces the same deploy verdict as this build did.
+    let enforceLintRegexGroupDepth = await deploy.actions.protocolChanges.isEnabled('LINT_REGEX_GROUP_DEPTH', data['BLOCK_INDEX']);
     // banned-rest (unmeterable rest positions) is the deploy half of
     // REST_PATTERN_METER. Its VM twin wraps a top-level rest's source in the
     // size-charged helper; the positions with no addressable source cannot be
@@ -114,7 +117,7 @@ async function resolveLintFlags(deploy, data){
     // the chain already accepted. Below the flag day the rule is dropped and the
     // historical verdict replays byte-identically.
     let enforceBannedRest = await deploy.actions.protocolChanges.isEnabled('REST_PATTERN_METER', data['BLOCK_INDEX']);
-    return { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceLintOptionalChain, enforceBannedWith, enforceLintNestingDepth, enforceLintDestructure, enforceBannedRest, enforceLintSyntaxDepth };
+    return { enforceBannedAsync, enforceLintHardening, enforceBannedGenerator, enforceBannedWasm, enforceLintGlobalAlias, enforceLintOptionalChain, enforceBannedWith, enforceLintNestingDepth, enforceLintDestructure, enforceBannedRest, enforceLintSyntaxDepth, enforceLintRegexGroupDepth };
 }
 
 /**

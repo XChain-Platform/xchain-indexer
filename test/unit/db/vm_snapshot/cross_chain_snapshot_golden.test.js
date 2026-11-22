@@ -1,6 +1,16 @@
-'use strict';
-
-/*
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
  * test/unit/db/vm_snapshot/cross_chain_snapshot_golden.test.js
  *
  * Golden bytes for the cross-chain VM snapshot. buildCrossChainDataForVM and
@@ -8,6 +18,8 @@
  * builds fresh on every call, and the JSON.stringify of each snapshot is compared
  * against a literal string so key order is pinned along with the values.
  */
+
+'use strict';
 
 const assert = require('assert');
 

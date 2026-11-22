@@ -146,10 +146,20 @@ if [ ! -d "$SRC/src" ]; then
         echo "vendor-vm: canonical source not found at $SRC and XCHAIN_REQUIRE_SIBLINGS is set; refusing to skip." >&2
         exit 1
     fi
+    # A present copy must not be vouched for when no canonical bytes were inspected.
+    if [ "$MODE" = "check" ] && { [ -e "$DEST" ] || [ -L "$DEST" ]; }; then
+        if [ "${XCHAIN_VM_ALLOW_UNVERIFIED:-}" = "1" ]; then
+            echo "vendor-vm: UNVERIFIED - vendored copy at $DEST was not compared because canonical source was not found at $SRC" >&2
+            exit 0
+        fi
+        echo "vendor-vm: UNVERIFIED - vendored copy at $DEST cannot be checked: canonical source not found at $SRC" >&2
+        echo "vendor-vm: point XCHAIN_VM_SOURCE at a canonical checkout, remove the vendored copy, or set XCHAIN_VM_ALLOW_UNVERIFIED=1" >&2
+        exit 1
+    fi
     echo "vendor-vm: canonical source not found at $SRC" >&2
     echo "vendor-vm: this is expected in a standalone checkout (no monorepo sibling)." >&2
     echo "vendor-vm: in that case the build pipeline (xchain-node) stages xchain-vm; nothing to do here." >&2
-    # Not an error for a standalone checkout: leave any staged copy untouched.
+    # A standalone checkout with no staged copy has nothing to verify.
     exit 0
 fi
 

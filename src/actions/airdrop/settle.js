@@ -20,6 +20,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const { recordProbeLegVerdict } = require('../send/leg_verdicts.js');
 const gateRegistry = require('../../consensus/gate_registry');
 
 const AIRDROP_ZERO_LEGS_OMITTED_KEY = 'airdrop_zero_legs_omitted_activation.AIRDROP_ZERO_LEGS_OMITTED_ACTIVATION';
@@ -65,6 +66,9 @@ module.exports = {
         let status = (error) ? error : 'valid';
         data['STATUS'] = airdrop['STATUS'] = status;
 
+        // Read-only pre-flight only: keep this leg's own verdict (see recordProbeLegVerdict)
+        recordProbeLegVerdict(data, airdrop, status);
+
         getLogger().info("\t AIRDROP : " + airdrop['TICK'] + ' : ' + this.util.logAmount(airdrop['AMOUNT']) + ' : '+ airdrop['STATUS']);
 
         await this.indexerDb.createAirdrop(airdrop);
@@ -87,7 +91,7 @@ module.exports = {
             // end-of-action updateTokens recomputes GAS supply from the ledger so the per-block
             // sanityCheck (ledger == supply == balances) holds. `balances` was already reduced above.
             if(this.util.bcgt(guardFee, 0)){
-                ctx.debits.push([ctx.gasTick, guardFee, data['SOURCE']]);
+                this.util.billGuardGas(ctx.debits, ctx.gasTick, guardFee, data['SOURCE'], data);
                 this.util.addAddressTicker(data['SOURCE'], ctx.gasTick);
             }
 

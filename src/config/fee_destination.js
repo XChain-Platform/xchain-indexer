@@ -17,6 +17,22 @@
 
 'use strict';
 
+// The configured value that means "no FEE_DESTINATION". The quote, pre-flight and startup
+// surfaces decide fee mode through isUsableFeeDestination so they cannot drift from each other;
+// utility.detectFeePaymentMode applies the same rule at consensus time, and
+// test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js holds the two together.
+const FEE_DESTINATION_PLACEHOLDER = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+
+function isUsableFeeDestination(address){
+    return !!address && address !== FEE_DESTINATION_PLACEHOLDER;
+}
+
+// The configured FEE_DESTINATION when it is usable, otherwise null.
+function usableFeeDestination(config){
+    let address = (config && config['ADDRESS']) ? config['ADDRESS']['FEE_DESTINATION'] : null;
+    return isUsableFeeDestination(address) ? address : null;
+}
+
 // Native-fee chains (LTC/DOGE) MUST have a FEE_DESTINATION. detectFeePaymentMode
 // falls back to 'xchain' for any action when FEE_DESTINATION is unset/placeholder;
 // on BTC that is the intended fallback, but on LTC/DOGE the correct behavior is
@@ -29,10 +45,10 @@
 function assertFeeDestination(fullConfig, coin, network){
     if(coin !== 'BTC'){
         let fd = fullConfig['ADDRESS'] ? fullConfig['ADDRESS']['FEE_DESTINATION'] : null;
-        if(!fd || fd === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'){
+        if(!isUsableFeeDestination(fd)){
             throw new Error('FEE_DESTINATION is required on ' + coin + ' (native-fee chain). It is the consensus-pinned coin-bundle default (src/coins/' + coin + '.js); the XCHAIN_FEE_DESTINATION_' + coin + '_' + String(network).toUpperCase() + ' env var is honored on regtest ONLY and is ignored on mainnet/testnet. Restore the coin-bundle default (or, on regtest, set that env var). A missing value would make every action fall back to XCHAIN fee mode and diverge from a correctly-configured node.');
         }
     }
 }
 
-module.exports = { assertFeeDestination };
+module.exports = { assertFeeDestination, FEE_DESTINATION_PLACEHOLDER, isUsableFeeDestination, usableFeeDestination };

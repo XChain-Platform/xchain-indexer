@@ -25,11 +25,14 @@
  * FEE_DESTINATION) are applied by coins/index.js, so the env surface lives in
  * exactly one place and mainnet/testnet carry none of it.
  *
- * Fields are split by coins/index.js into three consensus classes: the
- * pinned-verify-only subset (gas schedule, staking, fee math, addresses,
- * genesis, network byte-prefixes) is content-hashed and must stay byte-identical
- * fleet-wide; display/connection fields may be served live. See the platform
- * plan and genesis.js for the hash-pin rationale.
+ * Fields are split into three configuration classes. First, consensusSubset()
+ * in coins/index.js is the authoritative list of fields content-hashed into
+ * CONSENSUS_CONFIG_PIN; those fields must stay byte-identical fleet-wide.
+ * Second, genesis pins are excluded from that hash because genesis.js checks
+ * GENESIS_LEDGER_HASH and GENESIS_DUMP_HASH separately. Third, identity,
+ * display and connection fields, including display-only address roles and
+ * chainGenesisHash, are unhashed and may be served live. See the platform plan
+ * and genesis.js for the hash-pin rationale.
  *
  ********************************************************************/
 module.exports = {

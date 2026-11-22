@@ -29,7 +29,8 @@ const FEE_DEST = 'feeDestinationAddr111111111111111';
 function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
                    processThrows = false, processHangs = false, prices = {},
                    addressId = 7, tickId = 3, addressBalances = { 3: '19898' },
-                   balanceThrows = false } = {}){
+                   balanceThrows = false, guardGas = null, guardGasSource = null,
+                   settledGasFee } = {}){
     let calls = { order: [], begin: 0, rollback: 0, processed: null, createdAddresses: 0 };
     let util  = new Utility();
     util.config['COIN']                         = 'BTC';
@@ -48,9 +49,15 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
             calls.processed = tx;
             calls.blockIndexSeen = ctx.indexerDb.blockIndex;
             calls.order.push('process');
+            ctx.util.resetGuardGasTotals();
             if(processThrows) throw new Error('boom');
             if(processHangs) return new Promise(() => {});   // never resolves: the watchdog must fire
-            return { STATUS: status, ACTION_INDEX: actionIndex };
+            if(guardGas !== null)
+                ctx.util.billGuardGas([], 'GAS', guardGas,
+                    guardGasSource === null ? tx.source : guardGasSource, { DRY_RUN: true });
+            let result = { STATUS: status, ACTION: tx.data.split('|')[0], ACTION_INDEX: actionIndex, SOURCE: tx.source };
+            if(settledGasFee !== undefined) result['PROBE_SETTLED_GAS_FEE'] = settledGasFee;
+            return result;
         },
         dryRunAction:         Actions.prototype.dryRunAction,
         priceFeeQuote:        Actions.prototype.priceFeeQuote,
@@ -75,7 +82,9 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.deepStrictEqual(calls.order, ['begin', 'process', 'getFeeRecord:55', 'rollback'],
             'fee row read after the handler, before rollback');
         assert.strictEqual(calls.processed.data, 'ISSUE|0|NEWTOK|1000', 'action string reassembled');
+        assert.strictEqual(calls.processed.fee, 0, 'synthetic fee matches the decoder input');
         assert.ok(String(calls.processed.tx_hash).startsWith('DRYRUN-'), 'tx_hash marked DRYRUN');
+        assert.strictEqual(calls.processed.dry_run, true, 'every synthetic run carries the disclosure marker');
         assert.strictEqual(calls.processed.block_index, 100, 'synthetic tx anchored at tip');
         // Height-gated db reads see the synthetic height, and the boot-time null comes back
         assert.strictEqual(calls.blockIndexSeen, 100, 'the handler runs with indexerDb.blockIndex at the synthetic height');
@@ -113,6 +122,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         await ctx.dryRunAction.call(ctx, { action: 'DISPENSER', params: ['0'], source: 's',
             probeFeeDestination: FEE_DEST, feeProbe: true, timeoutMs: 300000 });
         assert.strictEqual(calls.processed.fee_probe, true);
+        assert.strictEqual(calls.processed.dry_run, true);
     });
 });
 
@@ -125,6 +135,7 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         await ctx.dryRunAction.call(ctx, { action: 'DISPENSER', params: ['0'], source: 's',
             feeOutputs: [], timeoutMs: 300000 });
         assert.strictEqual(calls.processed.fee_probe, false);
+        assert.strictEqual(calls.processed.dry_run, true);
     });
 
     it('both public read-only surfaces ask for the probe marker', () => {
@@ -160,6 +171,43 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         let { ctx } = makeCtx({ status: 'valid', feeAmount: null });
         let r = await ctx.dryRunAction.call(ctx, { action: 'MINT', params: ['0', 'TOK'], source: 'src1', timeoutMs: 300000 });
         assert.strictEqual(r.xchainFee, '0');
+        let charged = makeCtx({ status: 'valid', feeAmount: null, settledGasFee: '0.50000000' });
+        r = await charged.ctx.dryRunAction.call(charged.ctx, { action: 'EXECUTE', params: ['0'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(r.xchainFee, '0.50000000', 'settled VM debit overrides the absent fee row');
+        let unknown = makeCtx({ status: 'valid', feeAmount: null });
+        r = await unknown.ctx.dryRunAction.call(unknown.ctx, { action: 'EXECUTE', params: ['0'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(r.xchainFee, null, 'a VM run with no settled figure cannot report free');
+    });
+
+    it('reports billed guard gas separately without changing xchainFee', async () => {
+        let { ctx } = makeCtx({ status: 'valid', feeAmount: null, guardGas: '0.12500000' });
+        let r = await ctx.dryRunAction.call(ctx,
+            { action: 'SEND', params: ['0'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(r.xchainFee, '0');
+        assert.strictEqual(r.guardGasFee, '0.125');
+        let rpc = await ctx.computeFeeQuoteDryRun.call(ctx,
+            { action: 'SEND', params: ['0'], source: 'src1' });
+        assert.strictEqual(rpc.guardGasFee, '0.12500000');
+    });
+
+    it('returns zero for no guard and excludes gas billed to another source', async () => {
+        let plain = makeCtx({ status: 'valid', feeAmount: null });
+        let plainRun = await plain.ctx.dryRunAction.call(plain.ctx,
+            { action: 'SEND', params: ['0'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(plainRun.guardGasFee, '0');
+
+        let nested = makeCtx({ status: 'valid', feeAmount: null,
+            guardGas: '0.25000000', guardGasSource: 'another-source' });
+        let nestedRun = await nested.ctx.dryRunAction.call(nested.ctx,
+            { action: 'SEND', params: ['0'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(nestedRun.guardGasFee, '0');
+    });
+
+    it('withholds guard gas when the action verdict is not valid', async () => {
+        let { ctx } = makeCtx({ status: 'invalid: refused', feeAmount: null, guardGas: '0.12500000' });
+        let r = await ctx.dryRunAction.call(ctx,
+            { action: 'SEND', params: ['0'], source: 'src1', timeoutMs: 300000 });
+        assert.strictEqual(r.guardGasFee, null);
     });
 
     it('fresh (never-indexed) source is dry-run normally: dense in-txn ids roll back cleanly', async () => {
@@ -207,6 +255,17 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.match(r.error, /handler threw: fee read exploded/);
         assert.strictEqual(r.xchainFee, null, 'an incomplete read-back cannot claim the action is free');
         assert.strictEqual(calls.rollback, 1, 'the failed read-back still releases the transaction');
+
+        ctx.priceFeeQuote = async () => { throw new Error('an incomplete run must not be priced'); };
+        const raw = await ctx.computeFeeQuoteDryRun.call(ctx, {
+            action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1'
+        });
+        assert.strictEqual(raw.valid, null, 'the raw surface must not turn the partial status into true');
+        assert.strictEqual(raw.noVerdict, true);
+        assert.strictEqual(raw.retryable, true);
+        assert.strictEqual(raw.status, null);
+        assert.match(raw.error, /fee read exploded/);
+        assert.strictEqual(raw.xchainFee, null);
     });
 });
 
@@ -273,6 +332,22 @@ describe('_dryRunAction (shared dry-run engine)', () => {
 
 describe('computeFeeQuoteDryRun (raw regtest surface)', () => {
 
+    it('returns folded leg and sub-command disclosures from the raw run', async () => {
+        let { ctx } = makeCtx({ status: 'valid', feeAmount: null });
+        const legs = [{ tick: 'TEST', amount: '1', destination: 'd1', status: 'invalid: first' },
+                      { tick: 'TEST', amount: '1', destination: 'd2', status: 'valid' }];
+        const subCommands = [{ position: 0, action: 'SEND', status: 'invalid: first', refused: null }];
+        ctx.dryRunAction = async () => ({
+            blockIndex: 100, blockTime: 1000, status: 'invalid: first', error: null,
+            xchainFee: null, legs, subCommands,
+        });
+        const result = await ctx.computeFeeQuoteDryRun.call(ctx,
+            { action: 'SEND', params: ['1'], source: 'src1' });
+        assert.strictEqual(result.valid, false);
+        assert.deepStrictEqual(result.legs, legs);
+        assert.deepStrictEqual(result.subCommands, subCommands);
+    });
+
     it('valid run with prices: handler verdict + best-effort native sizing merged', async () => {
         let { ctx, calls } = makeCtx({ status: 'valid', prices: BTC_PRICES });
         let r = await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK', '1000'], source: 'src1' });
@@ -316,7 +391,9 @@ describe('computeFeeQuoteDryRun (raw regtest surface)', () => {
         let { ctx, calls } = makeCtx({ processHangs: true, prices: BTC_PRICES });
         ctx.config['BLOCK_PROCESS_TIMEOUT'] = 50;   // tiny so the watchdog fires fast
         let r = await ctx.computeFeeQuoteDryRun.call(ctx, { action: 'ISSUE', params: ['0', 'X'], source: 'src1' });
-        assert.strictEqual(r.valid, false);
+        assert.strictEqual(r.valid, null, 'a timed-out run produced no chain verdict');
+        assert.strictEqual(r.noVerdict, true);
+        assert.strictEqual(r.retryable, true);
         assert.ok(/timeout|exceeded/i.test(r.error), r.error);
         assert.strictEqual(calls.rollback, 1);
     });

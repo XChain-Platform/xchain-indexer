@@ -11,7 +11,8 @@
 #
 # Vendored set: the client entry (hub_db_sync.js), its parts directory
 # (hub_db_sync/, every .js under it, subdirectories included), the hub-list
-# modules it requires (hub_client/hub_list.js and hub_client/hub_list_refresh.js),
+# modules it requires (hub_client/hub_list.js, hub_client/hub_list_refresh.js,
+# and hub_client/request.js),
 # the schema-version lockstep constant (hub_schema_version.js), the three activation
 # gate modules the client requires by relative path (DEP_FILES below, under
 # src/consensus/gates/ since W5; a consumer without them fails at require on
@@ -95,16 +96,68 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$HERE/../src"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
-HUB_FILES="hub_db_sync.js hub_schema_version.js hub_client/hub_list.js hub_client/hub_list_refresh.js"
+HUB_FILES="hub_db_sync.js hub_schema_version.js hub_client/hub_list.js hub_client/hub_list_refresh.js hub_client/request.js"
 HUB_DIRS="hub_db_sync"
 DEP_FILES="consensus/gates/mirror_admission_gate.js consensus/gates/mirror_admission_margin_gate.js"
 # What DEP_FILES require, relative to the consumer's src/: present or the modules
 # cannot load (see the header).
 REGISTRY_ENTRY="consensus/gate_registry.js"
+# Consumer-owned logging and registry modules stay local. The quorum module is
+# a hand-maintained byte twin checked by the consumer conformance suite.
+REQUIRE_ALLOWLIST="observability/index.js consensus/gate_registry.js consensus/stake_weighted_quorum.js"
 SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql list_snapshots.sql remote_token_snapshots.sql"
 SERVICES="xchain-explorer"
 
+check_require_closure() {
+    CANON_SRC="$SRC" HUB_FILES="$HUB_FILES" HUB_DIRS="$HUB_DIRS" DEP_FILES="$DEP_FILES" \
+        REQUIRE_ALLOWLIST="$REQUIRE_ALLOWLIST" node <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const src = path.resolve(process.env.CANON_SRC);
+const split = name => String(process.env[name] || '').trim().split(/\s+/).filter(Boolean);
+const files = [];
+
+function walkJs(dir){
+    for(const entry of fs.readdirSync(dir, { withFileTypes: true })){
+        const target = path.join(dir, entry.name);
+        if(entry.isDirectory()) walkJs(target);
+        else if(entry.name.endsWith('.js')) files.push(target);
+    }
+}
+
+for(const file of split('HUB_FILES')) files.push(path.join(src, 'hub', file));
+for(const dir of split('HUB_DIRS')) walkJs(path.join(src, 'hub', dir));
+for(const file of split('DEP_FILES')) files.push(path.join(src, file));
+
+const slash = value => value.split(path.sep).join('/');
+const relative = file => slash(path.relative(src, file));
+const vendored = new Set(files.map(relative));
+const allowed = new Set(split('REQUIRE_ALLOWLIST'));
+const missing = [];
+const requirePattern = /require\(\s*['"](\.\.?\/[^'"]+)['"]\s*\)/g;
+
+for(const file of files){
+    const source = fs.readFileSync(file, 'utf8');
+    let match;
+    while((match = requirePattern.exec(source)) !== null){
+        let target = path.resolve(path.dirname(file), match[1]);
+        if(!path.extname(target)) target += '.js';
+        const dependency = relative(target);
+        if(!vendored.has(dependency) && !allowed.has(dependency))
+            missing.push(relative(file) + ' requires unguarded ' + dependency);
+    }
+}
+
+if(missing.length){
+    for(const message of missing) process.stderr.write('DRIFT: ' + message + '\n');
+    process.exitCode = 1;
+}
+NODE
+}
+
 drift=0
+if ! check_require_closure; then drift=1; fi
 caller_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [ "$CHECK" -eq 1 ] && [ "$(basename "$caller_root")" = "xchain-explorer" ]; then
     canonical_paths=()

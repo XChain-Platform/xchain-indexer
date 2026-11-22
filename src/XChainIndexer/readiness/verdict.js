@@ -66,26 +66,43 @@ function nextBehindSince(previous, behind, now, lastBlockCommittedAt){
     return (!validPrevious || committedAfter) ? now : previous;
 }
 
+// The lag that drives nextBehindSince. A stale chain tip is unknown, not caught up: a
+// positive decoder lag is still a known lower bound, but a decoder level with the
+// indexer says nothing about the chain, so it keeps the episode instead of ending it.
+function episodeBehind(decoderLag, chainLag, chainTipStale){
+    if(chainTipStale === true)
+        return (Number.isFinite(decoderLag) && decoderLag > 0) ? decoderLag : null;
+    return blocksBehind(decoderLag, chainLag);
+}
+
 // The readiness verdict. Every input is a plain value so the rule is testable without
-// a block loop. Returns { ready, reasons, behind, noCommitForMs, chainLagKnown }
-// where reasons is the ordered list of every condition that holds (empty when ready):
+// a block loop. Returns { ready, reasons, behind, noCommitForMs, behindNoCommitForMs,
+// chainTipStaleForMs, chainLagKnown }, where reasons lists every condition that holds:
 //   indexer_db_unreachable - the committed height cannot be read.
 //   wedged                 - the liveness wedge (stallClass 'wedged').
 //   poll_silent            - the block-poll loop has stopped iterating.
-//   decoder_reorg_halt     - the paired decoder carries a live REORG_HALT marker, so
-//                            nothing past the halted height will ever arrive.
+//   decoder_reorg_halt     - the paired decoder carries a live REORG_HALT marker, or
+//                            no halt probe has completed a read yet. The latter fails
+//                            closed and is identified by the response's unverified
+//                            stallReason while decoderReorgHalted remains false.
 //   barrier_ceiling_exceeded - one block has been held behind a barrier for longer
 //                            than its named ceiling.
-//   behind_tip_no_commit   - behind a known tip for noCommitMs without a commit.
+//   behind_tip_no_commit   - behind a known tip for noCommitMs without a commit, including
+//                            an episode first observed against a known tip and kept open
+//                            after that tip source goes stale.
 //   chain_tip_stale        - the configured tip source has stayed stale for a full
 //                            readiness window, so current state is unverified.
 // A future-stamped block wait is never behind_tip_no_commit: consensus forbids
-// committing that block yet, so the indexer holds everything it may hold.
+// committing that block yet, so the indexer holds everything it may hold. Its
+// clear instant also starts a fresh readiness window once the wait has lapsed.
+// That exemption does not cover chain_tip_stale: waiting on block time says nothing
+// about whether the configured tip source is reachable.
 function readinessVerdict(input){
     let {
         now, indexerDbUnreachable, wedged, pollSilent, decoderReorgHalted,
         barrierCeilingExceeded, decoderLag, chainLag, chainTipStale, chainTipStaleSince,
-        waitingOnFutureBlock, lastBlockCommittedAt, startedAt, behindSince, noCommitMs
+        waitingOnFutureBlock, futureWaitClearsAt, lastBlockCommittedAt, startedAt,
+        behindSince, noCommitMs
     } = input || {};
     let reasons = [];
     if(indexerDbUnreachable) reasons.push('indexer_db_unreachable');
@@ -95,6 +112,7 @@ function readinessVerdict(input){
     if(barrierCeilingExceeded) reasons.push('barrier_ceiling_exceeded');
 
     let behind = blocksBehind(decoderLag, chainLag);
+    let episodeCarried = chainTipStale === true && Number.isFinite(behindSince) && behindSince > 0;
     // Since boot when nothing has committed: a restart must not reset the clock to
     // "never judged", which is the hole stallWedged() has by design.
     let progressAt = Number.isFinite(lastBlockCommittedAt) && lastBlockCommittedAt > 0
@@ -104,16 +122,18 @@ function readinessVerdict(input){
     let behindWindowAt = Number.isFinite(behindSince) && behindSince > 0
         ? Math.max(progressAt || 0, behindSince)
         : progressAt;
+    if(Number.isFinite(futureWaitClearsAt) && futureWaitClearsAt > 0)
+        behindWindowAt = Math.max(behindWindowAt || 0, futureWaitClearsAt);
     let behindNoCommitForMs = (behindWindowAt != null && Number.isFinite(now))
         ? Math.max(0, now - behindWindowAt)
         : null;
     let chainTipStaleForMs = chainTipStale && Number.isFinite(chainTipStaleSince)
         && Number.isFinite(now) ? Math.max(0, now - chainTipStaleSince) : null;
-    if(behind != null && behind > 0 && !waitingOnFutureBlock
+    if(((behind != null && behind > 0) || episodeCarried) && !waitingOnFutureBlock
        && Number.isFinite(noCommitMs) && noCommitMs > 0
        && behindNoCommitForMs != null && behindNoCommitForMs > noCommitMs)
         reasons.push('behind_tip_no_commit');
-    if(chainTipStale && !waitingOnFutureBlock
+    if(chainTipStale
        && Number.isFinite(noCommitMs) && noCommitMs > 0
        && chainTipStaleForMs != null && chainTipStaleForMs > noCommitMs)
         reasons.push('chain_tip_stale');
@@ -137,5 +157,5 @@ function resolveReadyNoCommitMs(raw){
 }
 
 module.exports = { READY_NO_COMMIT_DEFAULT_MS, CHAIN_TIP_TTL_DEFAULT_MS, CHAIN_TIP_TIMEOUT_DEFAULT_MS,
-                   blocksBehind, nextBehindSince, readinessVerdict, resolvePositiveIntMs,
+                   blocksBehind, episodeBehind, nextBehindSince, readinessVerdict, resolvePositiveIntMs,
                    resolveReadyNoCommitMs };

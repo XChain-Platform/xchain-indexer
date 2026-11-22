@@ -43,9 +43,10 @@ module.exports = {
             let dispense  = dispenses[idx];
             let dispenser = dispenserInfo[dispense['DISPENSER_ACTION_INDEX']];
 
-            // Defensive: dispenserInfo is only populated for known dispensers (see the
-            // 'invalid: Dispenser unknown' skip above). A missing entry here means this
-            // dispense has nothing to settle against, so skip it rather than throwing.
+            // Skip unknown dispensers upstream in priceDispenseForDispenser.
+            // Treat a missing entry here as an ACTION_INDEX mismatch.
+
+            // Protect escrow settlement from throwing when the backstop fires.
             if(!dispenser)
                 return;
 

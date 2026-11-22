@@ -16,6 +16,10 @@
 -- rollback: 'special' on close_block (table_lifecycle.js). These rows are derived
 -- at the close block and delete with it, so a reorg past C removes the epoch's
 -- verdict along with the synthetic UNSTAKE actions and the reward row it produced.
+--
+-- ROLLCALL_ACTIVATION.mainnet is 0, so a mainnet BTC indexer writes a row here from its first close,
+-- even with no validators, and must have this table first. The "mainnet ships null" line in the
+-- 2026-08-30 rollcall-tables migration header is wrong, and stays as written since migrations are checksummed.
 
 -- responsible_set_json PINS MEMBERSHIP, and the K-streak is unimplementable
 -- without it. Step 7 skips epochs at which a source was not in R -- that is what

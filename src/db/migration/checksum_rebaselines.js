@@ -206,6 +206,14 @@ const MIGRATION_CHECKSUM_REBASELINES = {
         from: '05dfd2ef7d246929a451521aa7c4c6e0f21faf019dd06f1f16384a450675267c', // orphaned blob 8a293ccf, pre-scrub
         to:   '0796c26842434c39b056e9875ba5ee7dbbcfd92d340e2899f7921e03147c5458',
     },
+    // Added the deploy-precondition header tag and its explanatory comment block.
+    // Comment lines only: all eleven ALTER TABLE statements are byte-identical to
+    // the sole committed predecessor, 11ac3f8d. One `from` therefore covers every
+    // database that could have recorded this file before the retag.
+    '2026-09-02-utf8mb4-raw-wire-fields-not-null.sql': {
+        from: '08f543fd5439280e9ffd4d7396b05b33880b6b9b07240a43d273e7110267d4e6',
+        to:   'f51ced48fe9ba1c747bafa08abd14167c4251fbf7767dd538bcf190578754b12',
+    },
     // Added the `deploy-precondition=required` header tag (and the DEPLOY PRECONDITION
     // comment block explaining it) when the reward-identity startup assertion landed, the
     // same retag the pubkeys widen carries above. Comment lines only: the four ALTER TABLE

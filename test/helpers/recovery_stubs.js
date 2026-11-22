@@ -187,9 +187,9 @@ function callRows(calls, sql, params) {
     }
     if (sql.startsWith('INSERT INTO cross_chain_calls')) {
         // finalizing_view is the last bound value (after validator_signatures).
-        calls.push({ id: params[0], call_id: params[1], phase: params[2],
-                     effective_time: params[14], status: params[15],
-                     validator_signatures: params[18], finalizing_view: params[params.length - 1] });
+        calls.push({ id: calls.length + 1, call_id: params[0], phase: params[1],
+                     effective_time: params[13], status: params[14],
+                     validator_signatures: params[17], finalizing_view: params[params.length - 1] });
         return [];
     }
     return undefined;
@@ -198,17 +198,30 @@ function callRows(calls, sql, params) {
 function bridgePolicyRows(bridges, policies, sql, params) {
     if (sql.startsWith('SELECT transfer_id FROM bridge_transfers'))
         return bridges.filter(r => r.transfer_id === params[0]).map(r => ({ transfer_id: r.transfer_id }));
+    // The revive statement also starts with the status-only prefix, so it is matched first.
+    if (sql.startsWith('UPDATE bridge_transfers SET status') && sql.includes('validator_signatures = ?')) {
+        for (let row of bridges) {
+            if (row.transfer_id !== params[5]) continue;
+            row.status = params[0];
+            row.validator_signatures = params[1];
+            row.finalizing_view = params[2];
+            row.effective_time = params[3];
+            row.snapshot_block = params[4];
+        }
+        return [];
+    }
     if (sql.startsWith('UPDATE bridge_transfers SET status')) {
         for (let row of bridges) if (row.transfer_id === params[1]) row.status = params[0];
         return [];
     }
     if (sql.startsWith('INSERT INTO bridge_transfers')) {
-        bridges.push({ id: params[0], transfer_id: params[1], snapshot_block: params[2], network: params[3],
-                       src_chain: params[4], src_action_index: params[5], src_address: params[6],
-                       dest_chain: params[7], dest_address: params[8], tick: params[9], decimals: params[10],
-                       amount: params[11], effective_time: params[12], admit_block_btc: params[13],
-                       admit_block_ltc: params[14], admit_block_doge: params[15], finalizing_view: params[16],
-                       validator_signatures: params[17], status: params[18] });
+        // Recovery binds no id, so the row takes a local surrogate like AUTO_INCREMENT.
+        bridges.push({ id: bridges.length + 1, transfer_id: params[0], snapshot_block: params[1], network: params[2],
+                       src_chain: params[3], src_action_index: params[4], src_address: params[5],
+                       dest_chain: params[6], dest_address: params[7], tick: params[8], decimals: params[9],
+                       amount: params[10], effective_time: params[11], admit_block_btc: params[12],
+                       admit_block_ltc: params[13], admit_block_doge: params[14], finalizing_view: params[15],
+                       validator_signatures: params[16], status: params[17] });
         return [];
     }
     if (sql.startsWith('SELECT snapshot_id FROM policy_snapshots WHERE snapshot_id'))
@@ -217,13 +230,13 @@ function bridgePolicyRows(bridges, policies, sql, params) {
         return policies.filter(r => r.network === params[0] && r.origin_chain === params[1] &&
             r.tick === params[2] && Number(r.policy_seq) === Number(params[3]))
             .map(r => ({ snapshot_id: r.snapshot_id }));
-    if (sql.startsWith('INSERT IGNORE INTO policy_snapshots')) {
-        policies.push({ id: params[0], snapshot_id: params[1], snapshot_block: params[2], network: params[3],
-                        origin_chain: params[4], tick: params[5], policy_seq: params[6], origin_block: params[7],
-                        policy_hash: params[8], allow_list: params[9], block_list: params[10], sleeping: params[11],
-                        effective_time: params[12], admit_block_btc: params[13], admit_block_ltc: params[14],
-                        admit_block_doge: params[15], finalizing_view: params[16],
-                        validator_signatures: params[17], status: params[18] });
+    if (/^\s*INSERT\s+(?:IGNORE\s+)?INTO\s+policy_snapshots/i.test(String(sql))) {
+        policies.push({ id: policies.length + 1, snapshot_id: params[0], snapshot_block: params[1], network: params[2],
+                        origin_chain: params[3], tick: params[4], policy_seq: params[5], origin_block: params[6],
+                        policy_hash: params[7], allow_list: params[8], block_list: params[9], sleeping: params[10],
+                        effective_time: params[11], admit_block_btc: params[12], admit_block_ltc: params[13],
+                        admit_block_doge: params[14], finalizing_view: params[15],
+                        validator_signatures: params[16], status: params[17] });
         return [];
     }
     return undefined;
@@ -233,7 +246,7 @@ function checkpointPriceRows(checkpoints, prices, sql, params) {
     if (sql.startsWith('SELECT chain, network, block_index'))
         return checkpoints.filter(r => r.chain === params[0] && r.network === params[1] &&
             Number(r.checkpoint_seq) === Number(params[2])).map(r => Object.assign({}, r));
-    let checkpointInsert = /^\s*INSERT\s+IGNORE\s+INTO\s+state_checkpoints\s*\(([^)]*)\)/i.exec(String(sql));
+    let checkpointInsert = /^\s*INSERT\s+(?:IGNORE\s+)?INTO\s+state_checkpoints\s*\(([^)]*)\)/i.exec(String(sql));
     if (checkpointInsert) {
         let columns = checkpointInsert[1].split(',').map(column => column.trim().replace(/^`|`$/g, ''));
         assert.strictEqual(columns.length, params.length, 'state_checkpoints column/value count');
@@ -255,8 +268,9 @@ function checkpointPriceRows(checkpoints, prices, sql, params) {
     }
     if (sql.startsWith('INSERT INTO price_snapshots')) {
         let incoming = {};
-        let columns = ['id', 'round_number', 'coin_pair'].concat(priceColumns);
+        let columns = ['round_number', 'coin_pair'].concat(priceColumns);
         columns.forEach((column, index) => { incoming[column] = params[index]; });
+        incoming.id = prices.length + 1;
         prices.push(incoming);
         return [];
     }

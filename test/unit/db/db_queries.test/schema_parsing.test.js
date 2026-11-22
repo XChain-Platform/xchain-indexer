@@ -127,11 +127,18 @@ describe('Database.parseExpectedColumns() @regression @tier1', function () {
             'CREATE TABLE `test` (',
             '  `id` INT NOT NULL AUTO_INCREMENT,',
             '  `name` VARCHAR(250) NULL,',
-            '  PRIMARY KEY (`id`)',
+            '  `fulltext_score` INT NULL,',
+            '  `shape` GEOMETRY NOT NULL,',
+            '  PRIMARY KEY (`id`),',
+            '  FULLTEXT KEY `ft_name` (`name`),',
+            '  FULLTEXT INDEX `ft_name_2` (`name`),',
+            '  FULLTEXT `ft_name_3` (`name`),',
+            '  SPATIAL INDEX `sp_shape` (`shape`)',
             ') ENGINE=InnoDB;'
         ].join('\n');
         const cols = db.parseExpectedColumns(sql);
         assert.ok(Array.isArray(cols));
+        assert.deepStrictEqual(cols.map(c => c.name), ['id', 'name', 'fulltext_score', 'shape']);
         const id   = cols.find(c => c.name === 'id');
         const name = cols.find(c => c.name === 'name');
         assert.ok(id, 'id column should be parsed');

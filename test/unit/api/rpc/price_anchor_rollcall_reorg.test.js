@@ -14,8 +14,8 @@
  * The federation-read JSON-RPC families for price batches, anchors, roll calls
  * and reorg history (src/api/rpc/price_batches.js, anchor.js, rollcall.js,
  * reorg_history.js), driven against the indexer double: each read resolves
- * through apiView(), binds the arguments its query layer expects, and answers
- * a missing database or a throw with its own error.
+ * through apiView(), binds the arguments its query layer expects, and keeps
+ * price-batch rows when only their decoder landing times are unavailable.
  */
 
 'use strict';
@@ -42,7 +42,7 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
     it('getpricebatches validates the window, reads valid batches over it and pages by truncation', async function () {
         const rows = [{ first_round: 3, last_round: 5, block_index: 9, action_index: 40 }];
         const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows });
-        const decoderView = recordingView({ protocolTimeForStoredBlock: 1700000900 });
+        const decoderView = recordingView({ protocolTimesForStoredBlocks: new Map([[9, 1700000900]]) });
         const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view, decoderView }) });
         const res = await rpc.getpricebatches({ first_round: 1, last_round: 10, limit: 1 });
         assert.strictEqual(res.block_index, 20);
@@ -65,17 +65,21 @@ describe('JSON-RPC price batch family @regression @tier1', function () {
         const times = { 9: 1700000900, 12: false };
         const view = recordingView({ getLatestBlockIndex: 20, getPriceBatchesOverlappingRange: rows });
         // The decoder database, as block_parse.js reads the time the push carried.
-        const decoderView = recordingView({ protocolTimeForStoredBlock: (block) => times[block] });
+        const decoderView = recordingView({ protocolTimesForStoredBlocks: (blocks) =>
+            new Map(blocks.filter(block => times[block] !== false).map(block => [block, times[block]])) });
         const rpc = buildPriceBatchesRpc({ indexer: fakeIndexer({ view, decoderView }) });
         const res = await rpc.getpricebatches({ first_round: 1, last_round: 10 });
         assert.deepStrictEqual(res.batches.map(b => [b.first_round, b.block_index, b.block_time]),
             [[3, 9, 1700000900], [4, 9, 1700000900], [7, 12, null]]);
-        // One protocol-time read per distinct landing block.
-        assert.deepStrictEqual(decoderView.calls.filter(c => c[0] === 'protocolTimeForStoredBlock'),
-            [['protocolTimeForStoredBlock', 9], ['protocolTimeForStoredBlock', 12]]);
-        sinon.stub(observability.getLogger(), 'error');
-        decoderView.protocolTimeForStoredBlock = async () => { throw new Error('x'); };
-        assert.deepStrictEqual(await rpc.getpricebatches({ first_round: 1, last_round: 2 }), { error: 'failed to look up price batches' });
+        assert.deepStrictEqual(decoderView.calls,
+            [['protocolTimesForStoredBlocks', [9, 12]]]);
+        const logError = sinon.stub(observability.getLogger(), 'error');
+        decoderView.protocolTimesForStoredBlocks = async () => { throw new Error('x'); };
+        const degraded = await rpc.getpricebatches({ first_round: 1, last_round: 2 });
+        assert.strictEqual(degraded.block_index, 20);
+        assert.deepStrictEqual(degraded.batches.map(b => [b.first_round, b.block_index, b.block_time]),
+            [[3, 9, null], [4, 9, null], [7, 12, null]]);
+        assert.strictEqual(logError.callCount, 1);
     });
 
     it('getpricebatchpayload rebuilds the committed valid batch body that pushpricebatch received', async function () {
@@ -266,9 +270,19 @@ describe('JSON-RPC reorg history family @regression @tier1', function () {
 
     it('falls back to the indexer\'s last-known halt flag when the probe faults', async function () {
         const decoderView = recordingView({ getReorgEventsSince: [], isReorgHalted: () => { throw new Error('probe'); } });
-        const rpc = buildReorgHistoryRpc({ indexer: fakeIndexer({ decoderView, decoderReorgHalted: null }) });
-        const res = await rpc.getreorghistory({});
-        assert.strictEqual(res.decoderReorgHalted, false);
+        const probe = async (decoderReorgHalted) => buildReorgHistoryRpc({ indexer: fakeIndexer({ decoderView, decoderReorgHalted }) })
+            .getreorghistory({});
+        // no probe has ever read the marker: published as halted and flagged unverified
+        const unread = await probe(null);
+        assert.strictEqual(unread.decoderReorgHalted, true);
+        assert.strictEqual(unread.decoderReorgHaltUnverified, true);
+        // a confirmed last-known state is carried over unchanged and is not unverified
+        const clear = await probe(false);
+        assert.strictEqual(clear.decoderReorgHalted, false);
+        assert.strictEqual(clear.decoderReorgHaltUnverified, false);
+        const halted = await probe(true);
+        assert.strictEqual(halted.decoderReorgHalted, true);
+        assert.strictEqual(halted.decoderReorgHaltUnverified, false);
     });
 
     it('validates, refuses without the decoder database and reports a throw', async function () {

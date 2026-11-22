@@ -113,7 +113,7 @@ describe('a contract stake locks tokens rather than destroying them', function()
         // The guard fee is destroyed, so supply SHOULD fall for it. Escrowing it would be
         // the mirror-image error of the one being fixed.
         const guard = contractBlock.slice(contractBlock.indexOf('guardFee'));
-        assert.ok(/debits\.push\(\[this\.config\['GAS'\], guardFee/.test(guard),
+        assert.ok(/debits\.push\(\[this\.config\['GAS'\], guardFee|billGuardGas\(debits, this\.config\['GAS'\], guardFee/.test(guard),
             'the guard fee stopped being debited');
         assert.ok(!/escrows\.push\(\[this\.config\['GAS'\], guardFee/.test(guard),
             'the guard fee is escrowed, but it is burned - supply must fall for it');

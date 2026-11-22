@@ -65,4 +65,10 @@ describe('PreflightMemo @regression', function () {
         assert.strictEqual(m.size, 0);
         assert.strictEqual(m.get('a'), null);
     });
+
+    it('uses a fixed-size digest even for caller-sized wire text', function () {
+        let m = new PreflightMemo();
+        let key = m.key('SEND', '\0'.repeat(1024 * 1024), 's'.repeat(4096), 100, 'native');
+        assert.match(key, /^[0-9a-f]{64}$/);
+    });
 });

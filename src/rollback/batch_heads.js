@@ -30,20 +30,23 @@ module.exports = {
     // Reset an anchor archive batch's parent (a v1 head, or a v3 fold archive row) status that an
     // orphaned final chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A
     // chunked archive batch spans multiple blocks: a head in an early block, then v2
-    // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js
+    // continuation chunks in later blocks. When the LAST v2 chunk lands, actions/anchor/reassembly.js
     // reassembles the blob and, on a CRC mismatch against the parent's signed
     // batch_crc32, stamps the parent 'invalid_archive' via a direct UPDATE on the
     // parent row (created in an EARLIER block, so it survives the bulk delete below).
     // If that completing chunk is in the orphaned range, the delete removes the chunk
     // but cannot undo the in-place stamp, leaving the surviving parent stuck
     // 'invalid_archive' while a from-genesis replay (the bad chunk never re-mined, or
-    // re-mined validly) would re-derive the parent's pre-flip status. anchor_actions
-    // .status_id is not in any block-hash projection, so this is a state-table
-    // divergence (and could mislead the archive-integrity flag / recovery selection,
-    // which read the ARCHIVE_HEAD_VERSIONS set at status 'valid'/'unverified'), not a
-    // consensus fork.
+    // re-mined validly) would re-derive the parent's pre-flip status. The surrogate
+    // status_id is not hashed, but the resolved 'invalid_archive' stamp is covered by
+    // the gated anchor_invalid state-hash class once
+    // stateHash.ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION is active. A missed reset can
+    // then fork state_hash (and could mislead the archive-integrity flag / recovery
+    // selection, which read the ARCHIVE_HEAD_VERSIONS set at status
+    // 'valid'/'unverified'). Below that activation the legacy chunk-height key matches
+    // nothing, so the damage is state-table-only.
     //
-    // Reset to 'unverified', the conservative re-verification state (anchor.js stores
+    // Reset to 'unverified', the conservative re-verification state (actions/anchor/quorum.js stores
     // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
     // recovery re-verifies such rows from the archived snapshots), so a parent that was
     // 'valid' before the flip is re-promoted by recovery rather than left wrongly
@@ -76,8 +79,11 @@ module.exports = {
     // The re-mined continuation then rejoins a batch with no head, absorbs nothing,
     // and the window is permanently dead on this node while a from-genesis replay
     // (the chunk never re-mined, or re-mined into a batch that reassembles) has it
-    // live. attests.status_id is in no block-hash projection, so this is a
-    // state-table divergence, not a consensus fork.
+    // live. The surrogate status_id is not hashed, but at or above
+    // stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION the gated attest_batch_head
+    // section hashes the stamped head's resolved status at the block containing the
+    // author's latest valid continuation. A missed restore can therefore fork
+    // state_hash; below that activation the damage is state-table-only.
     //
     // ONLY A MARKED STAMP IS RESTORED, and this is the whole safety argument. A
     // blanket "reset every non-valid head joined to an orphaned chunk" is UNSAFE:

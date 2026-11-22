@@ -62,5 +62,7 @@ CREATE TABLE price_snapshots (
     KEY idx_pair_batchtime_round (coin_pair, batch_block_time, round_number),
     -- Reorg purge: purgeOrphanedPriceSnapshots deletes WHERE reference_chain = 'BTC' AND
     -- reference_block >= ?, which no other key leads on (scan of every round otherwise).
-    KEY idx_refchain_block (reference_chain, reference_block)
+    KEY idx_refchain_block (reference_chain, reference_block),
+    -- Explorer oracle price-history read: coin_pair and status equality, block_timestamp range; price last makes it index-only.
+    KEY price_snapshots_pair_status_ts (coin_pair, status, block_timestamp, price)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;

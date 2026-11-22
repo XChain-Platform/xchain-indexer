@@ -37,15 +37,16 @@ function countStateTreeNodes(query){
 }
 
 // Every distinct root any RETAINED state_tree_roots row still points at, as
-// [{ r }]: the union of balances_root, stakes_root and contract_state_root. The
-// extension column is NULL on every inert row and IS NOT NULL filters those out,
-// so the union is unchanged until a slot arms.
+// [{ r }]: every committed or shadow root whose tree lives in state_tree_nodes.
+// Optional columns are NULL on inert rows, so the union is unchanged until a slot arms.
 function selectRetainedRootUnion(query, chain, network){
     return query(
         'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
         'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-        'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
-        [chain, network, chain, network, chain, network]);
+        'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL ' +
+        'UNION SELECT DISTINCT contract_state_root_shadow AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root_shadow IS NOT NULL ' +
+        'UNION SELECT DISTINCT balances_root_escrow_shadow AS r FROM state_tree_roots WHERE chain=? AND network=? AND balances_root_escrow_shadow IS NOT NULL',
+        [chain, network, chain, network, chain, network, chain, network, chain, network]);
 }
 
 // The rows behind one frontier batch of hashes, resolved in one indexed

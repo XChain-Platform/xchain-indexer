@@ -25,6 +25,7 @@
 'use strict';
 
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
+const { stateValueTexts } = require('./state_value_text.js');
 
 // The emission context a guard's own emissions run under.
 function buildGuardEmissionContext(ctx){
@@ -56,11 +57,12 @@ function buildGuardEmissionContext(ctx){
 
 async function writeGuardState(ctx){
     let hostData = ctx.hostData;
-    for(let change of ctx.vmResult.stateChanges){
+    let texts = await stateValueTexts(() => this.actions.protocolChanges, hostData['BLOCK_INDEX'], ctx.vmResult.stateChanges);
+    for(let [i, change] of ctx.vmResult.stateChanges.entries()){
         await this.indexerDb.createContractState({
             CONTRACT_INDEX: ctx.contractIndex,
             STATE_KEY:      change.key,
-            STATE_VALUE:    JSON.stringify(change.value),
+            STATE_VALUE:    texts[i],
             BLOCK_INDEX:    hostData['BLOCK_INDEX'],
             ACTION_INDEX:   hostData['ACTION_INDEX']
         });

@@ -139,7 +139,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 //
 // These two cases source the signed bytes from the indexer's OWN builder
 // (Anchor.canonical / Anchor.rewardCanonical, the sibling of the hub's
-// StateCheckpointEngine.canonicalCheckpoint), so a layout change in anchor.js
+// StateCheckpointEngine.canonicalCheckpoint), so a layout change in src/actions/anchor/
 // moves the fixture and this file goes red rather than agreeing with itself.
 // Called off the prototype with a bare receiver: neither builder touches `this`.
 const Anchor = require('../../../../../src/actions/anchor/index.js');

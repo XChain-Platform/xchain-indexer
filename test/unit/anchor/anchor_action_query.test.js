@@ -108,8 +108,35 @@ describe('anchor-action-query: validateAnchorActionParams()', function () {
         assert.strictEqual(validateAnchorActionParams({ chain: 'BTC', network: 'regtest', block_index: 1, checkpoint_seq: -3 }).ok, false);
     });
 
+    it('refuses a chain or network wider than its column and accepts one at the width', function () {
+        const base = { block_index: 1, checkpoint_seq: 1 };
+        assert.strictEqual(validateAnchorActionParams({ ...base, chain: 'C'.repeat(10), network: 'n'.repeat(20) }).ok, true);
+        for (const [chain, network] of [['C'.repeat(11), 'regtest'], ['BTC', 'n'.repeat(21)], ['x'.repeat(100000), 'regtest']]) {
+            assert.deepStrictEqual(validateAnchorActionParams({ ...base, chain, network }),
+                { ok: false, error: 'chain and network are required strings' });
+        }
+    });
+
     it('accepts checkpoint_seq 0 (genesis-adjacent) and block_index 0', function () {
         assert.strictEqual(validateAnchorActionParams({ chain: 'BTC', network: 'regtest', block_index: 0, checkpoint_seq: 0 }).ok, true);
+    });
+
+    it('rejects coercible and unsafe checkpoint indexes', function () {
+        const base = { chain: 'BTC', network: 'regtest', block_index: 1, checkpoint_seq: 1 };
+        const invalid = [true, false, '', [], [5], null, '1e3', '0x10', '01', ' 1', 9007199254740994];
+        for (const field of ['block_index', 'checkpoint_seq']) {
+            for (const value of invalid)
+                assert.strictEqual(validateAnchorActionParams({ ...base, [field]: value }).ok, false,
+                    field + ' accepted ' + JSON.stringify(value));
+        }
+    });
+
+    it('accepts canonical checkpoint indexes through the safe-integer boundary', function () {
+        const base = { chain: 'BTC', network: 'regtest', block_index: 1, checkpoint_seq: 1 };
+        for (const value of [0, '0', '850000', Number.MAX_SAFE_INTEGER]) {
+            assert.strictEqual(validateAnchorActionParams({ ...base, block_index: value }).ok, true);
+            assert.strictEqual(validateAnchorActionParams({ ...base, checkpoint_seq: value }).ok, true);
+        }
     });
 });
 
@@ -244,6 +271,14 @@ describe('anchor-action-query: validateAnchorActionParams() txid/version', funct
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 2 })).ok, false);
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 9 })).ok, false);
         assert.strictEqual(validateAnchorActionParams(Object.assign({}, base, { version: 1.5 })).ok, false);
+    });
+
+    it('refuses coerced version filters while preserving canonical values', function () {
+        for (const version of [true, '01', '1e0', [1], 9007199254740994])
+            assert.strictEqual(validateAnchorActionParams({ ...base, version }).ok, false,
+                'version accepted ' + JSON.stringify(version));
+        for (const version of [0, 1, '1'])
+            assert.strictEqual(validateAnchorActionParams({ ...base, version }).ok, true);
     });
 });
 

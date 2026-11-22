@@ -15,10 +15,10 @@
  *
  * CONSENSUS REGRESSION GUARD for db.getAnchorV1ByBatchSeq() head-selection determinism.
  *
- * match_batch_seq is NOT unique on anchor_actions: the replay guard in anchor.js
+ * match_batch_seq is NOT unique on anchor_actions: checkReplayGuards in actions/anchor/archive/archive_head.js
  * parseCheckpoint accepts an EQUAL MATCH_BATCH_SEQ, so a permissionless re-broadcast or a
  * failover double-publish stores a SECOND v1/v6 row for the same batch. The returned parent
- * feeds a consensus-visible verdict in anchor.js parseContinuation (TOTAL_CHUNKS geometry
+ * feeds a consensus-visible verdict in actions/anchor/reassembly.js and archive/archive_verdict.js (TOTAL_CHUNKS geometry
  * gate + batch_crc32 reassembly, which stamps setAnchorArchiveStatus(parent.action_index,
  * 'invalid_archive')). The pre-fix query was `... match_batch_seq = ? LIMIT 1` with NO
  * ORDER BY, so two honest nodes could select different parents and persist divergent
@@ -125,7 +125,7 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
     // The join must not be able to change WHICH head is selected: an inner join would
     // skip a head whose action linkage is missing and silently pick the NEXT one, moving
     // a consensus-visible geometry verdict (TOTAL_CHUNKS) and the authorship rule with it.
-    // An unresolvable author must arrive as null instead, which anchor.js fails closed on.
+    // An unresolvable author must arrive as null instead, which src/actions/anchor/ fails closed on.
     it('joins the author LEFT so the head PICK stays byte-identical to pre-#3075', async function () {
         const db = makeDb();
         let captured = null;

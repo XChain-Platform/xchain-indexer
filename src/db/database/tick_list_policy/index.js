@@ -26,6 +26,9 @@ function policySet(items){
     return items ? new Set(items) : null;
 }
 
+// Gate this SOURCE policy's block-bound read with TOKEN_GATE_LIST_AT_BLOCK.
+// Keep AIRDROP recipient policy and membership bound to its action block; its source file
+// owns that read, and changing the replay scope requires a separate activation.
 async function readTickListPolicy(db, tick, block_index, config=db.config, util=db.util){
     const policyAtBlock = gateRegistry.activeAt(
         TOKEN_GATE_LIST_AT_BLOCK_KEY,

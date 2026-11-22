@@ -31,6 +31,7 @@
 const { opensBackslashEscape } = require('../shared.js');
 const { retypeLedgerAppliedAt } = require('./ledger_retype.js');
 const { stripBlockComments, alterSpecs, blankLiterals } = require('./migration_live_schema_guard.js');
+const { qualifiedWriteTarget } = require('./migration_guards/column_change_safety.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -109,10 +110,16 @@ function keywordDestroys(self, stmt){
     // touches - the same data-loss profile as DELETE, with no non-destructive
     // form - so match the bare keyword like DELETE above.
     if(/^REPLACE\b/i.test(stmt))                         return true;
+    // INSERT IGNORE disables strict conversion errors for one statement, so it can
+    // clamp values that a plain INSERT would reject. CREATE TABLE ... IGNORE or
+    // REPLACE SELECT has the same conversion or replacement hazard.
+    if(/^INSERT\s+(?:(?:LOW_PRIORITY|DELAYED|HIGH_PRIORITY)\s+)*IGNORE\b/i.test(stmt)) return true;
+    if(/^CREATE\s+(?:TEMPORARY\s+)?TABLE\b/i.test(stmt)){
+        const bare = blankLiterals(stmt);
+        if(/\b(?:IGNORE|REPLACE)\b\s*(?:AS\b\s*)?\(?\s*(?:SELECT|WITH)\b/i.test(bare)) return true;
+    }
     // INSERT ... ON DUPLICATE KEY UPDATE overwrites columns of every existing
-    // duplicate-key row it touches - the same data-rewrite profile the UPDATE arm
-    // below hard-blocks, reached from a keyword that arm never sees. Plain INSERT
-    // stays auto-eligible: with no ON DUPLICATE clause it only adds rows.
+    // duplicate-key row it touches. Plain INSERT without IGNORE only adds rows.
     if(/^INSERT\b[\s\S]*\bON\s+DUPLICATE\s+KEY\s+UPDATE\b/i.test(stmt)) return true;
     // LOAD DATA ... REPLACE INTO TABLE is a DELETE+INSERT on every key collision,
     // and the rows come from a file the classifier cannot read, so no form of it
@@ -233,10 +240,9 @@ module.exports = {
         // default and never auto-applied. Anchoring to the comment prologue keeps the
         // body-buried protection (the scan stops at the first non-comment, non-blank
         // line, so no data literal or trailing prose can be seen) while accommodating
-        // any length of leading comment banner. Kept byte-for-byte in step with the
-        // sibling runner at xchain-decoder/src/db/migration_statements.js:migrationMode, and
-        // the xchain-node deploy guard mirrors the same scan, tag regex and default at
-        // src/services/migration_precondition_service/migration_scan.js:migrationMode.
+        // any length of leading comment banner. Keep this parser aligned with
+        // xchain-decoder/src/db/migration_statements.js, xchain-node/src/services/
+        // migration_precondition_service/migration_scan.js, and xchain-hub/src/db/schema/sql_migration_files.js.
         const lines    = String(raw).split('\n');
         const prologue = [];
         for(const line of lines){
@@ -244,8 +250,14 @@ module.exports = {
             if(trimmed === '' || trimmed.startsWith('--')){ prologue.push(line); continue; }
             break;   // first non-blank, non-comment line ends the prologue
         }
-        const m = prologue.join('\n').match(/^\s*--\s*xchain:migration\b[^\n]*\bmode\s*=\s*(auto|manual)\b/im);
-        return m ? m[1].toLowerCase() : 'manual';
+        const modes = [];
+        for(const line of prologue){
+            const header = /^\s*--\s*xchain:migration\b(.*)$/i.exec(line);
+            if(!header) continue;
+            for(const token of header[1].matchAll(/\bmode\s*=\s*([A-Za-z]+)\b/gi))
+                modes.push(token[1].toLowerCase());
+        }
+        return modes.length > 0 && modes.every(mode => mode === 'auto') ? 'auto' : 'manual';
     },
 
     // Destructive-DDL scan for the auto-apply path. Given a migration file's
@@ -255,16 +267,15 @@ module.exports = {
     //
     // Flagged as destructive: any top-level DROP other than DROP INDEX and DROP TEMPORARY
     // TABLE (sequences, triggers, views, events and routines too), TRUNCATE, RENAME TABLE,
-    // DELETE (any form), REPLACE INTO (atomic DELETE+INSERT), INSERT ... ON DUPLICATE
-    // KEY UPDATE (rewrites every colliding row), LOAD DATA (rows from a file the
-    // scanner cannot read), UPDATE (except the
-    // committed AUTO_INCREMENT id=0 repair), ALTER TABLE ... DROP <column|partition|bare identifier>,
-    // ALTER TABLE ... RENAME (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE
-    // (rename+retype), MODIFY ... NOT NULL (the statically detectable
-    // narrowing; a width reduction cannot be seen without the live schema and
-    // stays covered by the manual-tag convention), MODIFY id without AUTO_INCREMENT, a
-    // MODIFY not opening its alter_spec (WAIT n / NOWAIT belongs to the head), any ALTER TABLE PARTITION,
-    // TABLESPACE or ENGINE clause, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
+    // DELETE (any form), REPLACE INTO (atomic DELETE+INSERT), INSERT IGNORE,
+    // INSERT ... ON DUPLICATE KEY UPDATE, CREATE TABLE ... IGNORE/REPLACE SELECT,
+    // LOAD DATA (rows from a file the scanner cannot read), UPDATE (except the committed AUTO_INCREMENT
+    // id=0 repair), ALTER TABLE ... DROP <column|partition|bare identifier>, ALTER TABLE ... RENAME
+    // (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE (rename+retype), MODIFY ... NOT NULL (the
+    // statically detectable narrowing; a width reduction cannot be seen without the live schema and stays
+    // covered by the manual-tag convention), MODIFY id without AUTO_INCREMENT, a MODIFY not opening its
+    // alter_spec (WAIT n / NOWAIT belongs to the head), any ALTER TABLE PARTITION, TABLESPACE or ENGINE
+    // clause, a schema-qualified write target, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
     // ALTER than ALTER [ONLINE] TABLE, a CREATE TABLE naming an engine other than InnoDB,
     // any FOREIGN KEY, REFERENCES or CHECK constraint definition (cascades, restricts or
     // rejects later writes and deletes), and any CREATE other than [TEMPORARY] TABLE and
@@ -302,6 +313,7 @@ module.exports = {
             // '/*' literal and a later '*/' literal, which the server still runs.
             const stmt = stripBlockComments(raw).trim();
             if(!stmt) continue;
+            if(qualifiedWriteTarget(stmt))                       return raw;
             // Second layer behind stripSqlLineComments: MariaDB/MySQL honour `#` to
             // end-of-line as a comment, so `# note\nDROP TABLE balances` is a DROP every
             // ^-anchored check below is blind to. The strip removes it upstream; if one

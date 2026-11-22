@@ -33,6 +33,8 @@ const SETTLE_REASON = {
     NOT_OURS:        'this chain is not the destination leg of the transfer',
     ROW_FIELDS:      'transfer row is missing fields the apply needs',
     NETWORK:         'row network does not match this indexer',
+    // Not emitted by any settle pass: chain identity is enforced at mirror apply by
+    // refuseForeignChainRow.
     CHAIN_ID:        'row btc_chain_id does not match this chain identity',
     NOT_FINALIZED:   'row is not finalized',
     NOT_DUE:         'effective_time is ahead of this block protocol time',

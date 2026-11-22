@@ -69,9 +69,34 @@ function markRateLimited(err, facts){
     return err;
 }
 
+function resultFromParsedResponse(parsed, data, status, rl){
+    if(status === 429){
+        let limitText = rl.limit != null ? rl.limit + ' req/min' : 'limit not advertised';
+        let waitText  = rl.retryAfterMs != null ? Math.round(rl.retryAfterMs / 1000) + 's' : 'unknown';
+        throw markRateLimited(new Error(
+            'hub rate limit exceeded (' + limitText + '); retry after ' + waitText +
+            ' [HTTP 429, JSON body without a JSON-RPC error]'),
+        { limit: rl.limit, retryAfterMs: rl.retryAfterMs, httpStatus: status });
+    }
+    if(status && (status < 200 || status >= 300)){
+        throw Object.assign(
+            new Error('hub returned HTTP ' + status + ' without a JSON-RPC envelope: ' +
+                String(data).slice(0, 200)),
+            { httpStatus: status });
+    }
+    const rpcShape = parsed && typeof parsed === 'object' && !Array.isArray(parsed) &&
+        Object.prototype.hasOwnProperty.call(parsed, 'result');
+    if(!rpcShape)
+        throw Object.assign(
+            new Error('hub reply carried neither result nor error [HTTP ' + status + ']'),
+            { httpStatus: status });
+    return parsed.result;
+}
+
 // Read a hub JSON-RPC response body into its result, or throw the classified error
-// `call` rejects with. The 'end' handler below settles the latch with whichever one
-// comes back, so the classification lives here and nowhere else.
+// `call` rejects with. HTTP failure is independent of body format: a gateway's
+// JSON diagnostic must never look like a successful RPC result. The 'end' handler
+// below settles the latch with whichever one comes back, so classification lives here.
 function parseHubResponse(data, status, headers){
     let rl = readRateLimitHeaders(headers);
     let parsed;
@@ -99,7 +124,7 @@ function parseHubResponse(data, status, headers){
                 { httpStatus: status });
         throw new Error('Invalid JSON response: ' + e.message);
     }
-    if(parsed.error){
+    if(parsed && parsed.error){
         let err = new Error(parsed.error.message || JSON.stringify(parsed.error));
         if(parsed.error.code !== undefined) err.rpcCode = parsed.error.code;
         if(status) err.httpStatus = status;
@@ -117,7 +142,7 @@ function parseHubResponse(data, status, headers){
         }
         throw err;
     }
-    return parsed.result;
+    return resultFromParsedResponse(parsed, data, status, rl);
 }
 
 // Wire the terminal socket/response events for one hub call onto resolve/reject.

@@ -270,19 +270,39 @@ module.exports = {
         return await this.doQuery(query, [e, n]);
     },
 
-    // Which of `epochHeights` this source was recorded absent at. Bounded by the
-    // caller's list, which is the lookback window, so the answer size is fixed by
-    // the protocol constant rather than by history.
-    async getRollcallAbsenceEpochsForSource(source, epochHeights){
-        if(!Array.isArray(epochHeights) || epochHeights.length === 0) return [];
-        let source_id = await this.getAddressId(source);
-        if(source_id === null) return [];
+    // Which of `epochHeights` each source was recorded absent at. Address ids are
+    // still resolved through getAddressId so canonical references and collation
+    // rules stay identical; only the bounded absence read is shared.
+    async getRollcallAbsenceEpochsForSources(sources, epochHeights){
+        let bySource = new Map();
+        if(!Array.isArray(sources) || sources.length === 0 ||
+           !Array.isArray(epochHeights) || epochHeights.length === 0) return bySource;
         let epochs = epochHeights.map((h) => parseInt(h)).filter((h) => Number.isFinite(h));
-        if(epochs.length === 0) return [];
-        let query = `SELECT epoch_height FROM rollcall_absences
-                      WHERE source_id = ? AND epoch_height IN (${epochs.map(() => '?').join(', ')})`;
-        let rows = await this.doQuery(query, [source_id].concat(epochs));
-        return rows.map((r) => parseInt(r.epoch_height));
+        if(epochs.length === 0) return bySource;
+
+        let sourceIds = new Map();
+        for(const source of sources){
+            let source_id = await this.getAddressId(source);
+            bySource.set(source, []);
+            if(source_id !== null)
+                sourceIds.set(source, source_id);
+        }
+        let ids = [...new Set(sourceIds.values())];
+        if(ids.length === 0) return bySource;
+
+        let query = `SELECT source_id, epoch_height FROM rollcall_absences
+                      WHERE source_id IN (${ids.map(() => '?').join(', ')})
+                        AND epoch_height IN (${epochs.map(() => '?').join(', ')})`;
+        let rows = await this.doQuery(query, ids.concat(epochs));
+        let byId = new Map();
+        for(const row of rows){
+            let key = String(row.source_id);
+            if(!byId.has(key)) byId.set(key, []);
+            byId.get(key).push(parseInt(row.epoch_height));
+        }
+        for(const [source, source_id] of sourceIds)
+            bySource.set(source, byId.get(String(source_id)) || []);
+        return bySource;
     },
 
     // Sources absent from the latest ROLLED epoch closed at or below the
@@ -336,7 +356,7 @@ module.exports = {
     // Public roll-call absences for one staking source, BTC side (JSON-RPC
     // getrollcallabsences). `source` is an address as a caller types it, resolved
     // to source_id the same way every other address-keyed read on this table does
-    // (getRollcallAbsenceEpochsForSource, getSweepableStakeBySource); an unknown
+    // (getRollcallAbsenceEpochsForSources, getSweepableStakeBySource); an unknown
     // or unresolvable address is not an error, it just has no absences on file.
     // The join back to index_addresses hands the caller the canonical address
     // string rather than echoing its raw input, so a `^<id>` wire reference

@@ -43,7 +43,8 @@ function setupBatchHarness() {
 }
 
 function probeData(){
-    return createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE, FEE_PROBE: true });
+    return createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE,
+        FEE_PROBE: true, GUARD_INERT: true, DRY_RUN: true });
 }
 
 describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', function () {
@@ -71,9 +72,20 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             assert.strictEqual(data['PROBE_SUB_VERDICTS'][0].refused, null);
         });
 
+        it('the raw dry-run collects verdicts but still dispatches VM sub-commands', async function () {
+            const data = createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE,
+                TX_DATA: WIRE, DRY_RUN: true });
+            await handler.parse(['0'], data, null);
+
+            assert.deepStrictEqual(actionsCtx.processAction.getCalls().map(c => c.args[0]),
+                ['SEND', 'DEPLOY', 'SEND']);
+            assert.deepStrictEqual(data['PROBE_SUB_VERDICTS'].map(v => v.action),
+                ['SEND', 'DEPLOY', 'SEND']);
+        });
+
         it('answers for the BATCH, not for whichever sub-command ran last', async function () {
             const data = createBaseData({
-                ACTION: 'BATCH', FORMAT: 0, SOURCE, FEE_PROBE: true,
+                ACTION: 'BATCH', FORMAT: 0, SOURCE, FEE_PROBE: true, GUARD_INERT: true, DRY_RUN: true,
                 TX_DATA: 'BATCH|0|SEND|0|TEST|10|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM'
             });
             await handler.parse(['0'], data, null);
@@ -89,11 +101,27 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
             });
             handler = new Batch(actionsCtx);
             const data = createBaseData({
-                ACTION: 'BATCH', FORMAT: 0, SOURCE, FEE_PROBE: true,
+                ACTION: 'BATCH', FORMAT: 0, SOURCE, FEE_PROBE: true, GUARD_INERT: true, DRY_RUN: true,
                 TX_DATA: 'BATCH|0|SEND|0|TEST|10|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM;COINPAY|0|42'
             });
             await handler.parse(['0'], data, null);
             assert.deepStrictEqual(data['PROBE_SUB_VERDICTS'].map(v => v.status), ['valid:SEND', null]);
+        });
+
+        it('reports null for a skipped sub-command in an authenticated dry-run', async function () {
+            actionsCtx.processAction = sinon.stub().callsFake(async (action, params, data) => {
+                if(action !== 'COINPAY') data['STATUS'] = 'valid:' + action;
+            });
+            handler = new Batch(actionsCtx);
+            const data = createBaseData({
+                ACTION: 'BATCH', FORMAT: 0, SOURCE, DRY_RUN: true,
+                TX_DATA: 'BATCH|0|SEND|0|TEST|10|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM;COINPAY|0|42'
+            });
+
+            await handler.parse(['0'], data, null);
+            assert.deepStrictEqual(data['PROBE_SUB_VERDICTS'].map(v => [v.status, v.refused]),
+                [['valid:SEND', null], [null, null]]);
+            assert.strictEqual(data['STATUS'], 'valid', 'top-level verdict must remain the batch verdict');
         });
     });
 });
@@ -119,8 +147,24 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
                 'off the probe path STATUS is the BATCH verdict too, never the last handler\'s');
         });
 
+        it('keeps inherited sub-command status outside dry-run collection', async function () {
+            let coinpayStatus;
+            actionsCtx.processAction = sinon.stub().callsFake(async (action, params, data) => {
+                if(action === 'COINPAY') coinpayStatus = data['STATUS'];
+                else data['STATUS'] = 'valid:' + action;
+            });
+            handler = new Batch(actionsCtx);
+            const data = createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE,
+                TX_DATA: 'BATCH|0|SEND|0|TEST|10|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM;COINPAY|0|42' });
+
+            await handler.parse(['0'], data, null);
+            assert.strictEqual(coinpayStatus, 'valid:SEND');
+            assert.strictEqual(data['PROBE_SUB_VERDICTS'], undefined);
+        });
+
         it('BELOW-PROBE CONTROL: the consensus value ledger is still seeded and never replaced', async function () {
-            const data = createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE, FEE_PROBE: true });
+            const data = createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_DATA: WIRE,
+                FEE_PROBE: true, GUARD_INERT: true, DRY_RUN: true });
             await handler.parse(['0'], data, null);
             // Row 30's seam: a probe IS inside a flagged batch, so the key is present for the
             // READ, and the probe collectors are separate objects that never write to it.

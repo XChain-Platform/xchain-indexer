@@ -90,8 +90,7 @@ function makeSnapshot(signers, overrides){
 function makePolicyConfig(){
     return {
         COIN: 'DOGE', NETWORK: NETWORK, GAS: 'XCHAIN',
-        ADDRESS: { GAS: 'nGasOwnerXXXXXXXXXXXXXXXXXXXXXXXXX', BRIDGE_BTC: BRIDGE_BTC_ON_DOGE },
-        BTC_CHAIN_ID: null
+        ADDRESS: { GAS: 'nGasOwnerXXXXXXXXXXXXXXXXXXXXXXXXX', BRIDGE_BTC: BRIDGE_BTC_ON_DOGE }
     };
 }
 

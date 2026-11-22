@@ -16,7 +16,7 @@
  * One SMT leaf per live (contract_index, state_key), keyed by
  * merkle.contractStateKey()'s XCHAIN_CST domain. This module owns the whole
  * row-to-leaf mapping and nothing else: the SMT engine, the node store and the
- * block paths stay in each repo's stateCommitment.js, which passes an `smt` in.
+ * block paths stay in each repo's state_commitment/index.js, which passes an `smt` in.
  * That is what lets this file be BYTE-IDENTICAL in xchain-indexer/src (SOURCE)
  * and xchain-sync/src (FOLLOWER), drift-guarded by the cross-repo twin loop in
  * xchain-sync/test/unit/rollback_coverage.test.js. The follower recomputes and

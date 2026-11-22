@@ -82,8 +82,11 @@ module.exports = {
             if(format==3 && idx>0 && idx%4==1 && idx < lastIdx)
                 airdrops.push([params[idx], params[idx+1], params[idx+2], params[idx+3]]);
         }
-        // Return no legs for an unknown FORMAT or short params, so parse() records no airdrops row or
-        // STATUS (a placeholder leg like SEND's changes replay output and needs its own activation gate).
+        // Leg counts by shape: an unknown FORMAT reads none; FORMAT 0 always reads one leg; FORMAT 1
+        // needs at least one TICK|AMOUNT pair; FORMAT 2 and 3 read a leg for every group that starts
+        // before the last param, so a truncated tail group is still a leg with undefined fields that
+        // validation records as an invalid airdrops row. parse() and the BATCH weight both count these
+        // legs, so any change to them needs its own activation gate.
         return airdrops;
     },
 

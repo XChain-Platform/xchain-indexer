@@ -57,6 +57,12 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
         assert.strictEqual(indexer.hubClient.pushPriceRound.callCount, 0);
         assert.strictEqual(indexer.hubClient.pushOraclePrice.callCount, 0);
         assert.strictEqual(indexer.hubClient.pushPriceBatch.callCount, 0);
+
+        indexer = makeIndexer([{ id: 9, pushType: 'price_round', payload: {} }]);
+        await indexer.deliverStagedHubPushes({ skipLive: true });
+        assert.strictEqual(indexer.indexerDb.takeStagedHubPushes.calledOnce, true);
+        assert.strictEqual(indexer.hubClient.pushPriceRound.callCount, 0);
+        assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 0);
     });
 
     it('does nothing when hubClient is unset', async function(){
@@ -109,12 +115,28 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
     });
 
     it('leaves the durable row alone (never marks delivered) when pushPriceBatch live delivery fails', async function(){
-        let indexer = makeIndexer(
-            [{ id: 4, pushType: 'price_batch', payload: { first_round: 1, last_round: 6 } }],
-            { pushPriceBatch: sinon.stub().rejects(new Error('hub down')) }
-        );
-        await indexer.deliverStagedHubPushes();
-        assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 0);
+        const rows = [4, 5, 6].map(id => ({
+            id: id, pushType: 'price_batch', payload: { first_round: id, last_round: id + 5 }
+        }));
+        for(const error of [new Error('Request timeout'),
+                            Object.assign(new Error('refused'), { code: 'ECONNREFUSED' }),
+                            Object.assign(new Error('slow down'), { rateLimited: true })]){
+            let push = sinon.stub().rejects(error);
+            let indexer = makeIndexer(rows, { pushPriceBatch: push });
+            await indexer.deliverStagedHubPushes();
+            assert.strictEqual(push.callCount, 1);
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 0);
+        }
+        for(const error of [Object.assign(new Error('payload refused'), { hubRejection: 'bad payload' }),
+                            Object.assign(new Error('rpc verdict'), { rpcCode: -32603 })]){
+            let push = sinon.stub();
+            push.onFirstCall().rejects(error);
+            push.resolves();
+            let indexer = makeIndexer(rows, { pushPriceBatch: push });
+            await indexer.deliverStagedHubPushes();
+            assert.strictEqual(push.callCount, 3);
+            assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 2);
+        }
     });
 
     it('skips an unknown pushType without calling any hub method or marking delivered', async function(){
@@ -137,5 +159,19 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
         assert.strictEqual(indexer.hubClient.pushPriceBatch.calledOnce, true);
         assert.strictEqual(indexer.hubClient.pushOraclePrice.calledOnce, true);
         assert.strictEqual(indexer.indexerDb.markHubPushDelivered.callCount, 3);
+
+        indexer.config = { COIN: 'BTC', NETWORK: 'regtest',
+                           CHAIN_TIP_PUSH_MAX_LAG: 100, HUB_LIVE_PUSH_MAX_LAG: 3 };
+        indexer.util = { getTimer: () => 0, bcsub: (a, b) => a - b, bcgt: (a, b) => a > b };
+        indexer.markBlockCommitted = sinon.stub();
+        indexer.resolveBtcChainId = sinon.stub().resolves('chain');
+        indexer.hubClient.pushChainTip = sinon.stub();
+        indexer.decoderDb = { getBlockIndex: sinon.stub().resolves(20) };
+        indexer.deliverStagedHubPushes = sinon.stub().resolves();
+        await indexer.afterBlockCommit({ blockToParse: 10, rawBlockTime: 1 }, [0, 0, 0], 20, 0);
+        assert.deepStrictEqual(indexer.deliverStagedHubPushes.firstCall.args[0], { skipLive: true });
+        indexer.deliverStagedHubPushes.resetHistory();
+        await indexer.afterBlockCommit({ blockToParse: 18, rawBlockTime: 1 }, [0, 0, 0], 20, 0);
+        assert.deepStrictEqual(indexer.deliverStagedHubPushes.firstCall.args[0], { skipLive: false });
     });
 });

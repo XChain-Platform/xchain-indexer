@@ -27,6 +27,7 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
@@ -53,6 +54,16 @@ const SIGS2   = JSON.stringify([1, 2].map(i => ({ pubkey: String(i).repeat(64), 
 function row(txid, sigs) {
     return { chain: 'DOGE', network: 'regtest', reward_type: 'anchor_bundle', round_reference: 20, snapshot_block: 20,
              publisher: PUB, reward_amount: '10', publisher_attestations: sigs, doge_anchor_txid: txid };
+}
+
+function signedRow() {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+    const spki = publicKey.export({ format: 'der', type: 'spki' });
+    const pubkey = spki.subarray(spki.length - 32).toString('hex');
+    const reward = Object.assign(row(GOOD, '[]'), { publisher: pubkey });
+    const sig = crypto.sign(null, Buffer.from(derive.rewardCanonical(reward), 'utf8'), privateKey).toString('hex');
+    reward.publisher_attestations = JSON.stringify([{ pubkey, sig }]);
+    return { reward, pubkey };
 }
 
 // A Database on node:sqlite holding the two mirror tables and the reward tables the
@@ -89,9 +100,9 @@ const proof = { proveMined: async (e) => (e.txid === GOOD ? 'verified' : e.txid 
 // The quorum check stands in for verifyAttestation: four signers meet it, two do not.
 const quorum = async (db, r) => JSON.parse(r.publisher_attestations).length >= 3;
 
-function context(minted) {
+function context(minted, writeResult = true) {
     return {
-        indexerDb: { createValidatorReward: async (...a) => { minted.push(a); return true; } },
+        indexerDb: { createValidatorReward: async (...a) => { minted.push(a); return writeResult; } },
         gatesActive: () => true, verifyAttestation: quorum,
         mint: { blockIndex: 164, proof, minConfirmations: 60, amount: '10',
                 protocolChanges: { isEnabled: async () => false } },
@@ -127,7 +138,8 @@ describe('anchor reward copies: armed selection @regression @tier1', function ()
                 const minted = [];
                 const [copies] = selection.copiesByTuple(order);
                 const chosen = await selection.mintTuple(copies, context(minted));
-                assert.strictEqual(chosen.doge_anchor_txid, GOOD);
+                assert.strictEqual(chosen.row.doge_anchor_txid, GOOD);
+                assert.strictEqual(chosen.written, true);
                 assert.strictEqual(minted.length, 1);
                 assert.deepStrictEqual(minted[0].slice(0, 5), [PUB, 20, 'anchor_bundle', '10', 20]);
             }
@@ -141,6 +153,12 @@ describe('anchor reward copies: armed selection @regression @tier1', function ()
         const [rejected] = selection.copiesByTuple([row(OTHER, SIGS4), row(GOOD, SIGS2)]);
         assert.strictEqual(await selection.mintTuple(rejected, context(minted)), null);
         assert.strictEqual(minted.length, 0);
+
+        const [unwritten] = selection.copiesByTuple([row(GOOD, SIGS4), row(ABSENT, SIGS4)]);
+        const selected = await selection.mintTuple(unwritten, context(minted, false));
+        assert.strictEqual(selected.row.doge_anchor_txid, GOOD);
+        assert.strictEqual(selected.written, false);
+        assert.strictEqual(minted.length, 1, 'a failed write does not retry another copy');
     });
 });
 
@@ -168,5 +186,18 @@ describe('anchor reward copies: the derive pass and its gate @regression @tier1'
             assert.strictEqual(db.getPendingAnchorRewardAttestations.called, !armed);
             assert.strictEqual(db.getPendingAnchorRewardAttestationCopies.called, armed);
         }
+
+        process.env[ENV] = 'armed';
+        const { reward, pubkey } = signedRow();
+        const db = {
+            getPendingAnchorRewardAttestationCopies: sinon.stub().resolves([reward]),
+            getValidatorsByCapability: sinon.stub().resolves([{ pubkey, amount: '1' }]),
+            getStakeWeightsByCapability: sinon.stub().resolves([{ pubkey, source: pubkey, weight: '1' }]),
+            createValidatorReward: sinon.stub().resolves(false),
+            reconcileAnchorRewardWinner: sinon.stub().resolves(0),
+        };
+        const derived = await derive.deriveAnchorRewards(db, { COIN: 'BTC', NETWORK: 'regtest' }, 164, proof);
+        assert.strictEqual(derived, 0, 'a verified copy is counted only when its reward row was written');
+        assert.ok(db.reconcileAnchorRewardWinner.calledOnce, 'verified copies preserve the existing reconcile call');
     });
 });

@@ -169,12 +169,62 @@ function registerObjectBatchProofTest(){
         let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, {
             prices: [price]
         });
+        let logs = [];
+        let db = memDb([batch.v1], batch.v2s);
+        let report = await new AnchorRecovery(db, { log: line => logs.push(line), util }).run();
+
+        assert.strictEqual(report.verified, 1);
+        assert.strictEqual(report.failed.length, 0);
+        assert.strictEqual(db.matches.length, 1, 'the rest of the archive is still restored');
+        assert.strictEqual(db.prices.length, 0, 'an unproven batch row is never written');
+        assert.ok(logs.some(line => line.includes('price batch 204-204 skipped') &&
+            line.includes('fails quorum')));
+    });
+}
+
+function batchRow(first, last, round, height, signers, overrides){
+    let price = rawPrice(round, 'BTC/USD', overrides || {});
+    let rounds = [];
+    for(let r = first; r <= last; r++)
+        rounds.push({ round: r, timestamp: price.block_timestamp, btcBlockHeight: price.reference_block,
+            pairs: [{ coinPair: price.coin_pair, price: price.price }], admitBlocks: null });
+    let canonical = ed25519.buildPriceBatchPayload(first, last, height, rounds, 'regtest');
+    price.consensus_proof = JSON.stringify({
+        batch: { first_round: first, last_round: last, btc_block_height: height },
+        sigs: signers.map(key => ({ pubkey: key.pubkey, sig: signHex(key, canonical) }))
+    });
+    return price;
+}
+
+function registerPartialBatchTest(){
+    it('skips a batch group that holds only part of its signed range and restores the rest', async function(){
+        let partial = batchRow(301, 303, 301, 120, oracleKeys.slice(0, 3));
+        let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, {
+            prices: [rawPrice(300, 'LTC/USD'), partial]
+        });
+        let db = memDb([batch.v1], batch.v2s);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 1);
+        assert.strictEqual(db.matches.length, 1);
+        assert.deepStrictEqual(db.prices.map(row => row.round_number), [300],
+            'the signature-proofed round is restored and the partial batch round is not');
+        assert.strictEqual(report.prices, 1);
+    });
+}
+
+function registerBatchOutsideRangeTest(){
+    it('still refuses an archive whose batch row sits outside its own proof range', async function(){
+        let row = batchRow(310, 311, 310, 121, oracleKeys.slice(0, 3));
+        let proof = JSON.parse(row.consensus_proof);
+        proof.batch.first_round = 311;
+        row.consensus_proof = JSON.stringify(proof);
+        let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, { prices: [row] });
         let db = memDb([batch.v1], batch.v2s);
         let report = await new AnchorRecovery(db, quiet).run();
 
         assert.strictEqual(report.verified, 0);
-        assert.ok(report.failed[0].reason.includes('price batch'));
-        assert.ok(report.failed[0].reason.includes('fails quorum'));
+        assert.ok(report.failed[0].reason.includes('falls outside its batch proof range'));
         assert.strictEqual(db.matches.length, 0);
         assert.strictEqual(db.prices.length, 0);
     });
@@ -222,7 +272,7 @@ function registerTombstoneRestoreTest(){
         assert.deepStrictEqual([report.prices, report.tombstones], [2, 1]);
         assert.strictEqual(db.prices.length, 1);
         assert.strictEqual(db.prices[0].price, '101.75');
-        assert.strictEqual(db.prices[0].id, 999);
+        assert.notStrictEqual(db.prices[0].id, 999, 'the archived hub id is not the local key');
     });
 }
 
@@ -251,6 +301,8 @@ function registerCheckpointPriceTests(){
     registerForgedPriceRoundTest();
     registerForgedDisputedPriceTest();
     registerObjectBatchProofTest();
+    registerPartialBatchTest();
+    registerBatchOutsideRangeTest();
     registerPriceOverwriteTest();
     registerTombstoneRestoreTest();
     registerCheckpointCollisionTest();

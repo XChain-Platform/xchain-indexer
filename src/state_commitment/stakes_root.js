@@ -24,6 +24,7 @@
 
 const M = require('../consensus/merkle.js');
 const { ZERO_CANON, canonicalAmountOf } = require('./leaf_values.js');
+const { getLogger } = require('../observability/index.js');
 
 // Root of an empty depth-256 SMT: the same value src/state_commitment/index.js exports
 // as EMPTY_ROOT_HEX, derived here from merkle.js rather than required back from
@@ -35,6 +36,25 @@ const EMPTY_ROOT_HEX = M.toHex(M.EMPTY_SMT_ROOT);
 // (the set is small, bounded by VALIDATOR_QUERY_LIMIT). One leaf per (pubkey,
 // capability) with the source-deduped weight; absent stakers are simply not in the
 // set (delete-on-zero falls out). Keyed by canonical pubkey+capability strings.
+//
+// The member key carries no source, so a pubkey delegated by two sources yields two
+// entries with one key and different leaves, and the tree keeps the LAST of them: the
+// source the stake-weight query returns last. The committed leaf for such a key
+// therefore depends on that query's ORDER BY and collation, not only on the row set.
+// Do not reorder the query without a flag day; duplicates are only logged here.
+const duplicateKeyCounts = new Map();   // capability -> duplicate count last logged
+
+// Log a duplicate-key count when it changes (once per process per value), never throw:
+// a throw here would stall BTC parsing over a condition that is legal today.
+function noteDuplicateKeys(capability, count){
+    const previous = duplicateKeyCounts.get(capability) || 0;
+    if(count === previous) return;
+    duplicateKeyCounts.set(capability, count);
+    if(count > 0)
+        getLogger().warn('stakes_root: ' + count + ' repeated member key(s) for capability ' +
+            capability + '; the last row returned by the stake-weight query is committed');
+}
+
 async function gatherStakeEntries(db, blockIndex){
     const caps = (db.config['STAKING'] && db.config['STAKING']['CAPABILITIES'])
         ? Object.keys(db.config['STAKING']['CAPABILITIES']) : [];
@@ -42,16 +62,20 @@ async function gatherStakeEntries(db, blockIndex){
     for(const capability of caps){
         const rows = await db.getStakeWeightsByCapability(capability, blockIndex);
         const seenSource = new Map();   // source -> weight (first wins; equal per source)
+        const seenKeys = new Set();
+        let duplicateKeys = 0;
         for(const r of (rows || [])){
             if(!r || r.pubkey == null) continue;
             if(canonicalAmountOf(String(r.weight == null ? '0' : r.weight)) === ZERO_CANON) continue;   // zero cannot qualify
             const source = String(r.source);
             // Member leaf commits SOURCE + weight so a light client can source-dedupe
             // signer stake exactly as swq.meetsStakeThreshold does (validator-set proof).
-            entries.push([ M.toHex(M.stakeKey(String(r.pubkey), capability)),
-                           M.toHex(M.stakeMemberLeaf(source, String(r.weight))) ]);
+            const key = M.toHex(M.stakeKey(String(r.pubkey), capability));
+            if(seenKeys.has(key)) duplicateKeys++; else seenKeys.add(key);
+            entries.push([ key, M.toHex(M.stakeMemberLeaf(source, String(r.weight))) ]);
             if(!seenSource.has(source)) seenSource.set(source, String(r.weight));
         }
+        noteDuplicateKeys(capability, duplicateKeys);
         // Total leaf: the source-deduped quorum denominator S, so a client can check
         // 3·Σ(signer-source weight) > 2·S without enumerating the full set (spec §7).
         const total = M.sumCanonicalAmounts(Array.from(seenSource.values()));
@@ -72,10 +96,13 @@ async function gatherStakeEntries(db, blockIndex){
 // buffer pool, which is what put BTC regtest block parse at 25-66s against LTC's
 // 3-5s for the same code (LTC commits the empty stakes root and never pays it).
 //
-// The memo is sound because buildFull is a PURE function of its entries: the node
-// store is content-addressed, so the same entry set always yields the same root.
-// test/unit/state_commitment/state_commitment.test.js pins both halves of that - equality with the merkle.js
-// reference, and insert-order independence.
+// The memo is sound because buildFull is a PURE function of its entries once repeated
+// keys are collapsed last-wins (stakeEntriesMap): the node store is content-addressed,
+// so the same collapsed entry set always yields the same root. Insert-order
+// independence holds for DISTINCT keys only; for a repeated key the surviving leaf is
+// the last entry, which is why the memo digests the collapsed map and not the raw list.
+// test/unit/state_commitment/state_commitment.test.js pins equality with the merkle.js
+// reference and insert-order independence over distinct keys.
 //
 // The memo applies only to the block immediately after the one this process built
 // and committed. A gap, re-parse, other chain or network, cold start, or missing
@@ -89,8 +116,9 @@ function stakeEntriesMap(entries){
 }
 
 function stakeEntriesDigest(entries){
-    // Sorted, because buildFull is order-independent: an entry set that merely
-    // reordered must still hit. Length-prefixed and separator-joined so no pair
+    // Sorted, because buildFull is order-independent over distinct keys: an entry set
+    // that merely reordered must still hit. Callers pass the last-wins map, so a
+    // repeated key is already collapsed. Length-prefixed and separator-joined so no pair
     // boundary can be forged by a value that happens to contain the separator.
     const pairs = Array.from(entries, e => String(e[0]) + ':' + String(e[1])).sort();
     return M.toHex(M.sha256(Buffer.from(pairs.length + '|' + pairs.join('|'), 'utf8')));

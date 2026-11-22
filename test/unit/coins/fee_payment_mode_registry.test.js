@@ -24,13 +24,12 @@
  * native-only in both; if its registry entry declares 'xchain' instead, both
  * tests below go red until the literal is taught about it.
  *
- * These tests do not move the classification into the registry (that is a
- * consensus-pin question: FEE_PAYMENT_MODE is deliberately outside
- * consensusSubset(), so making it a runtime decider would let a divergent
- * bundle verify clean at boot). They make the two literal lists unable to
- * diverge from the registry without CI going red, so the onboarding trap
- * fires at build time on a developer's machine rather than at runtime on a
- * live node.
+ * FEE_PAYMENT_MODE stays outside consensusSubset() because no indexer or
+ * ledger path reads it. Moving either consensus classifier onto the field
+ * first requires folding it into the pin so a divergent bundle cannot verify
+ * clean at boot. The SDK reads the field client-side in nativeFeeRequired to
+ * decide whether to add the native-fee output. These tests keep the indexer's
+ * two coin-based classifiers aligned with the declared mode.
  ********************************************************************/
 
 const assert = require('assert');

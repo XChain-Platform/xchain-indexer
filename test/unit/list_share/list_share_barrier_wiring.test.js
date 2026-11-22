@@ -146,4 +146,62 @@ describe('list-share block-loop barrier wiring @regression @tier1', function () 
         sinon.assert.calledOnce(warn);
         sinon.assert.calledOnce(error);
     });
+
+    it('waits exactly when the real reader predicate is active', async function () {
+        sinon.restore();
+        let seen = { active: false, inactive: false };
+        for (const armed of [false, true]) {
+            const loaded = loadListShareGate(armed);
+            try {
+                for (const sample of [
+                    { network: 'regtest', coin: 'BTC', height: 1 },
+                    { network: 'regtest', coin: 'BTC', height: 500 },
+                    { network: 'testnet', coin: 'BTC', height: 1 },
+                    { network: 'regtest', coin: 'BTC', height: null }
+                ]) {
+                    const wait = sinon.stub().resolves();
+                    const ctx = barrierContext({
+                        config: { NETWORK: sample.network, COIN: sample.coin },
+                        hubDbSync: { waitForListShareSync: wait },
+                        mirrorAdmissionActiveAt: (height) => loaded.admission
+                            .isMirrorAdmissionConsumerActive(sample.coin, sample.network, height)
+                    });
+                    await ctx.deferOnListShareSync(sample.height, 1000);
+                    const reader = loaded.settle.consumerActive({
+                        network: sample.network,
+                        coin: sample.coin,
+                        blockIndex: sample.height
+                    });
+                    assert.strictEqual(wait.called, reader,
+                        JSON.stringify({ armed, sample }));
+                    seen[reader ? 'active' : 'inactive'] = true;
+                }
+            } finally {
+                loaded.restore();
+            }
+        }
+        assert.deepStrictEqual(seen, { active: true, inactive: true });
+    });
 });
+
+function loadListShareGate(armed) {
+    const gatePath = require.resolve('../../../src/consensus/gates/mirror_admission_gate.js');
+    const settlePath = require.resolve('../../../src/consensus/list_share_settle.js');
+    const saved = [[gatePath, require.cache[gatePath]], [settlePath, require.cache[settlePath]]];
+    const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    delete require.cache[gatePath];
+    delete require.cache[settlePath];
+    if (armed) process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
+    else delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    const admission = require(gatePath);
+    const settle = require(settlePath);
+    const restore = () => {
+        for (const [file, cached] of saved) {
+            if (cached === undefined) delete require.cache[file];
+            else require.cache[file] = cached;
+        }
+        if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+        else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
+    };
+    return { admission, settle, restore };
+}

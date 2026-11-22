@@ -56,6 +56,7 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
         assert.ok(/ceiling/i.test(String(err.firstCall.args[0])), 'the crossing must be named in the log');
         assert.ok(String(err.firstCall.args[0]).includes('attest_response_sync_barrier'),
             'the log must name the barrier that is holding the block');
+        assert.ok(/Requesting hub-mirror recovery/.test(String(err.firstCall.args[0])));
     });
 
     // The announcement is once per block, but the remedy keeps being asked for: HubDbSync
@@ -83,10 +84,16 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
         const ix = wire(makeIndexer(900000));
         ix.stallClearsAt = NOW + 7200000;
         note.call(ix, 900, NOW);
+        assert.deepStrictEqual(ix.futureWaitClearsAt, { block: 900, at: NOW + 7200000 });
         note.call(ix, 900, NOW + 3600000);
         assert.strictEqual(ix.barrierHold, null);
         assert.strictEqual(ix.barrierCeilingHits, 0);
         assert.deepStrictEqual(ix.resyncCalls, []);
+        ix.stallClearsAt = null;
+        note.call(ix, 900, NOW + 7200001);
+        assert.deepStrictEqual(ix.futureWaitClearsAt, { block: 900, at: NOW + 7200000 });
+        note.call(ix, 901, NOW + 7200002);
+        assert.strictEqual(ix.futureWaitClearsAt, null);
     });
 
     // A rule-set halt is a build-update problem, so it must not be logged or counted as a
@@ -110,7 +117,9 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
     it('a committed block ends the hold and the next one starts clean', function () {
         const ix = wire(makeIndexer(900000));
         note.call(ix, 900, NOW);
-        ix.stallReason = null;                       // what the commit path sets
+        ix.futureWaitClearsAt = { block: 900, at: NOW };
+        XChainIndexer.prototype.markBlockCommitted.call(ix, 900);
+        assert.strictEqual(ix.futureWaitClearsAt, null);
         assert.strictEqual(note.call(ix, 901, NOW + 60000), 0);
         assert.strictEqual(ix.barrierHold, null);
     });
@@ -141,12 +150,20 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
         note.call(ix, 900, NOW);
         assert.doesNotThrow(() => note.call(ix, 900, NOW + 900000));
         assert.strictEqual(ix.barrierCeilingHits, 1);
+        assert.deepStrictEqual(ix.resyncCalls, []);
+        assert.ok(/no hub-mirror resync/i.test(String(err.firstCall.args[0])));
+        assert.ok(!/Requesting hub-mirror recovery/.test(String(err.firstCall.args[0])));
     });
 
     it('tolerates no mirror at all', function () {
         const ix = wire(makeIndexer(900000));
+        ix.stallReason = 'call_presence_barrier';
         ix.hubDbSync = null;
         note.call(ix, 900, NOW);
         assert.doesNotThrow(() => note.call(ix, 900, NOW + 900000));
+        assert.strictEqual(ix.barrierCeilingHits, 1);
+        assert.deepStrictEqual(ix.resyncCalls, []);
+        assert.ok(/no hub-mirror resync/i.test(String(err.firstCall.args[0])));
+        assert.ok(!/Requesting hub-mirror recovery/.test(String(err.firstCall.args[0])));
     });
 });

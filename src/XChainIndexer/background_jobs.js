@@ -22,6 +22,7 @@
  ********************************************************************/
 
 const stateCommitment = require('../state_commitment/index.js');
+const metricInterval  = require('../state_commitment/metric_interval.js');
 const retention       = require('../chain/retention.js');
 const { CONFIG_ENV }  = require('../config.js');
 const { getLogger }   = require('../observability/index.js');
@@ -69,9 +70,13 @@ module.exports = {
     // Interval STATE_TREE_METRIC_INTERVAL_MS (default 4h; 0 disables).
     startStateTreeMetric(){
         if(this._stateTreeMetricTimer) return;
-        const raw = parseInt(CONFIG_ENV.STATE_TREE_METRIC_INTERVAL_MS, 10);
-        const intervalMs = Number.isFinite(raw) ? raw : (4 * 60 * 60 * 1000);
-        if(intervalMs === 0) return;   // explicitly disabled
+        const raw = CONFIG_ENV.STATE_TREE_METRIC_INTERVAL_MS;
+        const resolved = metricInterval.resolveStateTreeMetricIntervalMs(raw);
+        if(resolved.disabled) return;
+        const intervalMs = resolved.intervalMs;
+        if(resolved.adjusted)
+            getLogger().warn('XChainIndexer: invalid STATE_TREE_METRIC_INTERVAL_MS=' + String(raw) +
+                '; using ' + intervalMs + 'ms (0 disables, accepted range 60000..2147483647)');
         this._stateTreeMetricRunning = false;
         this._stateTreeMetricTimer = setInterval(async () => {
             if(this._stateTreeMetricRunning) return;   // a prior slow scan is still running

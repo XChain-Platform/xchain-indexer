@@ -104,6 +104,14 @@ describe('GET /status and GET /ready on a healthy indexer', function(){
         assert.strictEqual(status.body.chainLagKnown, true);
         assert.strictEqual(status.body.ready, true);
         assert.deepStrictEqual(status.body.notReadyReasons, []);
+
+        ix.chainTip = null;
+        ix.chainTipAt = null;
+        ix._chainTipCheckedAt = 0;
+        ix.utxoTracker.getSyncStatus = async () => null;
+        status = await get(port, '/status');
+        assert.strictEqual(status.body.chainTip, null);
+        assert.strictEqual(status.body.chainLag, null);
     });
 
     it('keeps every key /status already carried, in order, with the new ones after stallClass', async function(){
@@ -182,6 +190,26 @@ describe('GET /status and GET /ready on faults a restart cannot clear', function
         assert.strictEqual((await get(port, '/ready')).status, 503);
     });
 
+    it('keeps the behind episode through a stale tip read while the decoder sits level', async function(){
+        let ix = stubIndexer({ indexerBlock: 900, decoderBlock: 900, nodeHeight: 905 });
+        let episodeAt = Date.now() - 11 * MIN;
+        ix.lastBlockCommittedAt = Date.now() - 30 * MIN;
+        ix.readyBehindSince = episodeAt;
+        let staleSince = Date.now() - 2 * MIN;
+        ix.readChainTip = async () => ({ height: null, source: null, at: staleSince - ix.chainTipTtlMs,
+                                        stale: true, staleSince: staleSince });
+        await serve(ix);
+        let staleReady = await get(port, '/ready');
+        assert.strictEqual(staleReady.status, 503);
+        assert.deepStrictEqual(staleReady.body.notReadyReasons, ['behind_tip_no_commit']);
+        assert.strictEqual(ix.readyBehindSince, episodeAt, 'an unknown tip is not a caught-up tip');
+        ix.readChainTip = async () => ({ height: 905, source: 'utxo_tracker', at: Date.now(),
+                                        stale: false, staleSince: null });
+        let ready = await get(port, '/ready');
+        assert.strictEqual(ready.status, 503);
+        assert.deepStrictEqual(ready.body.notReadyReasons, ['behind_tip_no_commit']);
+    });
+
     it('reports a held block that survived a restart: /status 200, /ready 503 past the ceiling', async function(){
         let ix = stubIndexer({ indexerBlock: 1000, decoderBlock: 4800 });
         let now = Date.now();
@@ -225,6 +253,13 @@ describe('GET /status and GET /ready on faults a restart cannot clear', function
         ready = await get(port, '/ready');
         assert.strictEqual(ready.status, 503);
         assert.deepStrictEqual(ready.body.notReadyReasons, ['chain_tip_stale']);
+
+        ix.utxoTracker.getSyncStatus = async () => ({ node_height: 900, node_height_stale: true });
+        ix._chainTipCheckedAt = 0;
+        let flagged = await get(port, '/status');
+        assert.strictEqual(flagged.body.chainTipStale, true);
+        assert.strictEqual(flagged.body.chainLag, null);
+        assert.deepStrictEqual(flagged.body.notReadyReasons, ['chain_tip_stale']);
     });
 });
 

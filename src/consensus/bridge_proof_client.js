@@ -28,7 +28,7 @@
  *   2. HAND OVER ONLY A QUORUM-ESTABLISHED CHECKPOINT. Two sources qualify, and each is
  *      already quorum-established before it reaches the selector:
  *        - a locally parsed `anchor_actions` v0 bundle SECTION with status 'valid'. The
- *          strongest source: actions/anchor.js verified the oracle_publish quorum at parse
+ *          strongest source: actions/anchor/ verified the oracle_publish quorum at parse
  *          time, from chain data this node parsed itself.
  *        - a mirrored `state_checkpoints` row RE-VERIFIED here against the capability
  *          snapshot at that checkpoint's own snapshot_block. The mirror is untrusted, so a

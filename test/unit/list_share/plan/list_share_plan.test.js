@@ -21,10 +21,10 @@ const { listMembershipHash } = require('../../../../src/consensus/list_share_has
 const { planDueVersions } = require('../../../../src/consensus/list_share_settle/plan.js');
 const { nextMembership } = require('../../../../src/consensus/list_share_settle/delta.js');
 
-const vectors = require(path.resolve(
-    __dirname,
-    '../../../../../xchain-documentation/protocol/test-vectors/list_share.json'
-));
+const DOCS_DIR = process.env.XCHAIN_DOCS_DIR || path.resolve(
+    __dirname, '../../../../../xchain-documentation'
+);
+const vectors = require(path.join(DOCS_DIR, 'protocol/test-vectors/list_share.json'));
 
 const list = (home_chain, home_list_index, applied, rows) => ({
     home_chain, home_list_index, applied, rows

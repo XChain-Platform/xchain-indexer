@@ -47,7 +47,7 @@ module.exports = {
     // Surviving STATUS=ok v1 responses carrying signatures, for the affected providers.
     async readOkResponses(db, affectedProviders, providerPlaceholders){
         let okResponses = await db.doQuery(
-            `SELECT provider_id, validator_signatures, block_index
+            `SELECT request_id, provider_id, validator_signatures, block_index
              FROM attests
              WHERE version = 1 AND response_status = 'ok' AND validator_signatures IS NOT NULL
                AND provider_id IN (` + providerPlaceholders + `)`,

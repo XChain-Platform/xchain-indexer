@@ -132,8 +132,33 @@ async function recordExecution(ctx){
         STATUS          : status,
         ERROR_MESSAGE   : ctx.error || ctx.vmError || null,
         EMITTED_COUNT   : ctx.emittedCount,
-        BLOCK_INDEX     : data['BLOCK_INDEX']
+        BLOCK_INDEX     : data['BLOCK_INDEX'],
+        FEE_PAYMENT_MODE: shouldRecordFee.call(this, ctx) ? ctx.feePaymentMode : null
     });
+}
+
+function shouldRecordFee(ctx){
+    return !ctx.error && !ctx.skipFee && ctx.tokenInfo && this.util.bcgt(ctx.fee, 0);
+}
+
+function executionFee(ctx){
+    let data = ctx.data;
+    return {
+        ACTION_INDEX      : data['ACTION_INDEX'],
+        SOURCE            : data['SOURCE'],
+        TICK              : ctx.gas,
+        AMOUNT            : ctx.fee,
+        METHOD            : 1,
+        GAS_COST          : ctx.gasBilled,
+        GAS_PRICE         : this.config['GAS_PRICE'],
+        XCHAIN_AMOUNT     : ctx.fee,
+        PAYMENT_MODE      : ctx.feePaymentMode,
+        NATIVE_COIN_AMOUNT: data['NATIVE_COIN_AMOUNT'] || null,
+        NATIVE_COIN       : data['NATIVE_COIN'] || null,
+        ORACLE_ROUND      : data['ORACLE_ROUND'] || null,
+        FEE_PREFERENCE    : 1,
+        FEE_VERSION       : 2
+    };
 }
 
 async function applyLedgerChanges(ctx){
@@ -146,18 +171,22 @@ async function applyLedgerChanges(ctx){
     let credits = [],
         debits  = [];
 
-    // Debit gas fee from SOURCE. Mirror the in-memory balance debit's condition
-    // EXACTLY (!error && !skipFee && feePaymentMode === 2). A failed VM run (revert /
-    // out_of_gas / timeout) leaves `error` null (it sets vmError + a dedicated vmStatus),
-    // so the "caller pays for a failed attempt" case still debits. From execute_fee_cap_activation
-    // capFeeToHeldGas has already capped the fee at the GAS the source holds, so the debit never
-    // drives the balance negative; below it the full metered fee is debited. But an EXECUTE
-    // rejected before the VM ran
+    // Record the metered fee through the common fee path. Its destroy method preserves the
+    // existing ledger-paid burn as one debit, while native payment records history without a
+    // ledger change. A failed VM run (revert / out_of_gas / timeout) leaves `error` null, so
+    // the caller still pays. From execute_fee_cap_activation capFeeToHeldGas has already capped
+    // a ledger fee at the GAS the source holds. But an EXECUTE rejected before the VM ran
     // (insufficient GAS funds / inactive contract / sleeping source) sets `error`
     // and must NOT record a ledger debit: burning gas the source never had drops
     // ledger supply while getAddressBalances (which only iterates credit ticks)
     // leaves the balances projection unchanged (balance = ledger + 1, SanityError).
-    if(!ctx.error && !ctx.skipFee && ctx.tokenInfo && ctx.feePaymentMode === 2)
+    if(!ctx.error && !ctx.skipFee && ctx.tokenInfo && data['DRY_RUN'] === true &&
+       (ctx.feePaymentMode === 2 || data['FEE_PROBE'] === true))
+        data['PROBE_SETTLED_GAS_FEE'] = String(ctx.fee);
+    if(shouldRecordFee.call(this, ctx))
+        [credits, debits] = await this.util.processTransactionFees(
+            this.indexerDb, credits, debits, executionFee.call(this, ctx));
+    else if(!ctx.error && !ctx.skipFee && ctx.tokenInfo && ctx.feePaymentMode === 2)
         debits.push([ctx.gas, ctx.fee, data['SOURCE']]);
 
     // Process any transaction ledger changes (credits / debits)

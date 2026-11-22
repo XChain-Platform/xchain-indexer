@@ -40,7 +40,7 @@ const path     = require('path');
 
 // Before the local requires: src/config.js captures the environment once at
 // module load, so .env must already be in process.env when it is first required.
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const config   = require('../src/config.js');
 const Database = require('../src/db');
@@ -57,6 +57,30 @@ function missChargeContext(parent){
         indexerDb:        parent.indexerDb,
         providerRegistry: new ProviderRegistry(parent.config)
     });
+}
+
+function countFulfilledResponses(okResponses, ensure, logError = console.error){
+    for(let row of okResponses){
+        let sigs;
+        try { sigs = JSON.parse(row.validator_signatures); }
+        catch(_) {
+            logError('repair-validator-stats: skipped malformed validator_signatures for request ' + row.request_id + ', provider ' + row.provider_id + ', block ' + row.block_index);
+            continue;
+        }
+        if(sigs === null) sigs = [];
+        if(!Array.isArray(sigs)){
+            logError('repair-validator-stats: skipped non-array validator_signatures for request ' + row.request_id + ', provider ' + row.provider_id + ', block ' + row.block_index);
+            continue;
+        }
+        let provider = String(row.provider_id);
+        let block    = Number(row.block_index) || 0;
+        for(let sig of sigs){
+            if(!sig || !sig.pubkey) continue;
+            let s = ensure(String(sig.pubkey).toLowerCase(), provider);
+            s.fulfilled += 1;
+            s.lastBlock = Math.max(s.lastBlock, block);
+        }
+    }
 }
 
 async function main(){
@@ -106,24 +130,12 @@ async function main(){
     // validator_signatures JSON column on the v1 response rows, so we aggregate
     // them in JS rather than joining a child table.
     let okResponses = await db.doQuery(
-        `SELECT provider_id, validator_signatures, block_index
+        `SELECT request_id, provider_id, validator_signatures, block_index
          FROM attests
          WHERE version = 1 AND response_status = 'ok' AND validator_signatures IS NOT NULL`,
         []
     );
-    for(let row of okResponses){
-        let sigs = [];
-        try { sigs = JSON.parse(row.validator_signatures) || []; }
-        catch(_) { sigs = []; }
-        let provider = String(row.provider_id);
-        let block    = Number(row.block_index) || 0;
-        for(let sig of sigs){
-            if(!sig || !sig.pubkey) continue;
-            let s = ensure(String(sig.pubkey).toLowerCase(), provider);
-            s.fulfilled += 1;
-            s.lastBlock = Math.max(s.lastBlock, block);
-        }
-    }
+    countFulfilledResponses(okResponses, ensure);
 
     // missed_count: one per responsible-set validator each time a request expired
     // (attest/expire.js parseExpire). There is no per-validator expiry row to count, so we
@@ -202,4 +214,4 @@ if(require.main === module){
     });
 }
 
-module.exports = { missChargeContext };
+module.exports = { countFulfilledResponses, missChargeContext };

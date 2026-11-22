@@ -65,6 +65,8 @@ const SYNC_SRC = fs.readFileSync(SYNC_ENTRY, 'utf8') + '\n' +
 // rather than a rename that slides through.
 const { stallReasonSites, countStallReasonAssignments } = require('../../../helpers/stall_reason_sites.js');
 const { BRIDGE_PROOF_BARRIER } = require('../../../../src/consensus/bridge_proof_client/stall.js');
+const { PRICE_LANDING_BARRIER, ROLLCALL_PROOF_REASON,
+        CAPABILITY_PROOF_REASON } = require('../../../../src/XChainIndexer/stall_health.js');
 const IMPORTED_REASONS = { REMOTE_TOKEN_RETRY_STALL_REASON, BRIDGE_PROOF_BARRIER };
 function graceWiring() {
     const pairs = [];
@@ -87,11 +89,13 @@ function graceWiring() {
         // takes the block height too (row 5): null above the admission activation,
         // the clock form below it, so it is height-aware like the mirrored members.
         const direct = /\bdirectCallBarrierClearsAt\(blockTime,\s*blockToParse\)/.test(expr);
+        const content = /\bpriceTimeClearsAt\(blockTime,\s*blockToParse\)/.test(expr);
         let field = null, kind = 'null';
         if (height)      { field = height[1]; kind = 'height-aware'; }
         else if (anchor) { field = anchor[1]; kind = 'bound-aware'; }
         else if (plain)  { field = plain[1];  kind = 'clock'; }
         else if (direct) { field = 'directCallGraceS'; kind = 'height-aware'; }
+        else if (content){ kind = 'content-floor'; }
         pairs.push([reason, field, kind]);
     }
     return pairs;
@@ -121,7 +125,7 @@ const EXPECTED = [
     // An unreadable decoder block time: a host fault that clears when the row is readable.
     ['decoder_block_time_unavailable',  null,                          'null'],
     ['price_sync_barrier',              null,                          'null'],          // height case can clear early
-    ['price_sync_barrier',              'priceWatermarkGraceS',        'height-aware'],
+    ['price_sync_barrier',              null,                          'content-floor'],
     ['price_landing_barrier',           null,                          'null'],          // clears on other chains' landed time
     ['oracle_sync_barrier',             'oracleWatermarkGraceS',       'height-aware'],
     ['match_sync_barrier',              'matchWatermarkGraceS',        'height-aware'],
@@ -140,19 +144,27 @@ const EXPECTED = [
     ['snapshot_sync_barrier',           null,                          'null'],          // presence, not wall clock
     // Read-scoped: deferOnHeldCapabilityRead sits after deferOnSnapshotSync in the source.
     ['capability_proof_unavailable',    null,                          'null'],          // proof verification, not wall clock
-    // Host faults, not mirror barriers: none of them has a clock instant to name, and a
-    // grace field appearing on one would be a category error rather than a drift.
+    // None has a clock instant to name, so a grace field would be a category error.
+    // Most are host faults; the two '_barrier' rows are exceptions noted inline.
     ['vm_executor_unavailable',         null,                          'null'],
     ['anchor_reward_proof_unavailable', null,                          'null'],
-    ['bridge_proof_barrier',            null,                          'null'],
+    ['bridge_proof_barrier',            null,                          'null'],          // proof wait opted out of resync
     ['rollcall_proof_unavailable',      null,                          'null'],
-    ['list_share_snapshot_barrier',     null,                          'null'],
+    ['list_share_snapshot_barrier',     null,                          'null'],          // absent mirror snapshot; resync-able
     ['list_share_halt',                 null,                          'null'],
     ['parse_exception:',                null,                          'null']          // repeated parse failure, by prefix
 ];
 describe('barrier stallClearsAt grace-field mapping @regression', function () {
 
     it('each barrier keys stallClearsAt on its own grace field', function () {
+        assert.deepStrictEqual([PRICE_LANDING_BARRIER, ROLLCALL_PROOF_REASON, CAPABILITY_PROOF_REASON],
+            ['price_landing_barrier', 'rollcall_proof_unavailable', 'capability_proof_unavailable'],
+            'published stall reason words are a wire contract with external consumers');
+        assert.strictEqual((INDEXER_SRC.match(/\bconst\s+(?:PRICE_LANDING_BARRIER|ROLLCALL_PROOF_REASON|CAPABILITY_PROOF_REASON)\s*=\s*'[^']+';/g) || []).length, 3,
+            'each health-matched stall reason must have one declaration');
+        assert.doesNotMatch(INDEXER_SRC,
+            /this\.stallReason\s*=\s*'(?:price_landing_barrier|rollcall_proof_unavailable|capability_proof_unavailable)'/,
+            'raise sites must import the reason that health matches');
         assert.strictEqual(stallReasonSites(INDEXER_SRC, IMPORTED_REASONS).length,
             countStallReasonAssignments(INDEXER_SRC),
             'a non-null stallReason assignment is outside the scan; extend stall_reason_sites.js to read it');
@@ -171,13 +183,15 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         // 'future_block_wait', keeps nextBarrierHold() at null and makes the 900 s ceiling
         // unreachable on exactly the barrier whose stall is now remediable.
         const reKeyed = EXPECTED.filter(e => e[2] === 'height-aware' || e[2] === 'bound-aware');
-        assert.strictEqual(reKeyed.length, 9,
-            'nine EXPECTED entries are re-keyed onto a height (height-aware or bound-aware); ' +
+        assert.strictEqual(reKeyed.length, 8,
+            'eight generic EXPECTED entries are re-keyed onto a height; ' +
             'a change here means a barrier gained or lost its height keying');
         assert.ok(/\bbarrierClearsAtHeightAware\(blockTime, graceField, blockHeight\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the height-aware helper must return null while the admission consumer is armed');
         assert.ok(/\banchorBarrierClearsAt\(blockTime, horizonBound, blockHeight, graceField\)\{[\s\S]{0,400}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
             'the anchor barrier\'s bound-aware helper must return null while the admission consumer is armed');
+        assert.ok(/\bpriceTimeClearsAt\(blockTime, blockHeight,[\s\S]{0,200}?\bmirrorAdmissionActiveAt\(blockHeight\)\) return null;/.test(INDEXER_SRC),
+            'the price content-floor helper must return null while admission is armed');
     });
 });
 describe('barrier stallClearsAt grace-field mapping @regression', function () {

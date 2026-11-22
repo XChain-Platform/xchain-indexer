@@ -80,7 +80,8 @@ function drawNativeFeeOutput(util, ledger, available, paidAmount, band, prices, 
         nativeCoinAmount: util.bcformat(attributed, 8),
         nativeCoin:       coin,
         oracleRound:      prices.oracleRound,
-        expectedAmount:   util.bcformat(band.expectedNative, 8)
+        expectedAmount:   util.bcformat(band.expectedNative, 8),
+        minAcceptableAmount: util.bcformat(band.minAcceptable, 8)
     };
 }
 
@@ -90,6 +91,16 @@ function addProbeNativeFee(data, amount){
     if(disclosure)
         disclosure.nativeFeeOwed = this.bcformat(
             this.bcadd(disclosure.nativeFeeOwed, amount, 8), 8);
+}
+
+// A probe reads no AIRDROP tally, so it lists each tallied leg's own XCHAIN fee for the quote
+// to replay the in-order draw against a proposed output (actions_class/fee_pricing.js).
+// Runs with `this` bound to the Utility instance; writes nothing outside a probe.
+function addProbeLegFee(data, fees, xchainAmount){
+    if(data['FEE_PROBE'] !== true || !fees['NATIVE_FEE_LEDGER'] || typeof fees['NATIVE_FEE_LEDGER'] !== 'object')
+        return;
+    if(!Array.isArray(data['PROBE_NATIVE_FEE_LEGS'])) data['PROBE_NATIVE_FEE_LEGS'] = [];
+    data['PROBE_NATIVE_FEE_LEGS'].push(this.bcformat(xchainAmount, 8));
 }
 
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
@@ -261,6 +272,7 @@ module.exports = {
 
         let band = this.computeNativeFeeBand(xchainAmount, prices.xchainUsdPrice, prices.coinUsdPrice, toleranceMin, toleranceMax);
         addProbeNativeFee.call(this, data, band.expectedNative);
+        addProbeLegFee.call(this, data, fees, xchainAmount);
         return drawNativeFeeOutput(this, ledger, available, paidAmount, band, prices, coin);
     }
 };

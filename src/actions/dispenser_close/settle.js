@@ -42,13 +42,13 @@ module.exports = {
             // Gated on the dispenser not having settled already: GIVE_REMAINING is derived and no
             // close/expire reduces it, so a re-settlement would refund it twice
             // (util.isDispenserSettled). Both live entry statuses still refund: 'cancelling' from
-            // processCancellations, and 'open' or 'cancelling' from the dispense.js auto-closes
+            // processCancellations, and 'open' or 'cancelling' from the dispense/settle.js auto-closes
             // ('empty' and the MAX_DISPENSES cap), which settle a dispenser findMatchingDispensers
             // matched under its own `status IN ('open','cancelling')` filter.
             //
             // Negate via bcsub, not JS unary minus: -GIVE_REMAINING coerces the 64-precision
             // bignumber string to a float and silently loses digits past ~15 sig figs, de-syncing
-            // the escrow debit from the full-precision credit below (mirrors dispense.js). Negate
+            // the escrow debit from the full-precision credit below (mirrors dispense/settle.js). Negate
             // at the same precision (64).
             escrows.push([dispenser['GIVE_TICK'], this.util.bcsub(0, dispenser['GIVE_REMAINING'], 64), destination]);
             credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], destination]);

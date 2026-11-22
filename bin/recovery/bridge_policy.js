@@ -15,10 +15,15 @@
 'use strict';
 
 const bridgeSettle = require('../../src/consensus/bridge_settle.js');
+const gateRegistry = require('../../src/consensus/gate_registry.js');
+const membership = require('../../src/consensus/bridge_settle/policy_membership.js');
 const swq = require('../../src/consensus/stake_weighted_quorum.js');
 
 const HEX64 = /^[0-9a-f]{64}$/;
+const LEGACY_HEX64_ID = /^[0-9a-f]{64}$/i;
 const STATUSES = new Set(['finalized', 'retracted']);
+const LIST_SHARE_PRODUCER_GATE =
+    'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 
 function fail(kind, id, reason){
     throw new Error(kind + ' ' + String(id || '').substring(0, 16) + '... ' + reason);
@@ -35,7 +40,7 @@ function text(value){
 function validateShared(kind, row, idKey, network){
     let id = row && row[idKey];
     if(!row || typeof row !== 'object' || Array.isArray(row)) fail(kind, id, 'has malformed shape');
-    if(!HEX64.test(String(id || ''))) fail(kind, id, 'has malformed ' + idKey);
+    if(!LEGACY_HEX64_ID.test(String(id || ''))) fail(kind, id, 'has malformed ' + idKey);
     if(!integer(row.id) || !integer(row.snapshot_block) || !integer(row.effective_time) || !integer(row.finalizing_view))
         fail(kind, id, 'has malformed integer fields');
     if(row.network !== network) fail(kind, id, 'network does not match archive head');
@@ -59,7 +64,8 @@ function validatePolicy(row, network){
     validateShared('policy snapshot', row, 'snapshot_id', network);
     for(let key of ['origin_chain', 'tick', 'policy_hash'])
         if(!text(row[key])) fail('policy snapshot', row.snapshot_id, 'has malformed ' + key);
-    if(!HEX64.test(row.policy_hash) || !integer(row.policy_seq) || !integer(row.origin_block))
+    let policyHash = String(row.policy_hash || '').toLowerCase();
+    if(!HEX64.test(policyHash) || !integer(row.policy_seq) || !integer(row.origin_block))
         fail('policy snapshot', row.snapshot_id, 'has malformed policy fields');
     if(row.allow_list !== null && typeof row.allow_list !== 'string')
         fail('policy snapshot', row.snapshot_id, 'has malformed allow_list');
@@ -68,12 +74,19 @@ function validatePolicy(row, network){
     if(!(row.sleeping === 0 || row.sleeping === 1))
         fail('policy snapshot', row.snapshot_id, 'has malformed sleeping');
 
-    let allow = bridgeSettle.parseMembership(row.allow_list);
-    let block = bridgeSettle.parseMembership(row.block_list);
-    if(allow === false || block === false || !bridgeSettle.verifyMembershipOrder(allow) ||
-       !bridgeSettle.verifyMembershipOrder(block))
+    let allowParsed = membership.parseMembershipOrRef(row.allow_list);
+    let blockParsed = membership.parseMembershipOrRef(row.block_list);
+    if(allowParsed === false || blockParsed === false)
         fail('policy snapshot', row.snapshot_id, 'has malformed or unordered membership list');
-    if(bridgeSettle.policyHash(allow, block, !!row.sleeping) !== row.policy_hash)
+    let allow = Object.prototype.hasOwnProperty.call(allowParsed, 'list') ? allowParsed.list : null;
+    let block = Object.prototype.hasOwnProperty.call(blockParsed, 'list') ? blockParsed.list : null;
+    let refs = { allow: allowParsed.ref || null, block: blockParsed.ref || null };
+    if((refs.allow || refs.block) && !gateRegistry.activeAt(
+        LIST_SHARE_PRODUCER_GATE, row.network, 'BTC', Number(row.snapshot_block), null))
+        fail('policy snapshot', row.snapshot_id, 'carries a shared-list ref below the producer gate');
+    if(!membership.verifyMembershipOrder(allow) || !membership.verifyMembershipOrder(block))
+        fail('policy snapshot', row.snapshot_id, 'has malformed or unordered membership list');
+    if(membership.policyHash(allow, block, !!row.sleeping, refs) !== policyHash)
         fail('policy snapshot', row.snapshot_id, 'policy_hash does not match membership lists');
 }
 
@@ -104,18 +117,34 @@ async function writeBridge(db, row){
     let existing = await db.doQuery(
         'SELECT transfer_id FROM bridge_transfers WHERE transfer_id = ? LIMIT 1', [row.transfer_id]);
     if(existing && existing.length > 0){
+        // The hub revives a retracted transfer in place with the new round's signed content
+        // (insertBridgeTransfer), re-archives it on the status change, and the live mirror
+        // takes the same columns (BRIDGE_REVIVE_COLUMNS). A status-only update here kept
+        // the first batch's effective_time and snapshot_block, which gate when and in what
+        // order a transfer settles, so a recovery-fed node credited at a different block
+        // than a mirror-fed one. Only the archived revive columns move; a retraction never
+        // rewrites content on the hub, so it stays status-only.
+        if(row.status === 'finalized'){
+            await db.doQuery(
+                `UPDATE bridge_transfers SET status = ?, validator_signatures = ?, finalizing_view = ?,
+                     effective_time = ?, snapshot_block = ?
+                 WHERE transfer_id = ?`,
+                [row.status, row.validator_signatures, Number(row.finalizing_view) || 0,
+                 Number(row.effective_time), Number(row.snapshot_block), row.transfer_id]);
+            return;
+        }
         await db.doQuery('UPDATE bridge_transfers SET status = ? WHERE transfer_id = ?',
                          [row.status, row.transfer_id]);
         return;
     }
     await db.doQuery(
         `INSERT INTO bridge_transfers
-            (id, transfer_id, snapshot_block, network, src_chain, src_action_index,
+            (transfer_id, snapshot_block, network, src_chain, src_action_index,
              src_address, dest_chain, dest_address, tick, decimals, amount, effective_time,
              admit_block_btc, admit_block_ltc, admit_block_doge, finalizing_view,
              validator_signatures, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [Number(row.id), row.transfer_id, Number(row.snapshot_block), row.network,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [row.transfer_id, Number(row.snapshot_block), row.network,
          row.src_chain, Number(row.src_action_index), row.src_address, row.dest_chain,
          row.dest_address, row.tick, Number(row.decimals), row.amount, Number(row.effective_time),
          row.admit_block_btc == null ? null : Number(row.admit_block_btc),
@@ -135,13 +164,13 @@ async function writePolicy(db, row){
     if(bySeq && bySeq.length > 0 && bySeq[0].snapshot_id !== row.snapshot_id)
         fail('policy snapshot', row.snapshot_id, 'collides with an existing policy sequence');
     await db.doQuery(
-        `INSERT IGNORE INTO policy_snapshots
-            (id, snapshot_id, snapshot_block, network, origin_chain, tick, policy_seq,
+        `INSERT INTO policy_snapshots
+            (snapshot_id, snapshot_block, network, origin_chain, tick, policy_seq,
              origin_block, policy_hash, allow_list, block_list, sleeping, effective_time,
              admit_block_btc, admit_block_ltc, admit_block_doge, finalizing_view,
              validator_signatures, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [Number(row.id), row.snapshot_id, Number(row.snapshot_block), row.network,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [row.snapshot_id, Number(row.snapshot_block), row.network,
          row.origin_chain, row.tick, Number(row.policy_seq), Number(row.origin_block),
          row.policy_hash, row.allow_list, row.block_list, Number(row.sleeping),
          Number(row.effective_time),
@@ -162,4 +191,4 @@ async function writeArchive(db, archive, report){
     }
 }
 
-module.exports = { verifyArchive, writeArchive };
+module.exports = { validatePolicy, verifyArchive, writeArchive };

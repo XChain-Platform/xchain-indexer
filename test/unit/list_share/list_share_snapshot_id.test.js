@@ -21,10 +21,10 @@ const path = require('path');
 const { deriveListSnapshotId } = require('../../../src/consensus/list_share_settle/canonical.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
-const VECTOR_PATH = path.resolve(
-    __dirname,
-    '../../../../xchain-documentation/protocol/test-vectors/list_share.json',
+const DOCS_DIR = process.env.XCHAIN_DOCS_DIR || path.resolve(
+    __dirname, '../../../../xchain-documentation'
 );
+const VECTOR_PATH = path.join(DOCS_DIR, 'protocol/test-vectors/list_share.json');
 
 describe('list share snapshot id', function () {
     it('derives the testnet DOGE list 880001 sequence 1 snapshot id', function () {

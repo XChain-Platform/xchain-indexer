@@ -36,13 +36,6 @@ const ar = require('../../consensus/gates/anchor_reward_gate.js');
 
 module.exports = {
 
-    // Get EVERY decoder reorg event newer than the one the indexer last processed, oldest
-    // first, each as {id, block_index} where block_index is that event's deepest (lowest)
-    // orphaned block. A single-newest-event reader would drop the older, deeper reorg when
-    // two reorgs land between indexer iterations and the newer one is shallower, leaving
-    // orphaned rows below the rollback point.
-    // Processing the full set (and rolling back to the minimum block across it) closes that
-    // gap. afterId is the decoder event id from getLastProcessedReorgId (null = none yet).
     // Stable hash of a decoder REORG event's `data` payload, used as the reorg-marker witness
     // (#2735). sha256 hex; null/undefined data hashes the empty string so a missing payload has a
     // deterministic witness rather than throwing.
@@ -69,6 +62,45 @@ module.exports = {
             return raw;
         let previous = await this.getPreviousBlockTimes(key, protocolTime.MEDIAN_TIME_SPAN);
         return protocolTime.protocolTime(network, raw, previous);
+    },
+
+    // Resolve a page of stored block times with one decoder statement. The block-table
+    // read returns each requested height beside the prior timestamps its MTP needs;
+    // grouping and median calculation stay in memory so read count is page-constant.
+    async protocolTimesForStoredBlocks(blockIndexes){
+        let keys = [];
+        let seen = new Set();
+        for(let value of (Array.isArray(blockIndexes) ? blockIndexes : [])){
+            let key = Number(value);
+            if(!Number.isSafeInteger(key) || key < 0 || seen.has(key)) continue;
+            seen.add(key);
+            keys.push(key);
+        }
+        if(keys.length === 0) return new Map();
+        let network = (this.config) ? this.config['NETWORK'] : undefined;
+        let span = protocolTime.isProtocolTimeMtpActive(network)
+            ? protocolTime.MEDIAN_TIME_SPAN : 0;
+        let rows = await this.getStoredBlockTimeWindows(keys, span);
+        let windows = new Map(keys.map(key => [key, []]));
+        for(let row of (Array.isArray(rows) ? rows : [])){
+            let requested = Number(row.requested_block_index);
+            if(windows.has(requested)) windows.get(requested).push(row);
+        }
+        let times = new Map();
+        for(let key of keys){
+            let window = windows.get(key);
+            let rawRow = window.find(row => Number(row.block_index) === key);
+            if(!rawRow) continue;
+            let previous = window
+                .filter(row => Number(row.block_index) < key)
+                .sort((a, b) => Number(b.block_index) - Number(a.block_index))
+                .slice(0, span)
+                .map(row => row.block_time);
+            let resolved = protocolTime.protocolTime(network, rawRow.block_time, previous);
+            if(resolved !== false && resolved !== null && resolved !== undefined)
+                times.set(key, Number(resolved));
+        }
+        return times;
     },
 
     // Handle getting block time for a given block. Memoized (last-block-wins, in

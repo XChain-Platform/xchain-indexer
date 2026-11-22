@@ -21,6 +21,11 @@
  ********************************************************************/
 
 const { MIGRATION_CHECKSUM_REBASELINES } = require('../migration/checksum_rebaselines.js');
+const utf8mb4Columns = require('../../chain/utf8mb4_columns.js');
+
+const MANUAL_UTF8MB4_RAW_FIELD_COLUMNS = utf8mb4Columns.forMode('manual');
+const MANUAL_UTF8MB4_COLUMN_PAIRS_SQL = MANUAL_UTF8MB4_RAW_FIELD_COLUMNS
+    .map(entry => "('" + entry.table + "', '" + entry.column + "')").join(', ');
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
 // applies a migration (see migrationPreconditionSkip). Each entry is a parameterised
@@ -79,6 +84,31 @@ const MIGRATION_PRECONDITIONS = {
             if(Number.isNaN(len)) return null;
             if(len >= 130) return 'pubkeys.pubkey is already ' + len + ' characters wide, so there is no narrow column to widen.';
             return null;
+        }
+    },
+    // The manual half of the raw-wire utf8mb4 widen is a startup precondition.
+    // A database created from current table definitions, or one widened by an earlier
+    // operator run, already has every manual registry column in the exact shape the file
+    // writes: its registered type, utf8mb4_general_ci and NOT NULL. Baseline only that
+    // complete shape, the same one xchain-node's deploy fact requires, so the indexer
+    // never records a file the deploy guard would still call missing. Missing, unreadable,
+    // narrow or otherwise drifted columns keep the file pending, fail-closed.
+    '2026-09-02-utf8mb4-raw-wire-fields-not-null.sql': {
+        sql: 'SELECT TABLE_NAME AS tbl, COLUMN_NAME AS col, COLUMN_TYPE AS type, CHARACTER_SET_NAME AS charset, ' +
+             'COLLATION_NAME AS coll, IS_NULLABLE AS nullable FROM information_schema.columns ' +
+             'WHERE table_schema = ? AND (table_name, column_name) IN (' + MANUAL_UTF8MB4_COLUMN_PAIRS_SQL + ')',
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows)) return null;
+            const text = (value) => String(value == null ? '' : value).toLowerCase();
+            const live = new Map(rows.map(row => [text(row && row.tbl) + '.' + text(row && row.col), row || {}]));
+            const allDeclared = MANUAL_UTF8MB4_RAW_FIELD_COLUMNS.every(entry => {
+                const row = live.get((entry.table + '.' + entry.column).toLowerCase());
+                return Boolean(row) && text(row.type) === entry.type.toLowerCase() &&
+                    text(row.charset) === 'utf8mb4' && text(row.coll) === 'utf8mb4_general_ci' &&
+                    text(row.nullable) === (entry.tail === 'NOT NULL' ? 'no' : 'yes');
+            });
+            if(!allDeclared) return null;
+            return 'all manual raw-wire columns already have their declared utf8mb4 NOT NULL shape, so there is nothing to widen.';
         }
     },
     // Adds validator_rewards.derive_block_index (+ its index) and
@@ -196,6 +226,25 @@ const MIGRATION_PRECONDITIONS = {
             return ['list_snapshots', 'list_share_mirrors'].every(t => live.has(t))
                 ? 'list_snapshots and list_share_mirrors are both present, so this migration has no table left to create.' : null;
         } },
+    // Widens index_memos.memo to utf8mb4 with utf8mb4_general_ci, a collation the later
+    // 2026-11-01-index-memos-binary-collation.sql replaces with utf8mb4_nopad_bin. Both are
+    // mode=manual, so a scoped `--file` run of the later one leaves this file pending, and a
+    // blanket run afterwards would apply it second: the column silently reverts to the folding
+    // collation, or the UNIQUE rebuild fails on a memo pair the binary collation had split.
+    // Any column already at utf8mb4 has had its widen, whatever its collation, so baseline it
+    // and this file can never run behind its successor. An absent table, an absent column or an
+    // unreadable charset is not baselined: the file runs and the startup widths speak for it.
+    '2026-08-19-utf8mb4-index-memos-memo.sql': {
+        sql: "SELECT CHARACTER_SET_NAME AS charset_name FROM information_schema.columns " +
+             "WHERE table_schema = ? AND table_name = 'index_memos' AND column_name = 'memo'",
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows) || !rows.length) return null;
+            const charset = String((rows[0] && rows[0].charset_name) || '').toLowerCase();
+            if(charset !== 'utf8mb4') return null;
+            return 'index_memos.memo is already utf8mb4, so there is no narrow column to widen and ' +
+                   'running this file now could only revert a later collation change.';
+        }
+    },
     // Widens oracle_prices.tick to 250. mode=manual, so a database created from the current
     // src/sql/oracle_prices.sql (already 250) would sit PENDING forever; baseline only while the
     // live column is already 250 or wider. An absent or unreadable length never baselines.
@@ -207,6 +256,21 @@ const MIGRATION_PRECONDITIONS = {
             const len = Number(rows[0].len);
             if(Number.isNaN(len) || len < 250) return null;
             return 'oracle_prices.tick is already ' + len + ' characters wide, so there is no narrow column to widen.';
+        }
+    },
+    // A current fresh install already has the outbox payload capacity and charset this
+    // manual migration supplies. Baseline only a type that can hold MEDIUMTEXT and only
+    // utf8mb4; a missing column or either half of the old shape must leave the file pending.
+    '2026-11-19-pending-hub-pushes-widen-payload.sql': {
+        sql: "SELECT DATA_TYPE AS data_type, CHARACTER_SET_NAME AS charset_name " +
+             "FROM information_schema.columns WHERE table_schema = ? " +
+             "AND table_name = 'pending_hub_pushes' AND column_name = 'payload'",
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows) || !rows.length) return null;
+            const type = String((rows[0] && rows[0].data_type) || '').toLowerCase();
+            const charset = String((rows[0] && rows[0].charset_name) || '').toLowerCase();
+            if(!['mediumtext', 'longtext'].includes(type) || charset !== 'utf8mb4') return null;
+            return 'pending_hub_pushes.payload is already ' + type + ' with utf8mb4.';
         }
     },
 };

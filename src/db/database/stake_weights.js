@@ -33,10 +33,11 @@ const gateRegistry = require('../../consensus/gate_registry.js');
 const archivePublish = require('../../consensus/archive_publish_set.js');
 const mirrorJudgement = require('../../consensus/capability_snapshot_proof/mirror_judgement.js');
 const capabilityProof = require('../../consensus/capability_snapshot_proof/verify.js');
+const { canonicalBlockHeight } = require('../../hub/hub_db_sync/apply/canonical_height.js');
 const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
-const { requireStakeWeight, normalizeStakeAmount, usesCapabilitySnapshot } = require('../shared.js');
+const { requireStakeWeight, normalizeStakeAmount, capabilityConfig, usesCapabilitySnapshot } = require('../shared.js');
 
 const { createHeldLog } = require('../../consensus/capability_snapshot_proof/held_log.js');
 // Logs, once a minute per row, why a mirror-resolved row is still held.
@@ -57,9 +58,18 @@ function warnFirstUseSetOnce(db, key){
     getLogger().warn('Capability snapshot proof is using an unpinned regtest checkpoint validator set for first use.');
 }
 
+function capabilitySnapshotProofRequired(db, row){
+    if(!row) return false;
+    let block = canonicalBlockHeight(row.snapshot_block);
+    if(block === null) return false;
+    let capability = row.capability == null ? '' : String(row.capability);
+    return usesCapabilitySnapshot(db.config, capability) &&
+        gateRegistry.activeAt(CAPABILITY_SNAPSHOT_PROOF_ACTIVATION,
+            db.config['NETWORK'], 'BTC', block, 0);
+}
+
 async function judgeMirrorResolvedRow(db, row, capability, opts){
-    if(!gateRegistry.activeAt(CAPABILITY_SNAPSHOT_PROOF_ACTIVATION,
-        db.config['NETWORK'], 'BTC', row.snapshot_block, 0))
+    if(!capabilitySnapshotProofRequired(db, row))
         return { verdict: 'unknown', reason: 'this chain resolves ' + capability + ' from the mirror' };
     let firstUseSetKey = null;
     let suppliedObserver = opts && opts.noteFirstUseSet;
@@ -81,6 +91,10 @@ async function judgeMirrorResolvedRow(db, row, capability, opts){
 }
 
 module.exports = {
+
+    capabilitySnapshotProofRequired(row){
+        return capabilitySnapshotProofRequired(this, row);
+    },
 
     // Source-keyed all-staker weights at `blockIndex` - the STAKE_WEIGHTED_QUORUM
     // counterpart of getActiveValidators (the config-change PBFT's whole-federation
@@ -126,8 +140,7 @@ module.exports = {
         // never come from different sources; see usesCapabilitySnapshot.
         if(usesCapabilitySnapshot(this.config, capability))
             return await this.getCapabilitySnapshotWeights(capability, blockIndex);
-        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
-        let capConfig = caps[capability];
+        let capConfig = capabilityConfig(this.config, capability);
         if(!capConfig) return [];
         // Caller-supplied threshold (the hub's authoritative, signed/governance-
         // anchored MIN_STAKE) is honoured VERBATIM, identically to
@@ -233,6 +246,11 @@ module.exports = {
     // deliberately out of scope for this step.
     async verifyCapabilitySnapshotRow(row, opts){
         if(!row) return { verdict: 'unknown', reason: 'no row' };
+        let block = canonicalBlockHeight(row.snapshot_block);
+        if(block === null)
+            return { verdict: 'refused', reason: 'non-canonical snapshot_block ' +
+                String(row.snapshot_block).slice(0, 32) };
+        row = Object.assign({}, row, { snapshot_block: block });
         let capability = row.capability == null ? '' : String(row.capability);
         // A chain that RESOLVES this capability from the mirror has no local stakes to
         // re-derive from. Once the proof gate reaches the row's BTC watermark, judge the
@@ -241,9 +259,6 @@ module.exports = {
             return judgeMirrorResolvedRow(this, row, capability, opts);
         if(!this.isCapabilityConfigured(capability))
             return { verdict: 'unknown', reason: 'capability ' + capability + ' is not configured on this node' };
-        let block = Number(row.snapshot_block);
-        if(!Number.isFinite(block) || block < 0 || Math.floor(block) !== block)
-            return { verdict: 'unknown', reason: 'unusable snapshot_block ' + String(row.snapshot_block).slice(0, 32) };
         // The hub resolves every capability set at the BURIED height (declared minus
         // CANONICAL_REORG_BUFFER) but writes the row under the declared block, and the
         // wire convention is that every consumer buries it exactly once, locally. Resolving
@@ -317,9 +332,8 @@ module.exports = {
     // signals config drift during a capability rollout and must surface as an error
     // rather than an empty set that looks identical to "no qualified validators".
     isCapabilityConfigured(capability){
-        let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
         if(capability === 'archive_publish') capability = 'oracle_publish';
-        return !!caps[capability];
+        return !!capabilityConfig(this.config, capability);
     },
 
 };

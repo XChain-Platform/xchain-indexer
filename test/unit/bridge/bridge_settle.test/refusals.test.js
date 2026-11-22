@@ -24,6 +24,27 @@ const { BS, makeKey, NETWORK, SNAPSHOT, buildProof, makeTransfer, snapshotSet, m
 const assert = require('assert');
 const swq    = require('../../../../src/consensus/stake_weighted_quorum.js');
 const CHK    = require('../../../../src/consensus/bridge_checkpoint_check.js');
+const chainIdentity = require('../../../../src/hub/hub_db_sync/chain_identity.js');
+
+// The real mirror apply fence, expecting `ownId`, refuses `row` and admits the same row
+// stamped with `ownId`.
+function assertFenceRefusesOnlyForeign(row, ownId){
+    const fence = { _expectedBtcChainId: ownId, _refusedChainIdRows: new Map(), noteRefusedRowName() {} };
+    assert.strictEqual(chainIdentity.refuseForeignChainRow.call(fence, 'bridge_transfers', row), true,
+        'the mirror apply fence admitted a row from another chain instance');
+    const own = Object.assign({}, row, { btc_chain_id: ownId });
+    assert.strictEqual(chainIdentity.refuseForeignChainRow.call(fence, 'bridge_transfers', own), false,
+        'the mirror apply fence refused a row of its own chain');
+}
+
+// The settle outcome for `row`, with `planted` (when set) written into config as BTC_CHAIN_ID.
+async function settleWithPlantedId(keys, row, planted){
+    const { ctx } = makeCtx({ coin: 'DOGE', validators: snapshotSet(keys),
+                              tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8 } } });
+    if(planted) ctx.config['BTC_CHAIN_ID'] = planted;
+    const res = await BS.applyBridgeTransfer(row, ctx);
+    return { applied: res.applied, reason: res.reason };
+}
 
 describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the refusal and deferral paths', function(){
@@ -110,16 +131,16 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.deepStrictEqual(state.credits, []);
         });
 
+        // The refusal is the mirror apply fence's (refuseForeignChainRow). The settle pass reads
+        // no per-node identity, so a BTC_CHAIN_ID planted in its config must change nothing.
         it('refuses a row carrying a foreign btc_chain_id (a re-genesised rail)', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const row  = makeTransfer(keys, { btc_chain_id: 'b'.repeat(64) });
-            const { ctx, state } = makeCtx({ coin: 'DOGE', chainId: 'c'.repeat(64),
-                                             validators: snapshotSet(keys),
-                                             tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8 } } });
-            const res = await BS.applyBridgeTransfer(row, ctx);
-            assert.strictEqual(res.applied, false);
-            assert.strictEqual(res.reason, BS.SETTLE_REASON.CHAIN_ID);
-            assert.deepStrictEqual(state.credits, []);
+            assertFenceRefusesOnlyForeign(row, 'c'.repeat(64));
+            const blind = await settleWithPlantedId(keys, row, null);
+            assert.deepStrictEqual(await settleWithPlantedId(keys, row, 'c'.repeat(64)), blind,
+                'the settle pass compared the row against a per-node chain identity');
+            assert.notStrictEqual(blind.reason, BS.SETTLE_REASON.CHAIN_ID);
         });
 
         it('refuses a row whose destination is another chain', async function(){

@@ -44,9 +44,9 @@ const { resolveBalanceDeltaMode } = require('./config/balance_delta_mode.js');
 
 // TICK of the protocol gas token (config['GAS']). This value is consensus: it
 // names the token debited for capability STAKE, VOTE deposits/escrows, and
-// contract gas billing. Vendored single source of truth: ./protocol/constants.js
-// (byte-identical to xchain-documentation/protocol/constants.js, GAS_TICK); the
-// cross-service drift guard asserts this and the SDK co-signer's mirror equal it.
+// contract gas billing. The registry-backed value comes from
+// ./protocol/constants.js and stays in value parity with the canonical declaration;
+// the cross-service drift guard asserts this and the SDK co-signer's mirror equal it.
 const GAS_TICK = require('./protocol/constants.js').GAS_TICK;
 
 // Every environment variable this service reads outside this file, captured
@@ -87,6 +87,7 @@ const CONFIG_ENV = Object.freeze({
     HUB_DB_USER: process.env.HUB_DB_USER,
     HUB_PRICE_SYNC_TIMEOUT_MS: process.env.HUB_PRICE_SYNC_TIMEOUT_MS,
     HUB_PUSH_FAILED_RETENTION_SECONDS: process.env.HUB_PUSH_FAILED_RETENTION_SECONDS,
+    HUB_PUSH_DRAIN_CONTINUE_MS: process.env.HUB_PUSH_DRAIN_CONTINUE_MS,
     HUB_PUSH_MAX_ATTEMPTS: process.env.HUB_PUSH_MAX_ATTEMPTS,
     HUB_PUSH_PRUNE_INTERVAL_MS: process.env.HUB_PUSH_PRUNE_INTERVAL_MS,
     HUB_PUSH_RETRY_BASE_MS: process.env.HUB_PUSH_RETRY_BASE_MS,
@@ -276,6 +277,10 @@ function applyBlockTiming(config){
     // for no value; the hub only cares about the live tip. Default 100; override via
     // CHAIN_TIP_PUSH_MAX_LAG.
     config['CHAIN_TIP_PUSH_MAX_LAG'] = parseIntMin0(process.env.CHAIN_TIP_PUSH_MAX_LAG, 100);
+
+    // Live post-commit hub delivery is only a near-tip fast path. Further behind,
+    // HubPushQueue delivers the already durable rows without holding the block loop.
+    config['HUB_LIVE_PUSH_MAX_LAG'] = parseIntMin0(process.env.HUB_LIVE_PUSH_MAX_LAG, 3);
 }
 
 function applyRetroactiveReplayCap(config, coin){

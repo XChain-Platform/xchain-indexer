@@ -109,6 +109,28 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(await handler.relayFeePayoutAddress(PUBKEY_A, 100), null);
         });
 
+        it('pays the same source for a multi-source key whatever order the rows arrive in', async function () {
+            // Case-folding order puts the lowercase-second-char address first; binary order
+            // puts the uppercase one first. The pick must follow the folding order either way.
+            const FOLD_FIRST = '1aZweo67BMG3ePzarPujdzNEkZxRqvpW1';
+            const BINARY_FIRST = '1BrxVKjBByTnZdeUmTKSuChtrj22eJCPTo';
+            let reencode = sinon.spy(indexer.util, 'crossChainReencodeAddress');
+            let paid = [];
+            for(let rows of [
+                [{ pubkey: PUBKEY_A, source: FOLD_FIRST, weight: '1' },
+                 { pubkey: PUBKEY_A, source: BINARY_FIRST, weight: '1' }],
+                [{ pubkey: PUBKEY_A, source: BINARY_FIRST, weight: '1' },
+                 { pubkey: PUBKEY_A, source: FOLD_FIRST, weight: '1' }],
+            ]){
+                indexer.indexerDb.getCapabilitySnapshotWeights.resolves(rows);
+                reencode.resetHistory();
+                paid.push(await handler.relayFeePayoutAddress(PUBKEY_A, 100));
+                assert.ok(reencode.calledWith(FOLD_FIRST, 'BTC'));
+                assert.ok(!reencode.calledWith(BINARY_FIRST, 'BTC'));
+            }
+            assert.strictEqual(paid[0], paid[1]);
+        });
+
         it('returns zero below the snapshot-plane gate without reading prices', async function () {
             relayFeeGate.returns(false);
             let prices = stubRelayPrices();

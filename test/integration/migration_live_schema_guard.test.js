@@ -52,6 +52,7 @@ const BRIDGE    = '2026-09-12-bridge-tables.sql';
 const LISTS     = '2026-09-30-list-share-tables.sql';
 const TICK      = '2026-09-22-oracle-prices-widen-tick.sql';
 const NULLABLE  = '2026-07-05-contract-index-columns-nullable.sql';
+const OUTBOX    = '2026-11-19-pending-hub-pushes-widen-payload.sql';
 function testIndexer() {
     return {
         config: {},
@@ -93,6 +94,10 @@ const CASES = [
     shape('oracle tick at the target width', TICK, true, 'CREATE TABLE oracle_prices (id INT NOT NULL PRIMARY KEY, tick VARCHAR(250) NOT NULL)'),
     shape('oracle tick still narrow', TICK, false, 'CREATE TABLE oracle_prices (id INT NOT NULL PRIMARY KEY, tick VARCHAR(249) NOT NULL)'),
     shape('oracle_prices table absent', TICK, false),
+    shape('outbox payload is MEDIUMTEXT utf8mb4', OUTBOX, true,
+        'CREATE TABLE pending_hub_pushes (payload MEDIUMTEXT CHARACTER SET utf8mb4 NOT NULL)'),
+    shape('outbox payload is legacy TEXT utf8mb3', OUTBOX, false,
+        'CREATE TABLE pending_hub_pushes (payload TEXT CHARACTER SET utf8 NOT NULL)'),
     shape('derive-block columns and index all present', DERIVE, true, REWARD_TABLE(', derive_block_index INT NULL, KEY idx_derive (derive_block_index)'),
         LOG_TABLE(', reward_derive_block_index INT NULL')),
     shape('derive-block index missing', DERIVE, false, REWARD_TABLE(', derive_block_index INT NULL'),
@@ -117,7 +122,7 @@ const CASES = [
     shape('both list share tables present', LISTS, true, LIST_TABLES.map(simpleTable)),
     shape('only one list share table present', LISTS, false, simpleTable('list_snapshots')),
     shape('no list share tables', LISTS, false),
-];
+].concat(require('./migration_live_schema_guard.test/helpers/memo_cases.js'), require('./migration_live_schema_guard.test/helpers/utf8mb4_cases.js').cases);
 const QUALIFIED = REWARD_TABLE(", round_qualifier VARCHAR(20) NOT NULL DEFAULT '', " +
                                'UNIQUE KEY reward_unique (round_id, validator, round_qualifier)');
 const UTF8 = ' ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci';
@@ -161,7 +166,7 @@ const ASSERTIONS = [
         'CREATE TABLE index_addresses (address VARCHAR(120) NOT NULL PRIMARY KEY)' + UTF8,
         'CREATE TABLE index_pubkeys (pubkey CHAR(64) NOT NULL PRIMARY KEY)' + UTF8),
     assertion('ordering tables absent', 'assertStakeWeightOrderingCollation'),
-];
+].concat(require('./migration_live_schema_guard.test/helpers/utf8mb4_cases.js').assertions);
 const SETTLED = BRIDGE_TABLES.concat(LIST_TABLES).map(simpleTable);
 const NARROW_TICK = 'CREATE TABLE oracle_prices (id INT NOT NULL PRIMARY KEY, tick VARCHAR(100) NOT NULL)';
 const AUTO_COLUMN = 'CREATE TABLE guard_probe (value BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY)';
@@ -258,7 +263,6 @@ function defineCoverage() {
         }
     });
 }
-
 function defineVerdicts(h) {
     for (const c of CASES) {
         it((c.baseline ? 'baselines: ' : 'leaves to run: ') + c.name + ' (' + c.file + ')', async function () {
@@ -272,7 +276,6 @@ function defineVerdicts(h) {
         });
     }
 }
-
 function defineAssertions(h) {
     for (const c of ASSERTIONS) {
         it((c.refuses ? 'refuses: ' : 'allows: ') + c.name + ' (' + c.method + ')', async function () {
@@ -284,7 +287,6 @@ function defineAssertions(h) {
         });
     }
 }
-
 function defineLiveColumnLosses(h) {
     it('covers every refusal category emitted by the live-column guard', function () {
         const refused = LIVE_COLUMN_CASES.filter(c => c.refuses).map(c => c.refuses.source).join(' ');
@@ -317,7 +319,6 @@ function defineLiveColumnLosses(h) {
             conn, 'absent.sql', [guardSql('INT NOT NULL')]));
     });
 }
-
 function defineRunner(h) {
     beforeEach(() => h.reset());
     it('baselines a converged manual migration without running it, even on a passive start', async function () {
@@ -388,7 +389,6 @@ function defineRunner(h) {
         assert.deepStrictEqual((await h.ledger()).map(r => r.name), [NULLABLE]);
     });
 }
-
 describe('migration live-schema guard against a real MariaDB @tier3', function () {
     this.timeout(120000);
     const h = schemaHarness();

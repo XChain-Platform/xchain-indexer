@@ -327,7 +327,7 @@ function materializeTrees(workdir) {
 }
 
 function projectDbConfig(options) {
-    require('dotenv').config({ path: path.join(REPO, '.env') });
+    require('dotenv').config({ path: path.join(REPO, '.env'), quiet: true });
     process.env.INDEXER_COIN = options.coin;
     process.env.INDEXER_NETWORK = options.network;
     const env = require(path.join(REPO, 'src', 'config.js')).CONFIG_ENV;

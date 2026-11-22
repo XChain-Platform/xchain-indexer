@@ -54,6 +54,10 @@ const { archiveHeadPickPredicate } = require('./anchors/archive_head_pick.js');
 // txid-keyed reads, which filter no version at all.
 const CHECKPOINT_VERSIONS = [0, 1, 3];
 
+// Widest value each caller-supplied key text can take, set by the column it is compared with
+// (anchor_actions.chain and .network, index_addresses.address). A longer string names no row.
+const ANCHOR_KEY_MAX_LENGTH = { chain: 10, network: 20, author: 120 };
+
 // The subset of CHECKPOINT_VERSIONS that IS a checkpoint in its own right: a v0
 // bundle SECTION or the chain-bearing side of a folded action. Version 1 is the
 // legacy archive head, which carries its WRAPPER checkpoint's identity, so an
@@ -256,25 +260,31 @@ const ARCHIVE_ANCHOR_ROW_LIMIT = 50;
 // node with a mirrored oracle_publish snapshot and one without, exactly as it would
 // for the head picks above.
 //
+// A folded v3 action stores the checkpoint identity on its wrapper row and the
+// archive sequence on a chain-null row in the same action. The k/a self-join
+// combines those halves while legacy v1 heads join to themselves.
+//
 // LEFT JOINs on the author/txid linkage for the same reason ANCHOR_ACTIONS_SQL uses
 // them: a row whose action or transaction linkage is missing must still be returned
 // (as source/txid null) rather than vanish, because a vanished row reads to the hub
 // as "definitively absent" and licenses a second spend.
 // Params: [chain, network, block_index, checkpoint_seq, batch_crc32, match_count].
 const ARCHIVE_ANCHOR_BY_CONTENT_SQL =
-    `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
-            a.checkpoint_seq, a.snapshot_block, a.match_batch_seq, a.match_count,
+    `SELECT a.action_index, a.version, k.chain, k.network, k.block_index,
+            k.checkpoint_seq, k.snapshot_block, a.match_batch_seq, a.match_count,
             a.batch_crc32, a.total_chunks, a.block_index_doge, s.status,
             adr.address AS source, it.hash AS txid
-     FROM anchor_actions a
+     FROM anchor_actions k
+     JOIN anchor_actions a ON a.action_index = k.action_index
+      AND (a.section_index = k.section_index OR (k.version = 3 AND a.version = 3 AND a.chain IS NULL))
      JOIN index_statuses s ON s.id = a.status_id
      LEFT JOIN actions            act ON act.action_index = a.action_index
      LEFT JOIN index_addresses    adr ON adr.id           = act.source_id
      LEFT JOIN transactions       t   ON t.tx_index       = act.tx_index
      LEFT JOIN index_transactions it  ON it.id            = t.tx_hash_id
      WHERE ${archiveHeadPredicate('a')}
-       AND a.chain = ? AND a.network = ? AND a.block_index = ? AND a.checkpoint_seq = ?
-       AND a.batch_crc32 = ? AND a.match_count = ?
+       AND k.chain = ? AND k.network = ? AND k.block_index = ? AND k.checkpoint_seq = ?
+       AND k.batch_crc32 = ? AND k.match_count = ?
      ORDER BY a.action_index ASC
      LIMIT ${ARCHIVE_ANCHOR_ROW_LIMIT}`;
 
@@ -310,7 +320,7 @@ const ANCHOR_BY_TXID_AFTER_SQL =
 
 module.exports = {
     CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS, CHECKPOINT_SECTION_VERSIONS_SQL,
-    ANCHOR_ROW_LIMIT, ANCHOR_ACTIONS_SQL,
+    ANCHOR_KEY_MAX_LENGTH, ANCHOR_ROW_LIMIT, ANCHOR_ACTIONS_SQL,
     ARCHIVE_HEAD_AUTHOR_SQL, ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
     ARCHIVE_HEAD_GATE_SQL,
     ARCHIVE_ANCHOR_ROW_LIMIT, ARCHIVE_ANCHOR_BY_CONTENT_SQL,

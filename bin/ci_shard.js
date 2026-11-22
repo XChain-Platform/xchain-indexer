@@ -109,8 +109,8 @@ function shardArgs(opts, defaults) {
 function collectMain(mainStep, cwd = process.cwd()) {
   // Resolved from the repo at run time because mocha lives in its node_modules.
   const mochaDir = path.join(cwd, 'node_modules', 'mocha');
-  const { loadOptions } = require(path.join(mochaDir, 'lib', 'cli', 'options'));
-  const collectFiles = require(path.join(mochaDir, 'lib', 'cli', 'collect-files'));
+  const { loadOptions } = require(path.join(mochaDir, 'lib', 'cli', 'options.cjs'));
+  const collectFiles = require(path.join(mochaDir, 'lib', 'cli', 'collect-files.cjs'));
   const defaults = require(path.join(mochaDir, 'lib', 'mocharc.json'));
   const opts = loadOptions(words(mainStep).slice(1));
   const collected = collectFiles({
@@ -130,6 +130,12 @@ function runStep(step, env) {
     const child = spawn('bash', ['-c', step], { env, stdio: 'inherit' });
     child.on('close', (code, signal) => resolve(signal ? 1 : code));
   });
+}
+
+/** Keeps npm-style package bins while making every shebang use this process's Node runtime. */
+function childEnv(cwd, env = process.env, execPath = process.execPath) {
+  const prefixes = [path.join(cwd, 'node_modules', '.bin'), path.dirname(execPath)];
+  return { ...env, PATH: [...prefixes, env.PATH].filter(Boolean).join(path.delimiter) };
 }
 
 /** Runs every shard with bounded concurrency and prints each shard's output as one block. */
@@ -200,7 +206,7 @@ async function runMain(mainStep, cwd, env) {
 
 /** @returns {Promise<number>} the chain's exit status, stopping at the first red step as `&&` does. */
 async function runChain(chain, cwd = process.cwd()) {
-  const env = { ...process.env, PATH: `${path.join(cwd, 'node_modules', '.bin')}${path.delimiter}${process.env.PATH}` };
+  const env = childEnv(cwd);
   for (const step of chain.before) {
     const code = await runStep(step, env);
     if (code !== 0) return code;
@@ -238,6 +244,9 @@ async function main() {
   return runChain(chain);
 }
 
-module.exports = { splitChain, words, shardCount, shardJobs, dealShards, partitionError, shardArgs, collectMain, runShards, exitOf };
+module.exports = {
+  splitChain, words, shardCount, shardJobs, dealShards, partitionError, shardArgs, collectMain,
+  runShards, childEnv, exitOf,
+};
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });

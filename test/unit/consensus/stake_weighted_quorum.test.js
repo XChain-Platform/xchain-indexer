@@ -32,7 +32,7 @@
 const assert  = require('assert');
 const swq     = require('../../../src/consensus/stake_weighted_quorum.js');
 // Decides whether each sibling path may be trusted before a cross-repo guard requires it.
-const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+const { siblingCheckout, skipOrFail, siblingsRequired } = require('../../helpers/sibling_checkout.js');
 
 // Loads BTC/regtest config into the env so `new Utility()` can resolve its COIN
 // config (same fixture the db unit tests use).
@@ -207,10 +207,12 @@ function registerCrossEngineDeterminismTest() {
         // Sibling-relative: present in the monorepo/aggregator checkout, absent in
         // standalone single-repo CI (the dependent test then skips).
         let hubSwq;
+        let hubLoadError = null;
         // Judged before the require, so a lane symlink into a live main checkout is
         // never loaded as the hub engine.
         const hubCheckout = siblingCheckout(__dirname, '../../../../xchain-hub/src/consensus/stake_weighted_quorum.js');
-        try { hubSwq = hubCheckout.usable ? require('../../../../xchain-hub/src/consensus/stake_weighted_quorum.js') : null; } catch (e) { hubSwq = null; }
+        try { hubSwq = hubCheckout.usable ? require('../../../../xchain-hub/src/consensus/stake_weighted_quorum.js') : null; }
+        catch (e) { hubSwq = null; hubLoadError = e; }
 
         // Deterministic PRNG (mulberry32): fixed seed, reproducible fixtures.
         function rng(seed) {
@@ -239,7 +241,10 @@ function registerCrossEngineDeterminismTest() {
 
         it('hub and indexer predicates agree on 500 seeded random snapshots', function () {
             if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the hub/indexer seeded snapshot agreement');
-            if (!hubSwq) return this.skip();
+            if (!hubSwq) {
+                if (siblingsRequired()) throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the hub/indexer seeded snapshot agreement cannot run: xchain-hub stake_weighted_quorum.js failed to load (' + hubLoadError.message + ')');
+                return this.skip();
+            }
             const rand = rng(0x5EED1);
             for (let i = 0; i < 500; i++) {
                 const { validators, signers } = fixture(rand);
@@ -257,10 +262,11 @@ function registerDelegationTotalStakeTest() {
     describe('delegation source-dedup invariant (§3.7, R-2)', function () {
         // Sibling-relative; absent in standalone single-repo CI (dependent test skips).
         let hubSwq;
+        let hubLoadError = null;
         // Judged before the require, as in the determinism block above.
         const hubCheckout = siblingCheckout(__dirname, '../../../../xchain-hub/src/consensus/stake_weighted_quorum.js');
-        try { hubSwq = hubCheckout.usable ? require('../../../../xchain-hub/src/consensus/stake_weighted_quorum.js') : null; } catch (e) { hubSwq = null; }
-
+        try { hubSwq = hubCheckout.usable ? require('../../../../xchain-hub/src/consensus/stake_weighted_quorum.js') : null; }
+        catch (e) { hubSwq = null; hubLoadError = e; }
         function rng(seed) {
             return function () {
                 seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
@@ -269,11 +275,9 @@ function registerDelegationTotalStakeTest() {
                 return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
             };
         }
-
-        it('S = Σ weight over DISTINCT sources, independent of delegated key count', function () {
-            if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the hub/indexer source-dedup agreement');
-            if (!hubSwq) return this.skip();
+        function fixtures() {
             const rand = rng(0xD3F);
+            const result = [];
             for (let i = 0; i < 200; i++) {
                 const nSources = 1 + Math.floor(rand() * 6);
                 const validators = [];
@@ -285,9 +289,29 @@ function registerDelegationTotalStakeTest() {
                     for (let k = 0; k < nKeys; k++)
                         validators.push({ pubkey: `s${s}k${k}`, source: `S${s}`, weight });
                 }
-                assert.strictEqual(String(hubSwq.totalStake(validators)), String(expectedS),
-                    `totalStake counted delegated keys instead of sources on fixture #${i}`);
+                result.push({ validators, expectedS });
             }
+            return result;
+        }
+        it('indexer totalStake: S = Σ weight over DISTINCT sources, independent of delegated key count', function () {
+            assert.strictEqual(String(swq.totalStake(V)), '12000');
+            fixtures().forEach(({ validators, expectedS }, i) => {
+                assert.strictEqual(String(swq.totalStake(validators)), String(expectedS),
+                    `indexer totalStake counted delegated keys instead of sources on fixture #${i}`);
+            });
+        });
+        it('S = Σ weight over DISTINCT sources, independent of delegated key count', function () {
+            if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the hub/indexer source-dedup agreement');
+            if (!hubSwq) {
+                if (siblingsRequired()) throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the hub/indexer source-dedup agreement cannot run: xchain-hub stake_weighted_quorum.js failed to load (' + hubLoadError.message + ')');
+                return this.skip();
+            }
+            fixtures().forEach(({ validators, expectedS }, i) => {
+                assert.strictEqual(String(hubSwq.totalStake(validators)), String(expectedS),
+                    `hub totalStake counted delegated keys instead of sources on fixture #${i}`);
+                assert.strictEqual(String(hubSwq.totalStake(validators)), String(swq.totalStake(validators)),
+                    `hub/indexer totalStake disagreement on fixture #${i}`);
+            });
         });
     });
 }

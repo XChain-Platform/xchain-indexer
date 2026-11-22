@@ -35,6 +35,8 @@ const { getLogger } = require('../../observability/index.js');
 
 // Reason reported for a clear row that lifts nothing (same text as the decoder's reader).
 const UNAUDITED_CLEAR_REASON = 'unreadable or unaudited REORG_HALT_CLEARED row, treated as a live halt';
+const HALT_SCAN_LIMIT = 1000;
+const HALT_SCAN_LIMIT_REASON = 'REORG_HALT history exceeded the safe scan bound';
 
 // Check a clear row's payload carries the reason bar `xchain-node clear-reorg-halt` writes.
 // Same rule as isAuditedClear in xchain-decoder/src/db/reorg_halt.js, which is the source of truth.
@@ -43,10 +45,41 @@ function isAuditedClear(payload){
     return typeof payload.reason === 'string' && payload.reason.trim().length >= 8;
 }
 
+function haltRowPayload(row){
+    return (row && row.data != null) ? String(row.data) : null;
+}
+
+function parseHaltPayload(row){
+    let data = row && row.data;
+    try { return (typeof data === 'string') ? JSON.parse(data) : data; }
+    catch (_) { return null; }
+}
+
+function foldHaltRows(rows){
+    let state = { halted: false, id: null, payload: null };
+    for(let row of [...rows].reverse()){
+        let payload = parseHaltPayload(row);
+        if(row.code === 'REORG_HALT'){
+            state = { halted: true, id: Number(row.id), payload: haltRowPayload(row) };
+        } else if(!isAuditedClear(payload)){
+            state = { halted: true, id: Number(row.id), payload: UNAUDITED_CLEAR_REASON +
+                ((row.data != null) ? ': ' + String(row.data).slice(0, 200) : '') };
+        } else if(!state.halted){
+            state = { halted: false, id: null, payload: null };
+        } else {
+            let hasTarget = Object.prototype.hasOwnProperty.call(payload, 'cleared_halt_id');
+            let target = Number(payload.cleared_halt_id);
+            if(!hasTarget || (Number.isSafeInteger(target) && target === state.id))
+                state = { halted: false, id: null, payload: null };
+        }
+    }
+    return { halted: state.halted, payload: state.payload };
+}
+
 module.exports = {
 
     // The getreorghistory page: recent decoder REORG events above `sinceId`. Newest-first,
-    // the opposite of getReorgsSince above, because a caller checking whether a RECENT reorg
+    // the opposite of getReorgsSince below, because a caller checking whether a RECENT reorg
     // happened must see the relevant rows before `limit` truncates the page. `id` is the
     // decoder's monotonic events id, and the limit is bounded upstream so a peer can never
     // make this node serialize an unbounded events scan.
@@ -58,6 +91,14 @@ module.exports = {
             [sinceId, limit]);
     },
 
+    // Get EVERY decoder reorg event newer than the one the indexer last processed, oldest
+    // first, each as {id, block_index} where block_index is that event's deepest (lowest)
+    // orphaned block. A single-newest-event reader would drop the older, deeper reorg when
+    // two reorgs land between indexer iterations and the newer one is shallower, leaving
+    // orphaned rows below the rollback point.
+    // Processing the full set (and rolling back to the minimum block across it) closes that
+    // gap. afterId is the decoder event id from getLastProcessedReorgId (null = none yet).
+    //
     // `cursorWitness` (optional #2735): { time, hash } captured for the cursor's decoder REORG
     // event when the marker was recorded. Any non-null afterId gets the cursor-row existence
     // check (and the over-cursor guard on an empty read); a witness adds the time/hash match.
@@ -128,11 +169,10 @@ module.exports = {
     // { halted:boolean, payload:(string|null) } - the payload is the marker's `data` column
     // (operator context: why the decoder halted), null when not halted or absent.
     //
-    // The NEWEST of REORG_HALT / REORG_HALT_CLEARED decides, mirroring the writer-side
-    // contract in xchain-decoder/src/db/reorg_halt.js readReorgHaltState. `xchain-node clear-reorg-halt`
-    // clears a reviewed halt by writing a REORG_HALT_CLEARED row and never deletes the halt
-    // row, so the audit trail survives; selecting only REORG_HALT reads a cleared halt as
-    // live forever. A later halt writes a newer REORG_HALT row that is live again.
+    // A clear lifts only the live halt id it names. For an audited newest clear, replay a
+    // bounded history oldest-first, matching xchain-decoder readReorgHaltState, so a delayed
+    // clear cannot hide a later halt. Legacy audited clears without a target still lift the
+    // live halt. More history than the shared bound fails closed.
     // Fail-closed: a row whose code is missing or unreadable still counts as halted, because
     // "we could not tell" must never reach a caller as "not halted".
     // A clear row lifts the halt only when its payload is audited, exactly as the decoder
@@ -140,17 +180,20 @@ module.exports = {
     // payload is then the unaudited-clear reason plus a snippet of the row's data.
     async isReorgHalted(){
         let rows = await this.doQueryStrict(
-            `SELECT code, data FROM events WHERE code IN ('REORG_HALT','REORG_HALT_CLEARED') ORDER BY id DESC LIMIT 1`);
+            `SELECT id, code, data FROM events WHERE code IN ('REORG_HALT','REORG_HALT_CLEARED') ORDER BY id DESC LIMIT 1`);
         if(rows.length === 0) return { halted: false, payload: null };
         if(rows[0].code === 'REORG_HALT_CLEARED'){
             let data = rows[0].data;
-            let payload = null;
-            try {
-                payload = (typeof data === 'string') ? JSON.parse(data) : data;
-            } catch(_){
-                payload = null;
+            let payload = parseHaltPayload(rows[0]);
+            if(isAuditedClear(payload)){
+                let history = await this.doQueryStrict(
+                    `SELECT id, code, data FROM events WHERE code IN ('REORG_HALT','REORG_HALT_CLEARED') ORDER BY id DESC LIMIT ${HALT_SCAN_LIMIT + 1}`);
+                if(!Array.isArray(history))
+                    return { halted: true, payload: UNAUDITED_CLEAR_REASON };
+                if(history.length > HALT_SCAN_LIMIT)
+                    return { halted: true, payload: HALT_SCAN_LIMIT_REASON };
+                return foldHaltRows(history);
             }
-            if(isAuditedClear(payload)) return { halted: false, payload: null };
             return { halted: true, payload: UNAUDITED_CLEAR_REASON + ((data != null) ? ': ' + String(data).slice(0, 200) : '') };
         }
         return { halted: true, payload: (rows[0].data != null) ? String(rows[0].data) : null };

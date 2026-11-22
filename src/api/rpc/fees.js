@@ -21,8 +21,53 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
+const { fitsUtf8mb3 } = require('../../db/utf8mb3.js');
+const rpcParams = require('./params.js');
 
 const hasOwn = (object, property) => Object.prototype.hasOwnProperty.call(object, property);
+const PARAMS_TYPE_ERROR = 'params must be a pipe-delimited string or an array of strings, numbers, booleans or null';
+const QUOTE_SOURCE_MAX_LENGTH = 4096;
+const QUOTE_PARAMS_MAX_BYTES = 390000;
+const FEE_MODE_MAX_LENGTH = 16;
+const FEE_OUTPUT_MAX_LENGTH = 32;
+
+function indexerNotReady(message){
+    return { error: message, code: 'INDEXER_NOT_READY', retryable: true };
+}
+
+function indexerInternal(message){
+    return { error: message, code: 'INDEXER_INTERNAL' };
+}
+
+function invalidQuoteParams(params){
+    let primitive = value => value == null || ['string', 'number', 'boolean'].includes(typeof value);
+    if(!primitive(params) && !(Array.isArray(params) && params.every(primitive)))
+        return { error: PARAMS_TYPE_ERROR };
+    let wire = Array.isArray(params)
+        ? params.map(value => value == null ? '' : String(value)).join('|')
+        : String(params == null ? '' : params);
+    if(Buffer.byteLength(wire, 'utf8') > QUOTE_PARAMS_MAX_BYTES)
+        return { error: 'params must be at most ' + QUOTE_PARAMS_MAX_BYTES + ' bytes' };
+    return null;
+}
+
+// The bound is in UTF-8 bytes to match the public proxy; the character bound runs first
+// so a type or length failure never reaches the byte count.
+function quoteSource(value){
+    let parsed = rpcParams.string(value, { name: 'source', maxLength: QUOTE_SOURCE_MAX_LENGTH });
+    if(parsed.error) return parsed;
+    if(typeof parsed.value === 'string' && Buffer.byteLength(parsed.value, 'utf8') > QUOTE_SOURCE_MAX_LENGTH)
+        return { error: 'source must be at most ' + QUOTE_SOURCE_MAX_LENGTH + ' bytes' };
+    return parsed;
+}
+
+function feeOutput(value){
+    if(value === undefined || value === null) return { value };
+    if((typeof value !== 'string' && typeof value !== 'number') ||
+       String(value).length > FEE_OUTPUT_MAX_LENGTH)
+        return { error: 'feeOutputSats must be a string or number of at most 32 characters' };
+    return { value };
+}
 
 // A fee quote may still be resolving the tip time when rollback clears the block loop's
 // memos. Fail closed unless the API view owns distinct memo objects, otherwise the late
@@ -69,13 +114,21 @@ function feeQuoteRpc({ indexer }){
         async feequote({action, params, source, feeOutputSats}){
             if(!action || typeof action !== 'string')
                 return { error: 'action is required' };
+            let paramsError = invalidQuoteParams(params);
+            if(paramsError) return paramsError;
+            let parsedSource = quoteSource(source);
+            if(parsedSource.error) return parsedSource;
+            let parsedFeeOutput = feeOutput(feeOutputSats);
+            if(parsedFeeOutput.error) return parsedFeeOutput;
             if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             try {
-                return await indexer.actions.computeFeeQuote({ action, params, source, feeOutputSats });
+                return await indexer.actions.computeFeeQuote({
+                    action, params, source: parsedSource.value, feeOutputSats: parsedFeeOutput.value
+                });
             } catch (err) {
                 getLogger().error('feequote error:', err);
-                return { error: 'failed to compute fee quote' };
+                return indexerInternal('failed to compute fee quote');
             }
         },
 
@@ -84,12 +137,12 @@ function feeQuoteRpc({ indexer }){
         // feequote. Public read (surfaced to wallets/SDK via the explorer proxy).
         async feeschedule(){
             if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             try {
                 return await indexer.actions.getFeeSchedule();
             } catch (err) {
                 getLogger().error('feeschedule error:', err);
-                return { error: 'failed to fetch fee schedule' };
+                return indexerInternal('failed to fetch fee schedule');
             }
         },
     };
@@ -107,29 +160,72 @@ function feeQuoteRpc({ indexer }){
 // Body: { oracleAddress, giveCoin, giveTick, fiatCode, getCoin, giveEscrow, blockTime? }
 // blockTime defaults to the indexer's current tip time; a caller quoting for a
 // specific block may pass one.
+function parseOracleFeeQuoteParams(values){
+    let parsed = {};
+    for(const [name, maxLength, required] of [
+        ['oracleAddress', 100, true], ['giveCoin', 10, false],
+        ['giveTick', 250, true], ['fiatCode', 10, true], ['getCoin', 10, false],
+    ]){
+        let result = rpcParams.string(values[name], { name, maxLength, required });
+        if(result.error) return result;
+        parsed[name] = result.value;
+    }
+    let blockTime = rpcParams.optionalInteger(values.blockTime, { name: 'blockTime', min: 1 });
+    if(blockTime.error) return blockTime;
+    parsed.blockTime = blockTime.value;
+    let giveEscrow = parseGiveEscrow(values.giveEscrow);
+    if(giveEscrow.error) return giveEscrow;
+    parsed.giveEscrow = giveEscrow.value;
+    return { value: parsed };
+}
+
+// An omitted escrow stays omitted (the quote sizes it as zero). A present one
+// must have the text shape the dispenser create check accepts, minus sign,
+// exponent and hex forms: digits with at most one fractional part, so a
+// zero-padded "007" or "5." is quoted exactly as consensus would accept it
+// while a negative or exponent value is refused.
+const ESCROW_TEXT = /^[0-9]+(\.[0-9]*)?$/;
+function parseGiveEscrow(value){
+    if(value === undefined || value === null) return { value };
+    if((typeof value !== 'string' && typeof value !== 'number') ||
+       !ESCROW_TEXT.test(String(value)) || String(value).length > 80)
+        return { error: 'giveEscrow must be a non-negative decimal' };
+    return { value };
+}
+
 function oracleFeeQuoteRpc({ indexer }){
     return {
         async oraclefeequote({oracleAddress, giveCoin, giveTick, fiatCode, getCoin, giveEscrow, blockTime}){
             if(!oracleAddress || !giveTick || !fiatCode)
                 return { error: 'oracleAddress, giveTick and fiatCode are required' };
+            let parsedResult = parseOracleFeeQuoteParams({ oracleAddress, giveCoin, giveTick,
+                                                           fiatCode, getCoin, giveEscrow, blockTime });
+            if(parsedResult.error) return parsedResult;
+            let parsed = parsedResult.value;
             if(!indexer.indexerDb || !indexer.util)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
+            // oracle_prices is utf8mb3, so a key holding a character above U+FFFF names no
+            // oracle row: answer what an unknown ASCII key gets, without the bind that would
+            // throw errno 1267 (Illegal mix of collations). The consensus readers stay as is.
+            if(![parsed.oracleAddress, parsed.giveCoin, parsed.giveTick, parsed.fiatCode]
+                .every(v => v == null || fitsUtf8mb3(v)))
+                return { valid: false, error: 'invalid: ORACLE_ADDRESS (no effective oracle price)' };
             try {
                 let db = timeMemoIsolatedApiView(indexer.indexerDb);
-                let ts = Number(blockTime);
-                if(!Number.isFinite(ts) || ts <= 0){
+                let ts = parsed.blockTime;
+                if(ts === undefined || ts === null){
                     let tip = await db.getLatestBlockIndex();
                     ts = Number(await db.getBlockTime(tip)) || 0;
                 }
                 if(!Number.isFinite(ts) || ts <= 0)
-                    return { error: 'no indexed block to quote against' };
+                    return indexerNotReady('no indexed block to quote against');
                 let quote = await indexer.util.quoteOracleFee(ts, {
-                    ORACLE_ADDRESS: oracleAddress,
-                    GIVE_COIN:      giveCoin || indexer.config['COIN'],
-                    GIVE_TICK:      giveTick,
-                    FIAT_CODE:      fiatCode,
-                    GET_COIN:       getCoin  || indexer.config['COIN'],
-                    GIVE_ESCROW:    giveEscrow,
+                    ORACLE_ADDRESS: parsed.oracleAddress,
+                    GIVE_COIN:      parsed.giveCoin || indexer.config['COIN'],
+                    GIVE_TICK:      parsed.giveTick,
+                    FIAT_CODE:      parsed.fiatCode,
+                    GET_COIN:       parsed.getCoin  || indexer.config['COIN'],
+                    GIVE_ESCROW:    parsed.giveEscrow,
                 }, db);
                 if(!quote.valid)
                     return { valid: false, error: quote.error };
@@ -138,7 +234,7 @@ function oracleFeeQuoteRpc({ indexer }){
                                     indexer.util.bcmul(quote.expectedFee, '100000000', 0), 0);
                 return {
                     valid:             true,
-                    oracleAddress:     oracleAddress,
+                    oracleAddress:     parsed.oracleAddress,
                     blockTime:         ts,
                     requiredFeeNative: native,
                     requiredFeeSats:   Number(satsExact),
@@ -146,11 +242,11 @@ function oracleFeeQuoteRpc({ indexer }){
                     belowDust:         !!quote.belowDust,
                     note:              quote.belowDust
                         ? 'fee is below the dust threshold; no output required'
-                        : 'add a native-coin output of at least this amount to ' + oracleAddress
+                        : 'add a native-coin output of at least this amount to ' + parsed.oracleAddress
                 };
             } catch (err) {
                 getLogger().error('oraclefeequote error:', err);
-                return { error: 'failed to compute oracle fee quote' };
+                return indexerInternal('failed to compute oracle fee quote');
             }
         },
     };
@@ -174,13 +270,23 @@ function preflightRpc({ indexer }){
         async preflight({action, params, source, feeMode}){
             if(!action || typeof action !== 'string')
                 return { error: 'action is required' };
+            let paramsError = invalidQuoteParams(params);
+            if(paramsError) return paramsError;
+            let parsedSource = quoteSource(source);
+            if(parsedSource.error) return parsedSource;
+            let parsedMode = rpcParams.string(feeMode, {
+                name: 'feeMode', maxLength: FEE_MODE_MAX_LENGTH
+            });
+            if(parsedMode.error) return parsedMode;
             if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             try {
-                return await indexer.actions.computePreflight({ action, params, source, feeMode });
+                return await indexer.actions.computePreflight({
+                    action, params, source: parsedSource.value, feeMode: parsedMode.value
+                });
             } catch (err) {
                 getLogger().error('preflight error:', err);
-                return { error: 'failed to compute pre-flight' };
+                return indexerInternal('failed to compute pre-flight');
             }
         },
 
@@ -189,14 +295,21 @@ function preflightRpc({ indexer }){
         // block watchdog as timeout. That unrestricted surface (VM actions on demand) is why
         // it stays regtest-gated (see ENABLE_DRYRUN) even though the default feequote now
         // dry-runs publicly. Never persists.
-        // Body: { action, params, source, feeOutputs? }
+        // Body: { action, params, source, feeOutputs? }. The response reports protocol cost
+        // as xchainFee and any separately burned controller gas as guardGasFee.
         async feequotedryrun({action, params, source, feeOutputs}){
             if(!action || typeof action !== 'string')
                 return { error: 'action is required' };
+            let paramsError = invalidQuoteParams(params);
+            if(paramsError) return paramsError;
+            let parsedSource = quoteSource(source);
+            if(parsedSource.error) return parsedSource;
             if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
+                return indexerNotReady('indexer not ready');
             try {
-                return await indexer.actions.computeFeeQuoteDryRun({ action, params, source, feeOutputs });
+                return await indexer.actions.computeFeeQuoteDryRun({
+                    action, params, source: parsedSource.value, feeOutputs
+                });
             } catch (err) {
                 getLogger().error('feequotedryrun error:', err);
                 return { error: 'dry-run failed: ' + ((err && err.message) ? err.message : String(err)) };

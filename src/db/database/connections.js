@@ -34,6 +34,13 @@ const {
     CAPABILITY_PROOF_DEFERRED,
     capabilityReadHeld
 } = require('../../consensus/capability_snapshot_proof/held_read.js');
+const { DB_CONNECTION_UNAVAILABLE } = require('../../consensus/fault_guard.js');
+
+function connectionUnavailable(message){
+    const error = new Error(message);
+    error.code = DB_CONNECTION_UNAVAILABLE;
+    return error;
+}
 
 module.exports = {
 
@@ -48,7 +55,8 @@ module.exports = {
         // Circuit breaker: reject immediately if open
         if(this.circuitState === 'open'){
             if(Date.now() < this.circuitOpenUntil)
-                this.util.throwError('Circuit breaker open - database connections rejected until cooldown expires');
+                this.util.throwError(connectionUnavailable(
+                    'Circuit breaker open - database connections rejected until cooldown expires'));
             // Cooldown expired, transition to half-open
             this.circuitState = 'half-open';
             getLogger().info('Circuit breaker half-open - attempting reconnection');
@@ -75,10 +83,13 @@ module.exports = {
                 if(this.circuitFailures >= this.circuitThreshold){
                     this.circuitState = 'open';
                     this.circuitOpenUntil = Date.now() + this.circuitCooldown;
-                    this.util.throwError('Circuit breaker opened after ' + this.circuitFailures + ' consecutive failures - cooling down for ' + (this.circuitCooldown / 1000) + 's');
+                    this.util.throwError(connectionUnavailable('Circuit breaker opened after ' +
+                        this.circuitFailures + ' consecutive failures - cooling down for ' +
+                        (this.circuitCooldown / 1000) + 's'));
                 }
                 if(attempts >= maxAttempts)
-                    this.util.throwError('Could not connect to MariaDB after ' + maxAttempts + ' attempts. Giving up.');
+                    this.util.throwError(connectionUnavailable(
+                        'Could not connect to MariaDB after ' + maxAttempts + ' attempts. Giving up.'));
                 // Exponential backoff with jitter: delay = min(baseDelay * 2^attempt, maxDelay) + random jitter
                 let delay = Math.min(baseDelay * Math.pow(2, attempts - 1), maxDelay);
                 let jitter = Math.floor(Math.random() * delay * 0.3); // up to 30% jitter

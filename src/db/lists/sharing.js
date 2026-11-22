@@ -45,6 +45,49 @@ async function getSharedLists(db){
     );
 }
 
+async function getSharedListDetails(db){
+    return await db.doQuery(
+        `SELECT
+            l.list_action_index AS root_index,
+            l.action_index AS share_action_index,
+            a.block_index AS share_block,
+            (SELECT lm.name
+               FROM list_metas lm
+               INNER JOIN index_statuses ms ON (ms.id=lm.status_id)
+              WHERE lm.list_action_index=l.list_action_index
+                AND ms.status='valid'
+              ORDER BY lm.action_index DESC
+              LIMIT 1) AS name,
+            CASE WHEN EXISTS (
+                SELECT 1
+                  FROM list_transfers lt
+                  INNER JOIN index_addresses ta ON (ta.id=lt.destination_id)
+                 WHERE lt.list_action_index=l.list_action_index
+            ) THEN (
+                SELECT ta.address
+                  FROM list_transfers lt
+                  INNER JOIN index_addresses ta ON (ta.id=lt.destination_id)
+                 WHERE lt.list_action_index=l.list_action_index
+                 ORDER BY lt.action_index DESC
+                 LIMIT 1
+            ) ELSE (
+                SELECT sa.address
+                  FROM lists root
+                  INNER JOIN actions root_action ON (root_action.action_index=root.action_index)
+                  INNER JOIN index_addresses sa ON (sa.id=root_action.source_id)
+                 WHERE root.action_index=l.list_action_index
+                 LIMIT 1
+            ) END AS owner
+         FROM lists l
+         INNER JOIN actions a ON (a.action_index=l.action_index)
+         INNER JOIN index_statuses s ON (s.id=l.status_id)
+         WHERE a.action_format=2
+           AND s.status='valid'
+         ORDER BY l.action_index ASC`,
+        []
+    );
+}
+
 async function getListOwner(db, rootIndex){
     let rows = await db.doQuery(
         `SELECT a.address
@@ -70,4 +113,10 @@ async function createListTransfer(db, data, destination){
     );
 }
 
-module.exports = { isListShared, getSharedLists, getListOwner, createListTransfer };
+module.exports = {
+    isListShared,
+    getSharedLists,
+    getSharedListDetails,
+    getListOwner,
+    createListTransfer
+};

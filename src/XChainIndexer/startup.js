@@ -59,6 +59,23 @@ const MIRRORED_CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attest
 let baseGateReadOverlay;            // the venue overlay, read before any witness overlay exists
 let witnessOverlay = null;          // the recorded-rules overlay this module installed, if any
 
+async function runStartupMigrations(){
+    let startedAt = Date.now();
+    let attempt = 0;
+    let result;
+    do {
+        attempt++;
+        result = await this.indexerDb.runMigrations();
+        if(!result.lockSkipped || this.stopFlag) return result;
+        let waitedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+        getLogger().warn('Indexer schema migrations deferred: migration lock for ' +
+            this.indexerDbName + ' is held by another process; retrying (attempt ' +
+            attempt + ', waited ' + waitedSeconds + 's). Block processing will not start.');
+        await this.util.sleep(5000);
+    } while(!this.stopFlag);
+    return result;
+}
+
 // Read on first use rather than at load, so a stand-in protocol_changes without a
 // registry can still load this module.
 function baseReadOverlay(){
@@ -346,7 +363,7 @@ module.exports = {
         // Create xchain-utxo-tracker client (used by DISPENSER fresh-address check)
         this.utxoTracker = new UtxoTracker(this.utxoTrackerUrl, this.utxoTrackerPort);
         if(!this.utxoTracker.enabled)
-            getLogger().info('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set. DISPENSER fresh-address check will reject all non-owner dispensers');
+            getLogger().info('WARNING: UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT not set. A non-owner DISPENSER create below DISPENSER_FRESHNESS_ACTIVATION will halt the block until the tracker is configured');
 
         // Create instance of the actions class and pass database connection instances to it
         this.actions = new actions(this);
@@ -407,16 +424,15 @@ module.exports = {
             if(!indexerTablesVerified)
                 this.util.throwError("Database " + this.indexerDbName + " tables don't exist!");
 
-            // Apply any pending `auto` schema migrations (additive/idempotent changes the
-            // drift reconciler can't make on its own). Manual/destructive migrations stay
-            // gated for an explicit operator run (`node src/db/migration/migrate.js`). Recorded in the
-            // schema_migrations ledger, so this is a no-op once applied.
-            const migrationResult = await this.indexerDb.runMigrations();
+            // Apply pending auto migrations before any writer starts. A contended migration
+            // lock is retried in-process so status remains available with schemaReady false.
+            // Manual migrations stay gated for an explicit operator run.
+            const migrationResult = await runStartupMigrations.call(this);
+            if(migrationResult.lockSkipped && this.stopFlag) return;
             if(this.indexerDb instanceof database ||
                typeof this.indexerDb.recordConsensusGateBoot === 'function')
                 await this.recordConsensusGateBoot();
-            if(!migrationResult.lockSkipped)
-                this.schemaReady = true;
+            this.schemaReady = true;
 
             // Invariant probe (a precondition for arming the dense-id rules): the deterministic
             // address/ticker id counter (getNextAddressId = MAX(id)+1) and every wire ^<id>
@@ -454,14 +470,18 @@ module.exports = {
 
     // The durable hub-push retry queue and the two state-tree maintenance timers.
     startBackgroundServices(){
-        // Start the durable hub-push retry queue. Both PRICE hub pushes (v0 round and v1
-        // oracle price) are write-ahead: price.js enqueues the pending_hub_pushes row
-        // UNCONDITIONALLY inside the open block transaction, so it commits atomically with
-        // the prices row. Live delivery runs post-commit (deliverStagedHubPushes) and drops
-        // the row only on success, so neither a crash in that window nor a transient hub
-        // outage can permanently drop it; this poller drains whatever survives, with
-        // exponential backoff. No-op when no hub is configured (nothing ever enqueues in
-        // that case).
+        // Start the durable hub-push retry queue. The PRICE pushes (price_batch and v1
+        // oracle_price), the ATTEST batch pushes and the reorg retractions are write-ahead:
+        // each producer enqueues the pending_hub_pushes row inside the open block
+        // transaction, so it commits atomically with the rows it describes. Live delivery
+        // runs post-commit (deliverStagedHubPushes) and drops the row only on success, so
+        // neither a crash in that window nor a transient hub outage can permanently drop
+        // it; this poller drains whatever survives, with exponential backoff.
+        // Every producer gates the enqueue on hubClient.enabled, a snapshot taken at boot
+        // (constructor, then setAddressSource once). A node started with no hub configured
+        // writes no rows and does not backfill them if a hub is added later, so a new push
+        // site must reuse that gate together with enqueueHubPushTx. This poller is a no-op
+        // when no hub is configured (nothing ever enqueues in that case).
         this.hubPushQueue = new HubPushQueue(this);
         this.hubPushQueue.start();
 

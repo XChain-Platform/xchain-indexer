@@ -128,7 +128,7 @@ module.exports = {
     //   payCoin - the coin the BUYER actually pays in, i.e. the dispenser's
     //             GET_COIN. Selects the validator COIN/FIAT pair below.
     // They are equal on every dispenser that can exist today, because
-    // actions/dispenser.js guards BOTH GIVE_COIN and GET_COIN to the indexer's
+    // actions/dispenser/validate.js guards BOTH GIVE_COIN and GET_COIN to the indexer's
     // own chain (lines 146-153), so passing one for the other was inert. It was
     // still a trap: cross-chain dispensers are only shelved, not refused forever
     // (shelved behind a fiat-oracle decision of its own), and the day
@@ -184,7 +184,7 @@ module.exports = {
                     // The SAME affordability, un-floored. `units` is whole tokens, which is
                     // the right granularity for a caller that hands out one token at a time,
                     // but the per-token settlement rule
-                    // (DISPENSER_ORACLE_PER_TOKEN_PRICE in actions/dispense.js) divides this
+                    // (DISPENSER_ORACLE_PER_TOKEN_PRICE in actions/dispense/pricing_paths.js) divides this
                     // by GIVE_AMOUNT to get a FILL count, and flooring to whole tokens first
                     // silently under-credits whenever GIVE_AMOUNT is below 1: a buyer who can
                     // afford 1.75 tokens of a dispenser giving 0.5 per fill is owed 3 fills,
@@ -283,7 +283,7 @@ module.exports = {
     // in the SEND's token.
     //
     // The one-value-N-settlements property still holds here, and by construction, not by
-    // luck: with the key absent, actions/dispense.js opens its own transaction-scoped
+    // luck: with the key absent, actions/dispense/pricing.js opens its own transaction-scoped
     // tally over this send.amount whenever the flag is active, so several dispensers
     // behind one paid address can no longer each buy a full multiplier off the same SEND.
     // A future batched SEND therefore cannot reintroduce the defect: it would arrive here

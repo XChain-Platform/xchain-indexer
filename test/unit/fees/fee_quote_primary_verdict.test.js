@@ -33,10 +33,14 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../../src/utility.js');
 const Actions = require('../../../src/actions/index.js');
+const { readDryRunVerdict } = require('../../../src/actions/actions_class/dry_run_support.js');
+const { planListRematch } = require('../../../src/consensus/list_rematch/plan.js');
 
 /** The ORDER's own identity, and the MATCH's, which overwrites it in place. */
 const ORDER_INDEX = 41;
 const MATCH_INDEX = 77;
+const EXEC_INDEX = 88;
+const EMISSION_INDEX = 99;
 
 /**
  * A dry-run context whose stubbed `processTransaction` reproduces the
@@ -161,10 +165,30 @@ describe('a fee quote answers for the action it was asked about', () => {
 
         it('ORDER_MATCH captures the record it was handed, before overwriting it', async () => {
             let ctx  = makeDispatchCtx();
-            let data = { STATUS: 'valid', ACTION_INDEX: ORDER_INDEX };
+            let data = { ACTION: 'LIST', STATUS: 'valid', ACTION_INDEX: ORDER_INDEX,
+                         LIST_ACTION_INDEX: 12 };
+            let step = planListRematch(data, [MATCH_INDEX], [])[0];
+            let feeRecord = { amount: '2.00000000', payment_mode: 1 };
+            ctx.indexerDb = { getFeeRecord: async (index) => {
+                assert.strictEqual(index, ORDER_INDEX,
+                    'a LIST edit rematch must read the LIST edit fee row');
+                return feeRecord;
+            } };
+            ctx.actionOrderMatch = { parse: async (_params, matchData) => {
+                matchData.STATUS = 'pending_coinpay';
+                matchData.ACTION_INDEX = MATCH_INDEX;
+            } };
             ctx._primaryVerdict = null;
-            await ctx.processAction.call(ctx, 'ORDER_MATCH', null, data, null);
+            assert.strictEqual(step.data.STATUS, data.STATUS,
+                'LIST rematch steps must retain STATUS for the fee-quote snapshot');
+            assert.strictEqual(step.data.ACTION_INDEX, data.ACTION_INDEX,
+                'LIST rematch steps must retain ACTION_INDEX for the fee-quote snapshot');
+            await ctx.processAction.call(ctx, step.action, null, step.data, null);
             assert.deepStrictEqual(ctx._primaryVerdict, { status: 'valid', actionIndex: ORDER_INDEX });
+            let verdict = {};
+            await readDryRunVerdict(ctx, data, verdict);
+            assert.strictEqual(verdict.status, 'valid');
+            assert.strictEqual(verdict.feeRecord, feeRecord);
         });
 
         it('SWAP_MATCH does too (swap.js hands over its record the same way)', async () => {
@@ -191,6 +215,32 @@ describe('a fee quote answers for the action it was asked about', () => {
             await ctx.processAction.call(ctx, 'ORDER_MATCH', null,
                 { STATUS: 'pending_coinpay', ACTION_INDEX: MATCH_INDEX }, null);
             assert.deepStrictEqual(ctx._primaryVerdict, { status: 'valid', actionIndex: ORDER_INDEX });
+        });
+
+        it('an emitted matcher cannot become the top-level verdict', async () => {
+            for (const action of ['ORDER_MATCH', 'SWAP_MATCH']) {
+                let ctx = makeDispatchCtx();
+                ctx._primaryVerdict = null;
+                await ctx.processAction.call(ctx, action, null,
+                    { IS_EMISSION: true, STATUS: 'valid', ACTION_INDEX: EMISSION_INDEX }, null);
+                assert.strictEqual(ctx._primaryVerdict, null);
+            }
+        });
+
+        it('[REGRESSION] a failed EXECUTE keeps its own status and fee row', async () => {
+            let ctx = makeDispatchCtx();
+            ctx._primaryVerdict = null;
+            await ctx.processAction.call(ctx, 'ORDER_MATCH', null,
+                { IS_EMISSION: true, STATUS: 'valid', ACTION_INDEX: EMISSION_INDEX }, null);
+            let requestedIndex = null;
+            ctx.indexerDb = { getFeeRecord: async (index) => {
+                requestedIndex = index;
+                return { amount: '1.00000000', payment_mode: 1 };
+            } };
+            const verdict = {};
+            await readDryRunVerdict(ctx, { STATUS: 'failed', ACTION_INDEX: EXEC_INDEX }, verdict);
+            assert.strictEqual(verdict.status, 'failed');
+            assert.strictEqual(requestedIndex, EXEC_INDEX);
         });
     });
 });

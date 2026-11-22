@@ -446,5 +446,33 @@
   "2026-10-25-state-checkpoints-supersede-columns.sql": {
     "residue": "06681f5ff2b3d4aafdd01b6157477be6fc390a33c7436d566e40bf867108bd6e",
     "sha256": "16080b370d93d9278e363b026d64b2add4b79a4b1d3da03c36289b0a89a75265"
+  },
+  "2026-11-01-index-memos-binary-collation.sql": {
+    "residue": "ae6f1986990b27bf2d658a8c1f687a123c662fb47df0e9efa823d801988b08f2",
+    "sha256": "eaed44bbbf96e096fb63773d00d59cd6e45782fbad117feba20187c28445d783"
+  },
+  "2026-11-15-file-multipart-tables.sql": {
+    "residue": "21e8afdea15ab7d69653701ae9fd690944a08f86e6adddd17cb6142e931012d5",
+    "sha256": "2022b41c5d9c58ce2ff377de162b2b6d882eb97ad92a1dfad0e93d2aef361e61"
+  },
+  "2026-11-16-mappings-actions-address-history-idx.sql": {
+    "residue": "fa34b6340969b073d6fddb220f900c629e8bb012af0be641fb078cc3bb24eed1",
+    "sha256": "a5a454e6bc11fb707356328020f075575de2b20dc1ead52872b7e52353b501cd"
+  },
+  "2026-11-16-price-snapshots-pair-status-ts-index.sql": {
+    "residue": "56a12d4724932fa66b849254f65391ab7ecb27ff893883a57a6297ee6a1d4b91",
+    "sha256": "93cf661631ce347c713d2dbadd4d9c6da14dc7fd69c3fcdd4a72cf9bd8b695b4"
+  },
+  "2026-11-17-file-multipart-uncapped.sql": {
+    "residue": "716a8e63d8d26c6000653d468148df582c6a5315cdf6810b23e03cfc3f90692f",
+    "sha256": "f4e671e3893001de14c5b27700872816a340837675a1ca16edc16e6a8b9a09ba"
+  },
+  "2026-11-19-pending-hub-pushes-widen-payload.sql": {
+    "residue": "2c55a72d019255b08a4636df3b9f5701f677b24f0ac6eda4e16aa0976234c17d",
+    "sha256": "a3fbee1967cf769450c5fffff4188f18fac7287583a96efb505ad4564203b75f"
+  },
+  "2026-11-19-vote-watermark-action-index-idx.sql": {
+    "residue": "8d7b48509aad3b370e22c58e1e379e5096ce2bba12d57989ca0f09dca2c4b54e",
+    "sha256": "cf86d73e231ffa9b2e4a58f20d70f5f2e820c8f4d0b4bf0d878dfd623f7b626f"
   }
 }

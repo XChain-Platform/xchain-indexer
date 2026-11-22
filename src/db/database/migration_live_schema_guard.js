@@ -21,6 +21,7 @@
  * information_schema for every MODIFY in an auto file and names each loss. A type change
  * it has no widening rule for counts as a loss, and a text MODIFY that names no charset
  * or collation is compared against the table default the server would fall back to.
+ * Generated expressions and their storage kind are compared token by token.
  * One signedness flip passes: signed to unsigned on an AUTO_INCREMENT column whose MODIFY
  * restates AUTO_INCREMENT, and only after a live MIN read finds no negative stored value.
  * A MODIFY keyword the parse cannot place refuses the file instead of being skipped.
@@ -30,6 +31,7 @@
 'use strict';
 
 const { opensBackslashEscape } = require('../shared.js');
+const { generationLosses, intraFileColumnDependencies } = require('./migration_guards/column_change_safety.js');
 
 const INT_RANK  = { tinyint: 1, smallint: 2, mediumint: 3, int: 4, integer: 4, bigint: 5 };
 const TEXT_RANK = { tinytext: 1, text: 2, mediumtext: 3, longtext: 4 };
@@ -118,7 +120,8 @@ const ALTER_HEAD = /^ALTER\s+(?:ONLINE\s+)?(?:IGNORE\s+)?TABLE\s+(?:IF\s+EXISTS\
 function alterSpecs(stmt){
     const head = ALTER_HEAD.exec(stripBlockComments(stmt).trim());
     if(!head) return null;
-    return { table: unquote(head[1].split('.').pop().trim()), specs: splitTopLevel(head[2]) };
+    const names = /^\s*(`[^`]+`|[\w$]+)(?:\s*\.\s*(`[^`]+`|[\w$]+))?\s*$/.exec(head[1]);
+    return { schema: names[2] ? unquote(names[1]) : null, table: unquote(names[2] || names[1]), specs: splitTopLevel(head[2]) };
 }
 
 // True when text carries a MODIFY keyword outside every quoted literal and identifier.
@@ -138,11 +141,11 @@ function modifyClauses(statements){
         for(const clause of parsed.specs){
             const m = /^\s*MODIFY\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(`[^`]+`|\w+)\s+([\s\S]+)$/i.exec(clause);
             if(!m){
-                if(namesModify(clause)) found.push({ table: parsed.table, unparsed: clause.trim() });
+                if(namesModify(clause)) found.push({ schema: parsed.schema, table: parsed.table, unparsed: clause.trim() });
                 continue;
             }
             const definition = m[2].replace(/\s+(?:FIRST|AFTER\s+(?:`[^`]+`|\w+))\s*$/i, '').trim();
-            found.push({ table: parsed.table, column: unquote(m[1]), definition });
+            found.push({ schema: parsed.schema, table: parsed.table, column: unquote(m[1]), definition });
         }
     }
     return found;
@@ -247,6 +250,24 @@ function narrowedType(rawLive, rawNext, opts){
 // A collation name as the server compares it: MariaDB 10.6+ reports utf8 as utf8mb3.
 const collationKey = (name) => (name == null || name === '' ? null : String(name).toLowerCase().replace(/^utf8_/, 'utf8mb3_'));
 
+// The collation without its charset prefix, so utf8mb3_bin and utf8mb4_bin compare equal.
+const collationSuffix = (key) => key.split('_').slice(1).join('_');
+
+// The loss when a text MODIFY that names a charset lands on another collation than the live
+// column's. Only the charset half may differ, and the charset rule judges that half. With no
+// COLLATE the server applies the charset's default, which varies by server version but is never
+// binary, so only a binary live collation is known to be lost.
+function namedCollationLoss(liveCollation, bare){
+    const named = /\bCOLLATE\s+(\w+)/i.exec(bare);
+    if(named){
+        const next = collationKey(named[1]);
+        return collationSuffix(next) === collationSuffix(liveCollation) ? null
+            : 'changes the collation (' + liveCollation + ' -> ' + next + ')';
+    }
+    return /(?:^|_)bin$/.test(liveCollation)
+        ? 'omits COLLATE (' + liveCollation + ' -> the ' + declaredCharset(bare) + ' default)' : null;
+}
+
 // Every loss one MODIFY would cause against the live column row; empty when it is safe.
 // `opts` carries the unsigned-retype probe verdict (unsignedRetypeSafe, liveMin).
 function losses(live, definition, opts = {}){
@@ -261,6 +282,7 @@ function losses(live, definition, opts = {}){
     if(/\bon update\b/.test(extra) && !/\bON\s+UPDATE\b/i.test(bare)) out.push('strips ON UPDATE');
     if(String(live.COLUMN_COMMENT || '') !== '' && !/\bCOMMENT\b/i.test(bare)) out.push('strips COMMENT');
     if(generated && !/\bGENERATED\b|\bAS\s*\(/i.test(bare)) out.push('strips the generation expression');
+    out.push(...generationLosses(live, definition, blankLiterals));
     if(String(live.IS_NULLABLE || '').toUpperCase() === 'YES' && /\bNOT\s+NULL\b|\bPRIMARY\s+KEY\b/i.test(bare)){
         out.push('narrows NULL -> NOT NULL');
     }
@@ -282,6 +304,10 @@ function losses(live, definition, opts = {}){
        liveCollation !== tableCollation){
         const what = liveCollation.split('_')[0] === tableCollation.split('_')[0] ? 'omits COLLATE' : 'omits CHARACTER SET';
         out.push(what + ' (' + liveCollation + ' -> table default ' + tableCollation + ')');
+    }
+    if(liveSet && nextSet && nextType && TEXTUAL.has(nextType.name) && liveCollation){
+        const changed = namedCollationLoss(liveCollation, bare);
+        if(changed) out.push(changed);
     }
     return out;
 }
@@ -327,15 +353,23 @@ async function rowFormatRefusal(conn, file, table, column, live, definition){
 }
 
 // Throw when an auto file's MODIFY would strip or narrow a live column. An absent live
-// column (a fresh install, or one the file itself adds) is not drift and passes through.
+// column passes only when no earlier statement in the same file created or changed it.
 async function assertNoLiveColumnLoss(conn, file, statements){
-    for(const { table, column, definition, unparsed } of modifyClauses(statements)){
+    const dependency = intraFileColumnDependencies(statements, { alterSpecs, stripBlockComments, splitTopLevel })[0];
+    if(dependency) throw new Error('runMigrations: ' + file + ' is tagged mode=auto but its MODIFY of ' +
+        dependency.table + '.' + dependency.column + ' depends on ' + dependency.earlier + ' in the same file. ' +
+        'Fold the final definition into the earlier statement, move the MODIFY to a later migration, or re-tag the file ' +
+        '`-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
+    for(const { schema, table, column, definition, unparsed } of modifyClauses(statements)){
         if(unparsed != null){
             throw new Error('runMigrations: ' + file + ' is tagged mode=auto but carries a MODIFY this guard cannot read: "' +
                 unparsed.slice(0, 160) + (unparsed.length > 160 ? '...' : '') + '", so the live column it lands on goes unchecked. ' +
                 'Rewrite it as `ALTER TABLE t [WAIT n | NOWAIT] MODIFY [COLUMN] c <definition>`, or re-tag the file ' +
                 '`-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
         }
+        if(schema) throw new Error('runMigrations: ' + file + ' is tagged mode=auto but its MODIFY targets schema-qualified ' +
+            schema + '.' + table + ', which this guard cannot check against the live schema. Use the bare table name, or re-tag ' +
+            'the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
         const rows = await conn.query(
             'SELECT COLUMN_TYPE, COLUMN_DEFAULT, EXTRA, COLUMN_COMMENT, GENERATION_EXPRESSION, IS_NULLABLE, CHARACTER_SET_NAME, ' +
             'COLLATION_NAME, TABLE_COLLATION, t.ROW_FORMAT FROM information_schema.COLUMNS c JOIN information_schema.TABLES t ' +

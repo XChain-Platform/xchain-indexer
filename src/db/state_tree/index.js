@@ -69,20 +69,23 @@ module.exports = {
 
     // The distinct sub-roots of every RETAINED root row, as rows of { r }.
     //
-    // EVERY committed sub-root must appear in this union. Phase 2 DELETES what the mark
+    // EVERY committed or shadow sub-root backed by state_tree_nodes must appear in this
+    // union. Phase 2 DELETES what the mark
     // cannot reach from it, and a missing slot means the sweep reclaims nodes the tree
     // still references; the next incremental descent then reads those absent rows as an
     // EMPTY subtree rather than failing, so the chain keeps running and silently commits a
-    // forked root. Adding a slot to merkle.STATE_SUBTREES without adding it here is a
+    // forked root. Adding a committed or shadow slot without adding it here is a
     // data-loss bug that fires only once the slot is armed AND the window rolls past it.
-    // contract_state_root is NULL on every inert row and IS NOT NULL drops those, so the
-    // union is unchanged until a chain arms the slot.
+    // Optional roots are NULL on inert rows and IS NOT NULL drops those, so the union is
+    // unchanged until a chain arms the corresponding slot.
     async getRetainedStateSubtreeRoots(chain, network){
         return await this.poolQuery(
             'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
             'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-            'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
-            [chain, network, chain, network, chain, network]);
+            'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL ' +
+            'UNION SELECT DISTINCT contract_state_root_shadow AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root_shadow IS NOT NULL ' +
+            'UNION SELECT DISTINCT balances_root_escrow_shadow AS r FROM state_tree_roots WHERE chain=? AND network=? AND balances_root_escrow_shadow IS NOT NULL',
+            [chain, network, chain, network, chain, network, chain, network, chain, network]);
     },
 
     // How many node rows the store holds. Read BEFORE the mark loads anything, because the

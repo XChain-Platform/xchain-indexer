@@ -28,6 +28,7 @@
 
 const { getLogger } = require('../observability/index.js');
 const { BRIDGE_PROOF_BARRIER } = require('../consensus/bridge_proof_client/stall.js');
+const { ROLLCALL_PROOF_REASON } = require('./stall_health.js');
 
 // The VM executor or a DOGE anchor proof is unavailable from HERE. Returns true when
 // the fault was one of these two.
@@ -99,7 +100,7 @@ function noteBridgeOrRollcallFault(error, lastIndexerBlock){
             (error && error.message) + ' HALTING block processing (not committing; ' +
             'silence is not absence). Retrying after ' +
             this.config['BLOCK_CHECK_INTERVAL'] + 'ms.');
-        this.stallReason = 'rollcall_proof_unavailable';
+        this.stallReason = ROLLCALL_PROOF_REASON;
         this.stallClearsAt = null;          // clears when DOGE visibility returns, not on a clock
         return true;
     }

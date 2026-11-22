@@ -22,7 +22,7 @@
  * executes: a wrong column name, a bad join, or a MAX() over the wrong table
  * would pass every unit assertion and then fail closed on a live node, where
  * the failure mode is not an error but a CONSENSUS VERDICT (the v1/v6 archive
- * replay guard in actions/anchor.js reads these two watermarks and rejects an
+ * checkReplayGuards in actions/anchor/archive/archive_head.js reads these two watermarks and rejects an
  * anchor as a stale replay).
  *
  * So this file exercises the semantics, not the shape:

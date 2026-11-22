@@ -25,9 +25,10 @@
  * signatures count, and at what BTC height an eviction and a COLLECT-spendable
  * reward materialise. On a SHARED-LEDGER network -- mainnet and testnet, where
  * many nodes validate one chain -- none may be read from the coin registry,
- * from env, or from coins.resolveConfirmations(), the same argument
- * anchor_reward_activation.js makes for its own maturity and burial depths: a
- * ledger input cannot be sourced from a field nothing pins and anyone may tune.
+ * from env, or from coins.resolveConfirmations(), the same argument the
+ * anchor_reward_activation.* gate rows (shared_rows_1.js) make for their own
+ * maturity and burial depths: a ledger input cannot be sourced from a field
+ * nothing pins and anyone may tune.
  *
  * THAT ARGUMENT IS ABOUT A SHARED LEDGER, so per the 2026-09-01 ruling it is
  * scoped to the networks that have one. A regtest chain is private: no two

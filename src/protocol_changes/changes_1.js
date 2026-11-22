@@ -174,7 +174,7 @@ module.exports = [
     // (validator PRICE v0 snapshot, or a user PRICE v1 oracle when
     // ORACLE_ADDRESS is set). Below activation a FIAT dispenser cannot settle
     // at all and its dispense records 'invalid: FIAT dispenser pricing not
-    // active'; above it, actions/dispense.js runs the reverse match.
+    // active'; above it, actions/dispense/pricing_paths.js runs the reverse match.
     //
     // Genesis-activated (pre-launch), and provably free of replay
     // consequences: retrofitted 2026-07-24 after confirming every mainnet
@@ -252,8 +252,9 @@ module.exports = [
     // DESTROY on a controller-bound token settles with its plain (un-guarded)
     // semantics, no allow/deny veto, no royalty/fee payout_legs written, and no
     // guard contract_executions row, exactly as a node that lacks the controller
-    // layer behaves. At/above it the shared chokepoint (_invokeController in
-    // utility.js) runs the guard, may DENY the action, and may attach payout_legs
+    // layer behaves. At/above it the shared chokepoint (invokeController in
+    // src/utility/controller_guard.js) runs the guard, may DENY the action, and
+    // may attach payout_legs
     // that the match-time proceeds split applies. Gated as its own consensus rule
     // because the guard is a NEW, ungated acceptance + ledger rule: a node version
     // with the controller layer and one without it process the SAME guarded action

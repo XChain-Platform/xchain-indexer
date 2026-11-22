@@ -29,7 +29,8 @@
 module.exports = {
 
     // Rewrite one contract_stakes / contract_unstakes row's signing key and journal the previous
-    // value so a reorg can restore it verbatim (see rollback.js) and xchain-sync can carry the
+    // value so restoreDelegationRotations in src/rollback/in_place_flips.js and
+    // src/db/rollback/stake_restores.js can restore it verbatim, and xchain-sync can carry the
     // mutated surviving row to followers (updatedRows.js). Shared by the rotate and revert passes
     // above. `table` is a fixed literal from this method, never caller input.
     async rotateContractStakeKey(table, stakeRow, delegationActionIndex, newPubkeyId, blockIndex){
@@ -124,6 +125,10 @@ module.exports = {
         this.assertTxNotFenced();
         if(!this.transactionConnection)
             throw new Error('rollbackToSavepoint requires an active transaction');
+        // An address interned inside the savepoint may have materialized staged recovery
+        // rewards; the partial rollback restores those rows while the transaction goes on
+        // to commit, so the in-memory countdown must be re-probed.
+        if(typeof this.invalidateRecoveryPendingProbe === 'function') this.invalidateRecoveryPendingProbe();
         await this.transactionConnection.query('ROLLBACK TO SAVEPOINT ' + name);
     },
 

@@ -40,11 +40,11 @@ const ProviderRegistry = require('../../attestation/provider_registry.js');
 // test/unit/actions/gas_ceiling_parity.test.js enforces that, so keep this one-literal shape.
 const GAS_CEILING = 1000000;
 
-// Cross-contract call protocol constants. Vendored single source of truth:
-// ../protocol/constants.js (byte-identical to xchain-documentation/protocol/
-// constants.js, VM_MAX_CALL_DEPTH / VM_MIN_CALL_GAS). The VM enforces both at
-// emit time (gateway-emit.js); these host-side checks are defense in depth so
-// an older/compromised bundled VM cannot bypass them.
+// Cross-contract call protocol constants. These registry-backed values come
+// from ../../protocol/constants.js and stay in value parity with the canonical
+// declarations. The VM enforces both in gateway_emit/same_chain.js
+// buildExecuteEmit; these host-side checks are defense in depth so an older or
+// compromised bundled VM cannot bypass them.
 const PROTO = require('../../protocol/constants.js');
 const MAX_CALL_DEPTH = PROTO.VM_MAX_CALL_DEPTH;
 const MIN_CALL_GAS   = PROTO.VM_MIN_CALL_GAS;
@@ -141,6 +141,7 @@ class Execute {
             balances:        null,
             feePaymentMode:  2,
             skipFee:         false,
+            paidGasCeiling:  null,
             execCeiling:     null,
             gasUsed:         null,
             gasBilled:       null,
@@ -151,7 +152,7 @@ class Execute {
         };
 
         await validate.validateExecute.call(this, ctx, params);
-        await fees.chargeGasFee.call(this, ctx);
+        await fees.chargeGasFee.call(this, ctx, LIMITS);
         await validate.validateSourceAwake.call(this, ctx);
         await runVm.runVmExecution.call(this, ctx, LIMITS);
         await settle.settleExecution.call(this, ctx);

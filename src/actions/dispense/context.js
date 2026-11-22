@@ -63,9 +63,9 @@ module.exports = {
             await this.indexerDb.deleteActionIndex(data['ACTION_INDEX']);
 
             // Observability: a DISPENSE trigger that matches no open dispenser is dropped.
-            // When the paid address DID have a dispenser that is now cancelled or expired,
-            // this is the upstream decoder still proposing DISPENSE for a dispenser the
-            // indexer already closed/re-dated. Tag the reason and count it so the volume of
+            // When the paid address DID have a dispenser that is now closed (cancelled,
+            // expired, sold out or at the fill cap), this is the upstream decoder still
+            // proposing DISPENSE for a dispenser the indexer already closed. Tag the reason and count it so the volume of
             // this split can be sized from logs. Measurement only - the drop above is
             // unchanged; this adds no accept/reject behavior.
             let closed = await this.indexerDb.getClosedDispenserAtAddress(data['COIN'], data['COIN_DESTINATION']);

@@ -15,12 +15,18 @@
 const assert = require('assert');
 const { verifyCapabilitySnapshotRow } = require(
     '../../../../src/db/database/stake_weights.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
 
 const CAPABILITIES = ['cross_chain', 'oracle_publish', 'price', 'attestation'];
+// Testnet arms the gate at a past BTC height, so a testnet row is below it only one
+// block under that height; mainnet is unarmed and any height is below it.
+const TESTNET_ARM = ProtocolChanges.get(
+    'capability_snapshot_proof_activation.CAPABILITY_SNAPSHOT_PROOF_ACTIVATION')['BTC:testnet'];
+const BELOW_GATE = { mainnet: 900000, testnet: TESTNET_ARM - 1 };
 
-function snapshotRow(capability = 'oracle_publish'){
+function snapshotRow(capability = 'oracle_publish', snapshotBlock = 900000){
     return {
-        snapshot_block: 900000,
+        snapshot_block: snapshotBlock,
         capability,
         signing_pubkey: 'a'.repeat(64),
         source: 'src1',
@@ -46,6 +52,39 @@ async function verify(subject, row, recorder){
 }
 
 describe('capability snapshot proof below-gate behavior @regression @tier1', function () {
+    it('refuses non-canonical heights before checking the proof gate', async function () {
+        const badHeights = ['2e5', '161789.5', ' 200000', '200000abc', '+.2e6',
+                            '0x30d40', -1, 1.5, null, '9007199254740993'];
+        for(const coin of ['BTC', 'LTC', 'DOGE']){
+            for(const network of ['testnet', 'regtest']){
+                const recorder = proofRecorder();
+                const subject = {
+                    config: { COIN: coin, NETWORK: network },
+                    isCapabilityConfigured: () => true,
+                };
+                for(const height of badHeights){
+                    const actual = await verify(subject, snapshotRow('cross_chain', height), recorder);
+                    assert.strictEqual(actual.verdict, 'refused', `${coin} ${network} ${height}`);
+                    assert.match(actual.reason, /non-canonical snapshot_block/);
+                }
+                assert.deepStrictEqual(recorder.calls, []);
+            }
+        }
+    });
+
+    it('accepts canonical number and digit-string heights at the proof gate', async function () {
+        for(const height of [TESTNET_ARM, String(TESTNET_ARM)]){
+            const recorder = proofRecorder();
+            const subject = {
+                config: { COIN: 'LTC', NETWORK: 'testnet' },
+                isCapabilityConfigured: () => true,
+            };
+            await verify(subject, snapshotRow('cross_chain', height), recorder);
+            assert.strictEqual(recorder.calls.length, 1, String(height));
+            assert.strictEqual(recorder.calls[0][0], TESTNET_ARM);
+        }
+    });
+
     it('keeps LTC and DOGE mirror-resolved capabilities unknown on mainnet and testnet', async function () {
         const recorder = proofRecorder();
 
@@ -57,7 +96,8 @@ describe('capability snapshot proof below-gate behavior @regression @tier1', fun
                         isCapabilityConfigured: () => true,
                         getLatestBlockIndex: async () => Number.MAX_SAFE_INTEGER,
                     };
-                    const actual = await verify(subject, snapshotRow(capability), recorder);
+                    const actual = await verify(subject,
+                        snapshotRow(capability, BELOW_GATE[network]), recorder);
 
                     assert.strictEqual(actual.verdict, 'unknown',
                         `${coin} ${network} ${capability}`);

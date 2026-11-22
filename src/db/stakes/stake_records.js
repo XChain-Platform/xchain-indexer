@@ -81,7 +81,8 @@ module.exports = {
     },
 
     // Set deactivation_block for the ALREADY-ACTIVE stake rows owned by the given pubkey.
-    // Used by createUnstake to mark when a pubkey's stake (original + activated top-ups) should be
+    // Used by UNSTAKE v0 (actions/unstake/index.js sweepCapabilityStake, valid path only) to mark
+    // when a pubkey's stake (original + activated top-ups) should be
     // removed from the active set. The `currentBlock` filter (activation_block <= currentBlock) is
     // load-bearing: the unstake AMOUNT is summed from active rows only (getActiveStakeByPubkey), so a
     // pending-activation top-up (activation_block > currentBlock) must NOT be deactivated here - it
@@ -104,6 +105,10 @@ module.exports = {
         let status_id         = await this.createStatus(data['STATUS']);
         let source_id         = await this.getAddressId(data['SOURCE']);
         let signing_pubkey_id = await this.getOrCreatePubkeyId(data['SIGNING_PUBKEY']);
+        // A refused empty key has no index_pubkeys id; keep the row under 0, which names no
+        // pubkey, instead of binding NULL to the NOT NULL column.
+        if(signing_pubkey_id === null && data['STATUS'] !== 'valid')
+            signing_pubkey_id = 0;
         let action_index      = data['ACTION_INDEX'];
         let cooldown_end_block = data['COOLDOWN_END_BLOCK'];
         let amount            = data['AMOUNT'] || '0';

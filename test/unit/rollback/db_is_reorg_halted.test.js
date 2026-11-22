@@ -40,6 +40,21 @@ function makeDb() {
     return new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', indexer);
 }
 
+const halt = (id, data='safe-depth halt') => ({ id, code: 'REORG_HALT', data });
+const clear = (id, target, reason='audited operator clear') => ({
+    id, code: 'REORG_HALT_CLEARED',
+    data: JSON.stringify({ reason, ...(target === undefined ? {} : { cleared_halt_id: target }) })
+});
+
+function stubHaltRows(db, rows){
+    const newest = [...rows].sort((a, b) => Number(b.id) - Number(a.id));
+    return sinon.stub(db, 'doQueryStrict').callsFake(async sql => {
+        if(/LIMIT 1$/.test(sql)) return newest.slice(0, 1);
+        if(/LIMIT 1001$/.test(sql)) return newest.slice(0, 1001);
+        throw new Error('unexpected query: ' + sql);
+    });
+}
+
 describe('db.isReorgHalted', function () {
 
     afterEach(() => sinon.restore());
@@ -75,11 +90,54 @@ describe('db.isReorgHalted', function () {
 
     it('lifts the halt on a clear whose reason is exactly 8 characters after trim, or an object payload', async function () {
         const db = makeDb();
+        const strict = sinon.stub(db, 'doQueryStrict').callsFake(async sql => {
+            if(/LIMIT 1$/.test(sql)) return [{ id: 2, code: 'REORG_HALT_CLEARED',
+                data: JSON.stringify({ reason: '  12345678  ' }) }];
+            return [{ id: 2, code: 'REORG_HALT_CLEARED', data: { reason: 'reviewed by operator' } }];
+        });
+        assert.deepStrictEqual(await db.isReorgHalted(), { halted: false, payload: null });
+        assert.deepStrictEqual(await db.isReorgHalted(), { halted: false, payload: null });
+        assert.strictEqual(strict.callCount, 4);
+    });
+
+    it('keeps a newer halt live when a delayed clear names an older halt', async function () {
+        const db = makeDb();
+        stubHaltRows(db, [halt(10), clear(11, 10), halt(12, 'newer halt'), clear(13, 10)]);
+        assert.deepStrictEqual(await db.isReorgHalted(), { halted: true, payload: 'newer halt' });
+    });
+
+    it('lets a later clear lift the newer halt it names', async function () {
+        const db = makeDb();
+        stubHaltRows(db, [halt(10), clear(11, 10), halt(12), clear(13, 10), clear(14, 12)]);
+        assert.deepStrictEqual(await db.isReorgHalted(), { halted: false, payload: null });
+    });
+
+    it('keeps legacy clears valid but fails closed on a null target', async function () {
+        const legacy = makeDb();
+        const legacyStrict = stubHaltRows(legacy, [halt(10), clear(11, undefined)]);
+        assert.deepStrictEqual(await legacy.isReorgHalted(), { halted: false, payload: null });
+        legacyStrict.restore();
+        const nullTarget = makeDb();
+        stubHaltRows(nullTarget, [halt(10, 'live halt'), clear(11, null)]);
+        assert.deepStrictEqual(await nullTarget.isReorgHalted(), { halted: true, payload: 'live halt' });
+    });
+
+    it('fails closed when halt history exceeds the shared scan bound', async function () {
+        const db = makeDb();
+        const rows = Array.from({ length: 1001 }, (_, offset) => halt(offset + 1));
+        rows.push(clear(1002, 1001));
+        stubHaltRows(db, rows);
+        assert.deepStrictEqual(await db.isReorgHalted(), {
+            halted: true, payload: 'REORG_HALT history exceeded the safe scan bound'
+        });
+    });
+
+    it('propagates a history read fault after an audited clear', async function () {
+        const db = makeDb();
         const strict = sinon.stub(db, 'doQueryStrict');
-        strict.onCall(0).resolves([{ code: 'REORG_HALT_CLEARED', data: JSON.stringify({ reason: '  12345678  ' }) }]);
-        strict.onCall(1).resolves([{ code: 'REORG_HALT_CLEARED', data: { reason: 'reviewed by operator' } }]);
-        assert.deepStrictEqual(await db.isReorgHalted(), { halted: false, payload: null });
-        assert.deepStrictEqual(await db.isReorgHalted(), { halted: false, payload: null });
+        strict.onFirstCall().resolves([clear(11, 10)]);
+        strict.onSecondCall().rejects(new Error('decoder history read fault'));
+        await assert.rejects(() => db.isReorgHalted(), /decoder history read fault/);
     });
 
     // Parity with xchain-decoder readReorgHaltState: an unaudited clear is a live halt there,

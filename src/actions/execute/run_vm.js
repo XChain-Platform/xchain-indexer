@@ -26,6 +26,7 @@
 
 const crypto = require('crypto');
 const { boundedAt, bankUnusedGas } = require('./nested_gas_sum.js');
+const { stateValueTexts } = require('./state_value_text.js');
 
 // Per-root discriminator for the ATTEST request_id / XCALL call_id preimages. One
 // helper for all three root-bearing sites here (top-level EXECUTE, controller guard,
@@ -178,12 +179,13 @@ async function executeContractVm(ctx, snapshot){
 // State writes for a successful run, applied inside the savepoint below.
 async function writeVmStateChanges(ctx, vmResult){
     let data = ctx.data;
-    // Write state changes
-    for(let change of vmResult.stateChanges){
+    // Write state changes (astral characters escaped once STATE_VALUE_ASTRAL_ESCAPE is active)
+    let texts = await stateValueTexts(() => this.actions.protocolChanges, data['BLOCK_INDEX'], vmResult.stateChanges);
+    for(let [i, change] of vmResult.stateChanges.entries()){
         await this.indexerDb.createContractState({
             CONTRACT_INDEX: data['CONTRACT_ACTION_INDEX'],
             STATE_KEY:      change.key,
-            STATE_VALUE:    JSON.stringify(change.value),
+            STATE_VALUE:    texts[i],
             BLOCK_INDEX:    data['BLOCK_INDEX'],
             ACTION_INDEX:   data['ACTION_INDEX']
         });
@@ -282,10 +284,12 @@ async function runVmExecution(ctx, limits){
 
     // Per-call gas ceiling. A cross-contract callee (reached via emit.execute)
     // runs against its caller-funded reservation (VM_GAS_LIMIT, validated in
-    // processEmission); top-level EXECUTEs and system-injected callbacks (which
-    // carry IS_EMISSION but no VM_GAS_LIMIT) use the protocol ceiling.
+    // processEmission); activated native-paid top-level calls use their paid
+    // budget, while every other top-level call and system callback uses the protocol ceiling.
     ctx.execCeiling = (data['IS_EMISSION'] && Number.isInteger(data['VM_GAS_LIMIT']))
-        ? data['VM_GAS_LIMIT'] : limits.GAS_CEILING;
+        ? data['VM_GAS_LIMIT']
+        : (Number.isInteger(ctx.paidGasCeiling)
+            ? Math.min(ctx.paidGasCeiling, limits.GAS_CEILING) : limits.GAS_CEILING);
 
     // Unused cross-contract gas reservations accumulated from this run's
     // emitted EXECUTEs (each callee's gasLimit minus what it was billed).

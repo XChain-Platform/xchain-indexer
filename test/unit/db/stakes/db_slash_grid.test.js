@@ -26,9 +26,9 @@
  * take from the reduction actually written. The invariant these cases assert is the one
  * that was broken: total === sum(releases) === sum(prev_amount - written amount).
  *
- * The legacy cases are here to PIN the pre-activation arithmetic byte for byte: the gate
- * is inert on every unpinned chain, so a replay of already-processed blocks must still
- * produce the inflated figures.
+ * The legacy cases are here to PIN the pre-activation arithmetic byte for byte. They run
+ * on testnet below its pinned activation height, so replaying those already-processed
+ * blocks must still produce the inflated figures.
  */
 
 'use strict';
@@ -43,10 +43,11 @@ const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
 const slashGrid         = require('../../../../src/db/contracts/slash_grid_gate.js');
+const TESTNET_PRE_ACTIVATION_BLOCK = slashGrid.SLASH_GRID_ACTIVATION['BTC:testnet'] - 1;
 
 // `network` picks the gate state: 'regtest' and 'mainnet' are armed at genesis (mainnet
-// by the 2026-09-09 ruling), 'testnet' is unpinned and therefore inert, which is what
-// makes the legacy cases below reachable at all.
+// by the 2026-09-09 ruling), while 'testnet' is armed at pinned heights. The legacy cases
+// below run before the BTC testnet activation height.
 function makeDb(network) {
     const config  = Object.assign({}, getTestConfig(), { NETWORK: network, COIN: 'BTC' });
     const util    = new Utility();
@@ -70,10 +71,12 @@ describe('Database.slashContractStake() off-grid conservation guard @regression 
         assert.strictEqual(slashGrid.isSlashGridActive(155001, 'testnet', 'BTC'), true);
     });
 
-    // The defect itself, pinned pre-activation. If this case ever goes green with a '0'
-    // total on an unpinned chain, the gate has stopped being inert and historical replay
-    // has moved.
+    // The defect itself, pinned before the testnet activation height. If this case ever
+    // goes green with a '0' total, the gate or historical replay has moved.
     it('LEGACY (inert gate): a 0.5 slash of a decimals=0 stake credits 1 and debits nothing', async function () {
+        assert.strictEqual(slashGrid.isSlashGridActive(
+            TESTNET_PRE_ACTIVATION_BLOCK, 'testnet', 'BTC'
+        ), false, 'fixture must sit below the testnet activation height');
         const db = makeDb('testnet');
         const calls = [];
         sinon.stub(db, 'getStatusId').callsFake(async (s) => (s === 'valid' ? 1 : (s === 'pending' ? 2 : null)));
@@ -87,7 +90,9 @@ describe('Database.slashContractStake() off-grid conservation guard @regression 
             return [];
         });
 
-        const res = await db.slashContractStake(1, 10, 1, '0.5', 500, 99, 0);
+        const res = await db.slashContractStake(
+            1, 10, 1, '0.5', TESTNET_PRE_ACTIVATION_BLOCK, 99, 0
+        );
 
         assert.strictEqual(String(res.total), '1', 'legacy credits a full unit');
         assert.deepStrictEqual(calls, ['1'], 'legacy writes the row back UNCHANGED');
@@ -211,11 +216,16 @@ describe('Database.slashContractStake() off-grid conservation guard @regression 
                 if (/UPDATE\s+contract_stakes\s+SET amount=\?/i.test(sql)) updates.push(String(args[0]));
                 return [];
             });
-            const res = await db.slashContractStake(1, 10, 1, '30.12345678', 500, 99, 0);
+            const res = await db.slashContractStake(
+                1, 10, 1, '30.12345678', TESTNET_PRE_ACTIVATION_BLOCK, 99, 0
+            );
             const out = { total: String(res.total), updates, releases: res.releases.map(r => String(r.amount)) };
             sinon.restore();
             return out;
         };
+        assert.strictEqual(slashGrid.isSlashGridActive(
+            TESTNET_PRE_ACTIVATION_BLOCK, 'testnet', 'BTC'
+        ), false, 'fixture must sit below the testnet activation height');
         assert.deepStrictEqual(await run('regtest'), await run('testnet'));
     });
 

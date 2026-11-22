@@ -15,6 +15,8 @@
 'use strict';
 
 const assert = require('assert');
+const sinon = require('sinon');
+const { getLogger } = require('../../../src/observability/index.js');
 const M = require('../../../src/consensus/merkle.js');
 const SC = require('../../../src/state_commitment/index.js');
 const { keyFor, leafFor, CountingStore } = require(
@@ -64,5 +66,53 @@ describe('stateCommitment: incremental stakes subtree updates @regression', func
         assert.strictEqual(gapRoot, await fullRoot(removed),
             'a gap rebuild must produce the same root as a full build');
         assert.ok(gapRows > 512, 'a gap must rebuild instead of applying an incremental update');
+    });
+});
+
+describe('stateCommitment: stakes subtree with a pubkey delegated by two sources @regression', function(){
+    const PUBKEY = 'ab'.repeat(32);
+    const CAP = 'duplicate_key_probe';
+    const LOG_CAP = 'duplicate_key_log_probe';
+
+    function dbReturning(rows, cap = CAP){
+        return { config: { STAKING: { CAPABILITIES: { [cap]: {} } } },
+                 getStakeWeightsByCapability: async () => rows };
+    }
+    const rowA = { pubkey: PUBKEY, source: 'a-source', weight: '1' };
+    const rowB = { pubkey: PUBKEY, source: 'B-source', weight: '1' };
+
+    beforeEach(function(){ SC.resetStakesMemo(); });
+    afterEach(function(){ SC.resetStakesMemo(); sinon.restore(); });
+
+    it('commits the member leaf of the row the query returns last', async function(){
+        const entries = await SC.gatherStakeEntries(dbReturning([rowA, rowB]), 100);
+        const key = M.toHex(M.stakeKey(PUBKEY, CAP));
+        const lastWins = [[key, M.toHex(M.stakeMemberLeaf('B-source', '1'))],
+                          entries[entries.length - 1]];
+        assert.strictEqual(await fullRoot(entries), await fullRoot(lastWins));
+
+        const swapped = await SC.gatherStakeEntries(dbReturning([rowB, rowA]), 100);
+        assert.notStrictEqual(await fullRoot(swapped), await fullRoot(entries),
+            'the committed root follows the query row order for a repeated key');
+    });
+
+    it('rebuilds when only the order of a repeated key changes', async function(){
+        const smt = freshSmt();
+        const first = await SC.gatherStakeEntries(dbReturning([rowA, rowB]), 100);
+        const second = await SC.gatherStakeEntries(dbReturning([rowB, rowA]), 101);
+        const firstRoot = await SC.buildStakesRoot(smt, CHAIN, NETWORK, 100, first);
+        const secondRoot = await SC.buildStakesRoot(smt, CHAIN, NETWORK, 101, second);
+        assert.notStrictEqual(secondRoot, firstRoot);
+        assert.strictEqual(secondRoot, await fullRoot(second));
+    });
+
+    it('logs a repeated key without throwing and stays quiet while the count is unchanged', async function(){
+        const warn = sinon.stub(getLogger(), 'warn');
+        await SC.gatherStakeEntries(dbReturning([rowA, rowB], LOG_CAP), 100);
+        await SC.gatherStakeEntries(dbReturning([rowA, rowB], LOG_CAP), 101);
+        assert.strictEqual(warn.callCount, 1);
+        assert.ok(/repeated member key/.test(String(warn.firstCall.args[0])));
+        await SC.gatherStakeEntries(dbReturning([rowA], LOG_CAP), 102);
+        assert.strictEqual(warn.callCount, 1, 'a clean read logs nothing');
     });
 });

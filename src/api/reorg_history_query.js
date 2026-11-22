@@ -142,7 +142,10 @@ function buildReorgHistoryResponse(rows, filter, opts) {
         // The hub reads this as "oldHash was canonical, then orphaned, at that height".
         matched:  ((f.block_index !== undefined && f.block_index !== null) || !!f.block_hash) && events.length > 0,
         // Additive trailing field: true when the decoder has a durable REORG_HALT marker.
-        decoderReorgHalted: !!(opts && opts.decoderReorgHalted)
+        decoderReorgHalted: !!(opts && opts.decoderReorgHalted),
+        // Additive trailing field: true when no probe has read the marker yet, in which case
+        // decoderReorgHalted is reported true (unknown is never published as "not halted").
+        decoderReorgHaltUnverified: !!(opts && opts.decoderReorgHaltUnverified)
     };
 }
 

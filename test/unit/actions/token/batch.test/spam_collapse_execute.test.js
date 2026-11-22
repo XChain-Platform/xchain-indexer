@@ -287,13 +287,12 @@ describe('Batch @regression @tier3', function () {
             });
 
             it('the benign older-schema gaps (1146, 1054) are still absorbed as UNKNOWN', async function () {
-                // faultGuard leaves these two to the caller: a missing table or column is an
-                // older-schema gap, not a transient fault, so every node on that schema answers
-                // the same way and the unwidened null verdict stays deterministic.
+                // This legacy title is pinned. Missing schema on a forward path is a
+                // node-local infrastructure fault, so both errors must stop the block.
                 for(const errno of [1146, 1054]){
                     gasTokenThrows(dbError(errno));
-                    const data = await run(true, repeat(exec, 3), '0.00000000');
-                    assert.strictEqual(data['STATUS'], 'valid', 'errno ' + errno + ' must not collapse the batch');
+                    await assert.rejects(() => run(true, repeat(exec, 3), '0.00000000'),
+                        new RegExp(String(errno)));
                 }
             });
 

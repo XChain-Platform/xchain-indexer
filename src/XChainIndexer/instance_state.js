@@ -26,7 +26,7 @@ const { CONFIG_ENV } = require('../config.js');
 const { resolveBarrierHoldCeilingMs } = require('../hub/hub_db_sync.js');
 const { CHAIN_TIP_TTL_DEFAULT_MS, CHAIN_TIP_TIMEOUT_DEFAULT_MS,
         resolvePositiveIntMs, resolveReadyNoCommitMs } = require('./readiness/verdict.js');
-const { resolveProofWaitGraceMs } = require('./stall_health.js');
+const { resolveProofWaitGraceMs, resolveRollbackGraceMs } = require('./stall_health.js');
 
 // Chain identity, stall and loop-liveness fields: what /health reads to tell an
 // advancing, deferring, wedged or silent block loop apart.
@@ -54,6 +54,10 @@ function initChainState(indexer){
     // so that expected, self-clearing wait is not reported as a wedge. Cleared alongside
     // stallReason on every successful commit.
     indexer.stallClearsAt = null;
+    // Wall-clock (epoch ms) the in-progress reorg rollback began, or null when none runs.
+    // It opens that rollback's own no-progress window (see stallWindowSince), because the
+    // rollback is one transaction inside one poll pass and records no barrier hold.
+    indexer.rollbackStartedAt = null;
     // Wall-clock (epoch ms) of the most recent SUCCESSFUL block commit, or null until the
     // first block commits. Stamped at the commit point alongside the stallReason clear, and
     // read by the /status healthcheck to tell an advancing-but-barrier-deferring indexer
@@ -155,12 +159,21 @@ function initActionBarrierFlags(indexer){
 
 // Barrier timing and hold state: the per-attempt timeout, the hold ceiling and record,
 // the price-barrier skip flags, and the two health windows sized off the timeout.
+function resolveBarrierTiming(env){
+    let priceSyncTimeoutMs = resolvePositiveIntMs(env.HUB_PRICE_SYNC_TIMEOUT_MS, 60000);
+    let healthStallGraceMs = resolvePositiveIntMs(env.INDEXER_HEALTH_STALL_GRACE_MS,
+                                                  Math.max(2 * priceSyncTimeoutMs, 120000));
+    let pollSilentMs = resolvePositiveIntMs(env.INDEXER_POLL_SILENT_MS, 2 * healthStallGraceMs);
+    return { priceSyncTimeoutMs, healthStallGraceMs, pollSilentMs };
+}
+
 function initBarrierTiming(indexer){
+    let timing = resolveBarrierTiming(CONFIG_ENV);
     // Price-sync barrier timeout (ms). Before processing a block, the indexer waits for
     // its local price mirror to catch up to that block height so native-coin fee
     // validation is deterministic across operators. On timeout the block is deferred and
     // retried rather than validated against a stale price copy.
-    indexer.priceSyncTimeoutMs = parseInt(CONFIG_ENV.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
+    indexer.priceSyncTimeoutMs = timing.priceSyncTimeoutMs;
 
     // Mirror-barrier hold ceiling. priceSyncTimeoutMs above bounds ONE barrier attempt;
     // this bounds the whole hold across retries, a quantity nothing else here bounds at
@@ -172,6 +185,9 @@ function initBarrierTiming(indexer){
     // barrier, or null when nothing is held. Folded by nextBarrierHold() once per
     // poll-loop pass and cleared on every successful commit.
     indexer.barrierHold = null;
+    // Remember a future wait's clear instant for this block until it commits. Some
+    // barrier retries drop the live stallClearsAt value as soon as the instant passes.
+    indexer.futureWaitClearsAt = null;
     // Count of ceiling crossings since boot, surfaced on /health so a fleet sweep can
     // see that a mirror needed re-driving without reading container logs.
     indexer.barrierCeilingHits = 0;
@@ -185,8 +201,7 @@ function initBarrierTiming(indexer){
     // genuinely wedged indexer (mirror down, host fault) trips 503 once it exceeds the window.
     // Defaults to comfortably more than one barrier-timeout cycle so a single legitimate defer
     // never flaps the healthcheck. Purely operational, NOT a consensus parameter.
-    indexer.healthStallGraceMs = parseInt(CONFIG_ENV.INDEXER_HEALTH_STALL_GRACE_MS
-                                       || String(Math.max(2 * indexer.priceSyncTimeoutMs, 120000)), 10);
+    indexer.healthStallGraceMs = timing.healthStallGraceMs;
 
     // Own no-progress window (ms) for the price-landing wait (stall class price_landing_wait).
     // That barrier waits on the other landing chains' landed times rather than the local
@@ -199,6 +214,12 @@ function initBarrierTiming(indexer){
     // Purely operational, NOT a consensus parameter.
     indexer.proofWaitGraceMs = resolveProofWaitGraceMs(indexer.healthStallGraceMs, indexer.barrierHoldCeilingMs);
 
+    // Own no-progress window (ms) for a running reorg rollback, measured from its start.
+    // A restart discards the rollback's whole transaction, so the window is several stall
+    // graces: a rollback that merely runs long is not restarted, one that hangs still is.
+    // Purely operational, NOT a consensus parameter.
+    indexer.rollbackGraceMs = resolveRollbackGraceMs(indexer.healthStallGraceMs);
+
     // Window (ms) the block-poll loop may go without completing an ITERATION before
     // isPollSilent() calls it dead. Sized off healthStallGraceMs, which is already at
     // least two barrier-timeout cycles, and doubled again on top: one block can hold a
@@ -206,8 +227,7 @@ function initBarrierTiming(indexer){
     // never fire on a block that is merely slow. It measures loop LIVENESS, never chain
     // progress, so unlike stallWedged it has nothing to do with commits. Purely
     // operational, NOT a consensus parameter.
-    indexer.pollSilentMs = parseInt(CONFIG_ENV.INDEXER_POLL_SILENT_MS
-                                 || String(2 * indexer.healthStallGraceMs), 10);
+    indexer.pollSilentMs = timing.pollSilentMs;
 }
 
 // The direct-hub-DB call-presence timeout and the two graces start() resolves.
@@ -265,4 +285,4 @@ function initReadinessState(indexer){
 }
 
 module.exports = { initChainState, initHaltState, initHubConfigState, initBarrierTiming, initDirectCallState,
-                   initReadinessState };
+                   initReadinessState, resolveBarrierTiming };

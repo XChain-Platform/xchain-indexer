@@ -30,8 +30,8 @@
  *
  * The mirror is transport, not trust: this pass re-verifies each row's XANCPUB signatures
  * against the BTC indexer's own locally-computed oracle_publish set at snapshot_block (the same
- * set + weighting anchor.js uses on DOGE), rebuilds the reward canonical byte-identically to
- * anchor.js.rewardCanonical / the hub's StateAnchorPublisher, and only then materializes
+ * set + weighting src/actions/anchor/index.js uses on DOGE), rebuilds the reward canonical byte-identically to
+ * the hub's StateAnchorPublisher canonicals, and only then materializes
  * validator_rewards at block_index = snapshot_block. A forged or short-quorum row credits
  * nothing. Idempotent and reorg-safe: the reward upserts on (reward_type, round_reference,
  * round_qualifier) - the qualifier being snapshot_block for the archive leg, whose
@@ -54,6 +54,7 @@
 
 const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
+const countQuorum = require('../actions/anchor/count_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ar      = require('./gates/anchor_reward_gate.js');
 const gateRegistry = require('./gate_registry.js');
@@ -74,9 +75,10 @@ const ANCHOR_FOLD = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const ANCHOR_REWARD_COPY_SELECTION =
     'anchor_reward_copy_selection_activation.ANCHOR_REWARD_COPY_SELECTION_ACTIVATION';
 
-// Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
-// anchor.js.rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
-// re-verified quorum would never match and the reward would silently never derive.
+// Rebuild the XANCPUB canonical for a mirrored attestation row. This is the only XANCPUB
+// builder in the indexer (the parse handler's rewardCanonical maps onto it). It MUST
+// byte-match the hub's publisher canonical, or the re-verified quorum would never match
+// and the reward would silently never derive.
 function rewardCanonical(row){
     let network        = String(row.network);
     let snapshotBlock  = row.snapshot_block;
@@ -95,8 +97,7 @@ function rewardCanonical(row){
         // Bundle leg (v0): ONE reward per per-network bundle. round_reference IS the
         // snapshot block, so field 2 and field 3 repeat it; the six-field positional
         // layout is kept so slash.js reads snapshot_block at index 3 for every XANCPUB
-        // family. MUST byte-match anchor.js.rewardCanonical's v0 branch and the hub's
-        // bundle attestation canonical.
+        // family. MUST byte-match the hub's bundle attestation canonical.
         let base = ['XANCPUB', 'anchor_bundle', roundReference,
                     String(snapshotBlock), publisher, ar.ANCHOR_REWARD_AMOUNT].join('|');
         if(eq.isEquivHeaderActive(snapshotBlock, network)){
@@ -119,7 +120,7 @@ function rewardCanonical(row){
 
 // Verify a mirrored row's XANCPUB attestation against the local oracle_publish set at
 // snapshot_block. Returns true iff the 2f+1 (or stake-weighted) quorum is met AND the
-// publisher is itself a member of that set. Mirrors anchor.js's v0/v1 attestation check
+// publisher is itself a member of that set. Mirrors src/actions/anchor/index.js's v0/v1 attestation check
 // (verify-then-mark-seen; stake-weighted at/above STAKE_WEIGHTED_QUORUM, else count).
 async function verifyAttestation(indexerDb, row){
     let snapshotBlock = Number(row.snapshot_block);
@@ -149,7 +150,7 @@ async function verifyAttestation(indexerDb, row){
     }
     return weighted
         ? swq.meetsStakeThreshold(validators, attSigners)
-        : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
+        : countQuorum.meetsCountThreshold(oracleN, attSigners.length);
 }
 
 // The flag-days a mirrored row must be past before it may mint, each read at the
@@ -226,20 +227,25 @@ async function mintGroupRows(indexerDb, groupRows, m){
 }
 
 // Mint one logical-reward group from every copy of each of its tuples
-// (anchor_reward_derive/copy_selection.js). Returns whether any tuple was minted.
+// (anchor_reward_derive/copy_selection.js). Track verified tuples separately so the
+// existing reconcile still runs when a verified tuple cannot write its reward row.
 async function mintGroupCopies(indexerDb, groupRows, m){
     let anyWritten = false;
+    let needsReconcile = false;
     for(let copies of copySelection.copiesByTuple(groupRows)){
-        let minted = await copySelection.mintTuple(copies, {
+        let selected = await copySelection.mintTuple(copies, {
             indexerDb, gatesActive: rowGatesActive, verifyAttestation,
             mint: Object.assign({}, m, { amount: familyAmount(copies[0]) }),
         });
-        if(minted){
-            observeDerive(minted, m.blockIndex);
-            anyWritten = true;
+        if(selected){
+            needsReconcile = true;
+            if(selected.written){
+                observeDerive(selected.row, m.blockIndex);
+                anyWritten = true;
+            }
         }
     }
-    return anyWritten;
+    return { anyWritten, needsReconcile };
 }
 
 // Derive all matured, not-yet-derived anchor/archive rewards from the mirrored
@@ -290,10 +296,14 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof, protoco
     let derived = 0;
     let mint = { blockIndex, proof, minConfirmations, protocolChanges };
     for(let [, groupRows] of groups){
-        let anyWritten = selectCopies
-            ? await mintGroupCopies(indexerDb, groupRows, mint)
-            : await mintGroupRows(indexerDb, groupRows, mint);
-        if(anyWritten){
+        let outcome;
+        if(selectCopies){
+            outcome = await mintGroupCopies(indexerDb, groupRows, mint);
+        } else {
+            let anyWritten = await mintGroupRows(indexerDb, groupRows, mint);
+            outcome = { anyWritten, needsReconcile: anyWritten };
+        }
+        if(outcome.needsReconcile){
             let first = groupRows[0];
             // Reconcile the single smallest-pubkey winner. The reconcile-log block_index is the
             // CURRENT BTC block, so a reorg of it restores collapsed losers (RB-ANCHOR). No ANCHOR
@@ -304,6 +314,8 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof, protoco
             await indexerDb.reconcileAnchorRewardWinner(
                 Number(first.round_reference), String(first.reward_type), Number(blockIndex), null,
                 arKey.rewardRoundQualifier(first.reward_type, first.snapshot_block));
+        }
+        if(outcome.anyWritten){
             derived++;
         }
     }

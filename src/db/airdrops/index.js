@@ -52,22 +52,26 @@ module.exports = {
             exists = true;
         // Define list of arguments for sql insert/update
         if(exists){
-            // UPDATE record
+            // Scope the update to the same leg identity as the exists-check. Several
+            // airdrop legs share one action_index, so an action-only predicate would
+            // rewrite every sibling. Exactly repeated legs still share one row because
+            // this table has no per-leg ordinal.
             query = `UPDATE
                         airdrops
                     SET
-                        tick_id=?,
-                        list_action_index=?,
-                        amount=?,
-                        memo_id=?,
                         status_id=?
                     WHERE
-                        action_index=?`;
+                        action_index=? AND
+                        tick_id=? AND
+                        memo_id=? AND
+                        list_action_index=? AND
+                        amount=?`;
+            args = [status_id, action_index, tick_id, memo_id, list_action_index, amount];
         } else {
             // INSERT record
             query = `INSERT INTO airdrops (tick_id, list_action_index, amount, memo_id, status_id, action_index) values (?, ?, ?, ?, ?, ?)`;
+            args = [tick_id, list_action_index, amount, memo_id, status_id, action_index];
         }
-        args    = [tick_id, list_action_index, amount, memo_id, status_id, action_index];
         results = await this.doQuery(query, args);
     },
 

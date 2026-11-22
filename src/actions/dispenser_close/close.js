@@ -35,7 +35,7 @@ module.exports = {
         //   2. Recorded canceller: per DISPENSER.md, escrow returns to whoever cancelled
         //      (GET_ADDRESS or SOURCE). Recorded by createDispenserStatus when status='cancelling'.
         //   3. SOURCE: the destination when there is no sweep and no canceller, chiefly a
-        //      dispense.js auto-close of an 'open' dispenser (auto-expire reaches dispenser_expire).
+        //      dispense/settle.js auto-close of an 'open' dispenser (auto-expire reaches dispenser_expire).
         let sweepDest = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
         let canceller = (!this.util.isNull(sweepDest)) ? null : await this.indexerDb.getDispenserCanceller(data['DISPENSER_ACTION_INDEX']);
         let destination = (!this.util.isNull(sweepDest)) ? sweepDest
@@ -62,7 +62,7 @@ module.exports = {
         // (the dispenser_ownership_cancel_activation row in src/protocol_changes/): below the flag-day the
         // legacy canceller-takes-ownership routing runs so historical replay is
         // byte-identical; at/after it only the SWEEP path transfers ownership and
-        // cancel/expire leave it with SOURCE (matching dispenser_expire.js, which
+        // cancel/expire leave it with SOURCE (matching dispenser_expire/settle.js, which
         // was already correct). The GIVE token-balance refund routing is separate
         // (handled per DISPENSER cancel semantics) and unaffected here.
         let ownershipCancelActive = gateRegistry.activeAt('dispenser_ownership_cancel_activation.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);

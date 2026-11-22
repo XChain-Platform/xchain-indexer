@@ -22,6 +22,7 @@
 
 const { effectiveOfferLists } = require('./cross_chain_offer_lists.js');
 const { exactU64 } = require('../database/exact_u64.js');
+const { fitsUtf8mb3 } = require('../utf8mb3.js');
 
 // The per-kind WHERE terms and their bound values, one list per UNION ALL branch, in the
 // order the branches bind them.
@@ -198,6 +199,14 @@ module.exports = {
     //   .next_cursor - the largest action_index returned (feed back as after_action_index), or
     //                  null on an empty page.
     async getOpenCrossChainOffers(limit, after_action_index, to_coin, block_time){
+        // index_coins is utf8mb3: a to_coin it cannot hold names no coin, so the book is
+        // empty. Binding it would throw errno 1267 (Illegal mix of collations) instead.
+        if(!this.util.isNull(to_coin) && !fitsUtf8mb3(to_coin)){
+            let none = [];
+            none.truncated   = false;
+            none.next_cursor = null;
+            return none;
+        }
         let { swapArgs, orderArgs, swapWhere, orderWhere } = offerFilters(this, after_action_index, to_coin);
         let swapBranch  = swapBranchSql(swapWhere);
         let orderBranch = orderBranchSql(orderWhere);

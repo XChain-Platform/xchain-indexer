@@ -61,7 +61,10 @@ const FAMILIES = [
 // nothing to say a handler had gone. `entryFamilies` are the factories src/api.js
 // keeps for itself, merged after these under the same refusal.
 function buildRpcController(ctx, entryFamilies = []){
-    const controller = {};
+    // The router indexes this table with caller-controlled method names. A plain
+    // object would make Object.prototype members callable even though no route
+    // family declared them.
+    const controller = Object.create(null);
     for(const build of FAMILIES.concat(entryFamilies)){
         for(const [name, handler] of Object.entries(build(ctx))){
             if(Object.prototype.hasOwnProperty.call(controller, name))

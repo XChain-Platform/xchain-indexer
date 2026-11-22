@@ -62,7 +62,9 @@ const chainTipMethods           = require('./XChainIndexer/readiness/chain_tip.j
 // the mariadb client's connection-level errnos, driver socket errors, and the database
 // circuit breaker's own refusals. beginTransaction stringifies the driver error into a plain
 // message, so its database-specific text forms are matched too.
-const DB_OUTAGE_ERRNOS = [45001, 45009, 45012, 45013, 45019, 45026, 45028, 1040, 1053, 1927, 2002, 2003, 2006, 2013];
+// 1969 and 3024 are max_statement_time aborts: the statement rolled back on its own and a retry is
+// safe, so they ride out like the connection errnos (matches isStatementTimeout in db/rollback/sweeps.js).
+const DB_OUTAGE_ERRNOS = [45001, 45009, 45012, 45013, 45019, 45026, 45028, 1040, 1053, 1927, 1969, 2002, 2003, 2006, 2013, 3024];
 const DB_OUTAGE_CODES  = ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EPIPE', 'EHOSTUNREACH', 'EAI_AGAIN'];
 const DB_OUTAGE_TEXT   = new RegExp('\\bno: (' + DB_OUTAGE_ERRNOS.join('|') + ')\\b|pool timeout|' +
     'server has gone away|Lost connection to|Could not connect to MariaDB after');
@@ -192,8 +194,8 @@ class XChainIndexer {
         if(this.hubPushQueue) this.hubPushQueue.stop();
     }
 
-    // Whether this chain binds mirrored rows by admission height at block B. Inert on every
-    // network in this train, in which case every sync barrier behaves exactly as it does now.
+    // Whether this chain binds mirrored rows by admission height at block B. Activation heights
+    // are pinned in shared_rows_2.js; below activation every sync barrier keeps its clock form.
     mirrorAdmissionActiveAt(blockHeight){
         if(blockHeight === null || blockHeight === undefined) return false;
         return isMirrorAdmissionConsumerActive(this.config['COIN'], this.config['NETWORK'], blockHeight);
@@ -255,6 +257,10 @@ class XChainIndexer {
         this.buildBlockModules();
         await this.verifyDecoderDatabase();
         await this.verifyIndexerDatabase();
+        if(this.schemaReady !== true){
+            if(this.stopFlag) return;
+            throw new Error('Indexer schema is not ready; refusing to start the block loop.');
+        }
         this.startBackgroundServices();
 
         // Parse blocks until stop() is requested.

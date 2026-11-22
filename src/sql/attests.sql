@@ -72,6 +72,9 @@ CREATE TABLE attests (
     -- attest_batch_head state-hash section (stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION)
     -- reads, and batch_total_chunks/batch_crc32 scope the head re-stamp a rollback undoes.
     -- Renaming them, or changing what a head or continuation writes to them, needs a flag day.
+    -- Their position (all eight after batch_action_index, in this order) is pinned by
+    -- test/unit/migration/sql_schema_column_parity.test.js, which compares this definition with
+    -- the ADD COLUMN statements of the migrations.
     batch_window_start            BIGINT UNSIGNED,                 -- v5: unix start of the published window (batch identity, hashed into request_id)
     batch_window_end              BIGINT UNSIGNED,                 -- v5: unix end of the window
     batch_row_count               INT UNSIGNED,                    -- v5: responses carried (cap ATTEST_BATCH_MAX_ROWS)

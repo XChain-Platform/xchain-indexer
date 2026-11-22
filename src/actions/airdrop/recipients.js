@@ -59,8 +59,11 @@ module.exports = {
 
     // Build out array of recipient addresses that are allowed to receive the airdrop
     // Fetch TICK's allow/block lists ONCE before the recipient loop, then check membership in
-    // memory via Sets (matching isActionAllowed's no-block_index behavior) so each recipient
-    // costs an O(1) hash probe instead of an O(n) scan, not O(recipients x list). The
+    // memory via Sets.
+    // Resolve both the token's list pointers and list members at this action's
+    // BLOCK_INDEX, unlike readTickListPolicy's TOKEN_GATE_LIST_AT_BLOCK-gated SOURCE read.
+    // Keep any alignment of those replay scopes behind its own activation gate.
+    // Probe each recipient in O(1) instead of scanning the list for every recipient. The
     // approved set is unchanged by this: membership is the only thing asked of the two
     // lists, so their own order never mattered. Determinism rides on `recipients`
     // iteration order, which Sets preserve, and therefore on the insertion order of

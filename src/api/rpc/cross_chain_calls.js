@@ -82,7 +82,7 @@ function crossChainCallResultRpc({ indexer }){
         async getcrosschaincallresult({call_id}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
+            if(!rpcParams.isHexId(call_id))
                 return { error: 'call_id must be a 64-hex id' };
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
@@ -101,15 +101,19 @@ function crossChainCallResultRpc({ indexer }){
                     // Surface refusal diagnostics: a quorum-starved dispatch has
                     // no execution row, but the injection pass records WHY it keeps being
                     // refused. Node-local advisory only (never quorum-verified relay data).
-                    let rejection = await db.getCrossChainCallRejectionById(String(call_id));
-                    if(rejection){
-                        res.rejection = {
-                            reason:      rejection.reason,
-                            detail:      rejection.detail || '',
-                            attempts:    Number(rejection.attempts),
-                            first_block: Number(rejection.first_block),
-                            last_block:  Number(rejection.last_block)
-                        };
+                    try {
+                        let rejection = await db.getCrossChainCallRejectionById(String(call_id));
+                        if(rejection){
+                            res.rejection = {
+                                reason:      rejection.reason,
+                                detail:      rejection.detail || '',
+                                attempts:    Number(rejection.attempts),
+                                first_block: Number(rejection.first_block),
+                                last_block:  Number(rejection.last_block)
+                            };
+                        }
+                    } catch(err) {
+                        getLogger().error('getcrosschaincallresult rejection read failed:', err);
                     }
                     return res;
                 }

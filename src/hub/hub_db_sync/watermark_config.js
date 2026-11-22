@@ -82,8 +82,9 @@ const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
     // row-content watermark at all (the rows carry no effective_time, and their arrival is
     // governed by DOGE confirmation and hub failover, not by any clock the block loop can
     // read). It gates purely on "the mirror has received everything the hub produced up to
-    // this block's time", which is what makes the fleet-agreed maturity watermark in
-    // anchor_reward_activation.js safe: a node that cannot certify that much DEFERS instead
+    // this block's time", which is what makes the fleet-agreed maturity watermark (the
+    // anchor_reward_activation.ANCHOR_REWARD_MIRROR_MATURITY gate row, read through
+    // consensus/gates/anchor_reward_gate.js) safe: a node that cannot certify that much DEFERS instead
     // of deriving a partial reward set. The value only has to cover ordinary stream lag,
     // because the maturity constant already absorbs the ~24h of DOGE burial, failover and
     // federation delay. Changing this NUMBER is a protocol change (it moves which nodes can

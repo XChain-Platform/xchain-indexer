@@ -50,17 +50,16 @@ const ProviderRegistry = require('../../attestation/provider_registry.js');
 // while actions/attest/ validated against the overlay, letting the VM accept a request
 // the indexer then rejects.
 
-// Maximum smart-contract code size (64 KiB). Vendored single source of truth:
-// ../protocol/constants.js (byte-identical to xchain-documentation/protocol/
-// constants.js, MAX_CODE_SIZE); kept equal to the SDK and VM by the
-// cross-service regression suite, which reads the value exported as a static
-// of the Deploy class below.
+// Maximum smart-contract code size (64 KiB). The registry-backed value comes
+// from ../../protocol/constants.js and is kept equal to the canonical file,
+// SDK and VM by the cross-service regression suite, which reads the value
+// exported as a static of the Deploy class below.
 const PROTO = require('../../protocol/constants.js');
 const MAX_CODE_SIZE = PROTO.MAX_CODE_SIZE;
 
-// Maximum chunks a chunked DEPLOY (v2/v3) may assemble. Vendored from
-// ../protocol/constants.js (MAX_DEPLOY_CHUNKS); kept in lockstep with the SDK +
-// the v4 carrier handler by the cross-service regression suite.
+// Maximum chunks a chunked DEPLOY (v2/v3) may assemble. Read from
+// ../../protocol/constants.js and kept in lockstep with the SDK and v4 carrier
+// handler by the cross-service regression suite.
 const MAX_DEPLOY_CHUNKS = PROTO.MAX_DEPLOY_CHUNKS;
 
 // The deployment's parts, in the order parse() and runDeployment() call them. Each

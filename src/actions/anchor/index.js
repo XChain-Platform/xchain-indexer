@@ -32,7 +32,7 @@
  * recovery re-verifies from the ARCHIVED snapshots, so chain-parse
  * recovery never depends on the mirror.
  *
- * Spec: xchain-documentation/protocol/actions/ANCHOR.md
+ * Spec: xchain-documentation/protocol/actions/anchor.md
  *
  * FORMATS:
  *   v0 - the per-network checkpoint BUNDLE: one header, SECTION_COUNT per-chain
@@ -64,7 +64,7 @@
 
 const zlib    = require('zlib');
 const eq      = require('../../consensus/equivocation_header.js');
-const ar      = require('../../consensus/gates/anchor_reward_gate.js');
+const rewardDerive = require('../../consensus/anchor_reward_derive.js');
 // The ANCHOR and archive-author gates are registry rows read by literal key
 // (W4): no predicate module stands between this file and the row it judges by.
 const gateRegistry = require('../../consensus/gate_registry');
@@ -171,9 +171,8 @@ class Anchor {
         this.formats[3] = 'VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|...|ARCHIVE_COUNT|...|PUBLISHER|ATTEST_SIG_COUNT|...';
     }
 
-    // Canonical signing string: MUST byte-match the hub's
-    // StateCheckpointEngine.canonicalCheckpoint (+ the archive extension for v1)
-    // and the SDK CheckpointVerifier.
+    // Match the hub checkpoint bytes for every row admitted to an ANCHOR bundle.
+    // Preserve FORMAT 0's unconditional roots and absent SUPERSEDE leg below.
     canonical(d){
         let base = ['XCHECKPOINT', d['CHAIN'], d['NETWORK'], String(d['BLOCK_INDEX_CHECKPOINTED']),
                     d['BLOCK_HASH'], d['LEDGER_HASH'], d['ACTIONS_HASH'], d['CONTRACT_HASH'],
@@ -209,6 +208,9 @@ class Anchor {
             // section signature fails and the all-or-nothing verdict takes the whole bundle down. It never
             // adopts unsigned roots.
             //
+            // Omit SUPERSEDE because the v0 wire carries neither supersession field.
+            // Rely on the hub bundle and fold guards to exclude superseding rows.
+            //
             // `d` is ONE section, rebuilt with the header NETWORK and with SNAPSHOT_BLOCK =
             // its own SECTION_SNAPSHOT_BLOCK, the block its signatures were produced over.
             base += '|' + [String(d['STATE_ROOT'] || '').toLowerCase(), String(d['STATE_ROOT_VERSION']),
@@ -221,47 +223,20 @@ class Anchor {
         return base;
     }
 
-    // Publisher-attestation canonical (XANCPUB): the string the 2f+1 oracle_publish quorum
-    // signs to ATTEST which validator earns the anchor reward. MUST byte-match the hub's
-    // StateAnchorPublisher.attestationCanonical. The amount is the FROZEN consensus constant
-    // (ar.ANCHOR_REWARD_AMOUNT), NEVER taken from the wire. A distinct 'XANCPUB|...' roundId
-    // prefix gives the attestation its OWN equivocation family, so a validator that signs both
-    // the checkpoint root canonical and this reward attestation in the same round is never
-    // falsely slashable (same false-slash reasoning as the checkpoint/archive roundId split above).
+    // Publisher-attestation canonical (XANCPUB) for a parsed v0 bundle or v1 archive head.
+    // Nothing on the parse path reads it: the string that decides reward credit is rebuilt
+    // from the mirrored row by consensus/anchor_reward_derive.js, and this maps the parsed
+    // fields onto that row shape so the indexer has exactly one XANCPUB builder. The hub's
+    // attestation canonicals must byte-match that builder. A v1 head attests the
+    // anchor_archive reward keyed on MATCH_BATCH_SEQ; any other format is the per-bundle
+    // anchor_bundle reward keyed on SNAPSHOT_BLOCK.
     rewardCanonical(d){
-        // Archive leg (v1): the attested tuple is the anchor_archive reward, keyed on
-        // MATCH_BATCH_SEQ (the archive round number) with the frozen ARCHIVE amount. MUST
-        // byte-match the hub's StateAnchorPublisher.archiveAttestationCanonical. The
-        // 'XANCPUB|archive|...' roundId is disjoint from the bundle's ('XANCPUB|bundle|...')
-        // and from the retired per-chain family ('XANCPUB|BTC|...'), so the attestation
-        // families can never equivocation-collide (same false-slash reasoning as the checkpoint
-        // roundId splits above).
-        if(Number(d['FORMAT']) === 1){
-            let base = ['XANCPUB', 'anchor_archive', String(d['MATCH_BATCH_SEQ']),
-                        String(d['SNAPSHOT_BLOCK']), String(d['PUBLISHER'] || '').toLowerCase(),
-                        ar.ARCHIVE_REWARD_AMOUNT].join('|');
-            if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK'])){
-                let roundId = 'XANCPUB|archive|' + d['NETWORK'] + '|' + d['MATCH_BATCH_SEQ'] + '|' + d['SNAPSHOT_BLOCK'];
-                return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
-            }
-            return base;
-        }
-        // Bundle leg (v0): ONE attested reward per bundle, type 'anchor_bundle', round
-        // SNAPSHOT_BLOCK. The layout keeps the shipped SIX positional fields so
-        // slash.js's XANCPUB family (which reads snapshot_block at field index 3 for
-        // every member) judges a bundle equivocation without a third branch; field 2 is
-        // round_reference, which for a bundle IS the snapshot block, hence the repeat.
-        // The 'XANCPUB|bundle|...' roundId is disjoint from the per-chain
-        // ('XANCPUB|CHAIN|...') and archive ('XANCPUB|archive|...') families, so no
-        // publisher becomes falsely slashable for signing in two of them.
-        let base = ['XANCPUB', 'anchor_bundle', String(d['SNAPSHOT_BLOCK']),
-                    String(d['SNAPSHOT_BLOCK']), String(d['PUBLISHER'] || '').toLowerCase(),
-                    ar.ANCHOR_REWARD_AMOUNT].join('|');
-        if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK'])){
-            let roundId = 'XANCPUB|bundle|' + d['NETWORK'] + '|' + d['SNAPSHOT_BLOCK'];
-            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
-        }
-        return base;
+        let archive = Number(d['FORMAT']) === 1;
+        return rewardDerive.rewardCanonical({
+            network: d['NETWORK'], snapshot_block: d['SNAPSHOT_BLOCK'], publisher: d['PUBLISHER'],
+            reward_type: archive ? 'anchor_archive' : 'anchor_bundle',
+            round_reference: archive ? d['MATCH_BATCH_SEQ'] : d['SNAPSHOT_BLOCK']
+        });
     }
 
     // Dispatch on VERSION

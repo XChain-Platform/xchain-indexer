@@ -38,5 +38,6 @@ CREATE TABLE vote_delegations (
 -- Latest-active lookup is per (tick, delegator) by highest action_index at/before
 -- a block; the composite index serves that grouping and the per-delegator scan.
 CREATE INDEX tick_delegator ON vote_delegations (tick_id, delegator_address_id, action_index);
+CREATE INDEX tick_action    ON vote_delegations (tick_id, action_index);
 CREATE INDEX action_index   ON vote_delegations (action_index);
 CREATE INDEX block_index    ON vote_delegations (block_index);

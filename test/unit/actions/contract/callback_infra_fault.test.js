@@ -259,10 +259,13 @@ function registerAttestExpiryTests() {
         });
         it('v2 expiry: an older-schema gap (errno 1146) in missed_count is still absorbed', async function () {
             indexer.indexerDb.incrementAttestationValidatorStat.rejects(dbFault(1146));
-            const data = v2Data();
-            await handler.parse(['2', REQ_ID], data, null);
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.ok(executeStub.parse.calledOnce, 'expiry callback still injected');
+            await assert.rejects(handler.parse(['2', REQ_ID], v2Data(), null), isErrno(1146));
+            assert.ok(executeStub.parse.notCalled, 'expiry callback must not run after a schema fault');
+        });
+        it('v2 expiry: a missing-column fault (errno 1054) propagates too', async function () {
+            indexer.indexerDb.incrementAttestationValidatorStat.rejects(dbFault(1054));
+            await assert.rejects(handler.parse(['2', REQ_ID], v2Data(), null), isErrno(1054));
+            assert.ok(executeStub.parse.notCalled, 'expiry callback must not run after a schema fault');
         });
     });
 }

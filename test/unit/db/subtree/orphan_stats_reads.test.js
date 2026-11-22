@@ -1,3 +1,13 @@
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md. A commercial
+// license (without AGPL source-disclosure terms) is available -
+// contact legal@dankest.llc.
+
 'use strict';
 
 const assert = require('assert');
@@ -37,8 +47,11 @@ describe('orphan stats reads', function () {
         assert.deepStrictEqual(recording.calls, [{
             sql: 'SELECT DISTINCT balances_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
                 'UNION SELECT DISTINCT stakes_root AS r FROM state_tree_roots WHERE chain=? AND network=? ' +
-                'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL',
-            params: ['BTC', 'regtest', 'BTC', 'regtest', 'BTC', 'regtest']
+                'UNION SELECT DISTINCT contract_state_root AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root IS NOT NULL ' +
+                'UNION SELECT DISTINCT contract_state_root_shadow AS r FROM state_tree_roots WHERE chain=? AND network=? AND contract_state_root_shadow IS NOT NULL ' +
+                'UNION SELECT DISTINCT balances_root_escrow_shadow AS r FROM state_tree_roots WHERE chain=? AND network=? AND balances_root_escrow_shadow IS NOT NULL',
+            params: ['BTC', 'regtest', 'BTC', 'regtest', 'BTC', 'regtest',
+                     'BTC', 'regtest', 'BTC', 'regtest']
         }]);
     });
 

@@ -14,6 +14,8 @@
 
 'use strict';
 
+const DB_CONNECTION_UNAVAILABLE = 'DB_CONNECTION_UNAVAILABLE';
+
 /**
  * Re-throw errors that are infrastructure faults, never contract outcomes.
  *
@@ -34,17 +36,20 @@
  *      guard direct VM call already honour this; the emission catches did not.
  *
  *   2. A MariaDB driver-level fault: contract logic never produces a numeric
- *      `errno`, so any errno is an infrastructure error. Missing table (1146)
- *      and missing column (1054) are the only benign older-schema gaps and are
- *      left for the caller to absorb; every other errno (lock-wait timeout
- *      1205, deadlock 1213, killed connection, ...) must propagate. Mirrors the
- *      gate at rollback.js and xchain-sync/src/client/rollback.js.
+ *      `errno`, so any errno is an infrastructure error. A missing table or
+ *      column on a forward path means this node lacks schema its peers use.
+ *      It must halt rather than record a node-local verdict. Rollback-only
+ *      schema-gap tolerance stays local to the delete or probe that needs it.
  *
  *   3. The price-barrier deferral (code 'PRICE_BARRIER_DEFERRED'): this
  *      block skipped the hub price-mirror barrier and then read the mirror
  *      anyway, so its read is uncovered on THIS node only. The assertion's
  *      contract is a rollback plus a retry with the barrier enforced, which a
  *      swallowing catch cancels.
+ *
+ *   4. A connection-acquisition outage (code 'DB_CONNECTION_UNAVAILABLE'):
+ *      contract logic never ran, while a healthy peer could acquire its
+ *      connection. Recording a verdict would make the outage part of state.
  *
  * A genuine deterministic contract failure (a reverted emission, an
  * insufficient-balance emit.send) carries no errno and is NOT re-thrown, so
@@ -77,7 +82,9 @@ function rethrowIfInfraFault(e){
     // UTXO tracker gave no answer (unreachable, non-2xx, unreadable, unconfigured): a
     // node-local fault whose healthy peers got an answer, so a verdict here would fork.
     if(e && e.code === 'UTXO_TRACKER_UNAVAILABLE') throw e;
-    if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e;
+    // Connection acquisition failed locally, so no deterministic contract verdict exists.
+    if(e && e.code === DB_CONNECTION_UNAVAILABLE) throw e;
+    if(e && typeof e.errno === 'number') throw e;
 }
 
-module.exports = { rethrowIfInfraFault };
+module.exports = { DB_CONNECTION_UNAVAILABLE, rethrowIfInfraFault };

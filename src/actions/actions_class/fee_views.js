@@ -21,7 +21,9 @@
  ********************************************************************/
 
 const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
-const { normalizeQuoteRequest, batchRequestWire } = require('./quote_answers.js');
+const { isUsableFeeDestination } = require('../../config/fee_destination.js');
+const { normalizeQuoteRequest, batchRequestWire, isIncompleteDryRun,
+        payloadUnjudgedFields } = require('./quote_answers.js');
 
 // Which database the fee schedule's price read came out of. Resolved exactly the way
 // util.getFeeOraclePrices resolves it, so the disclosure cannot drift from the
@@ -72,7 +74,7 @@ module.exports = {
 
         let coin           = this.config['COIN'];
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
-        let nativeEnabled  = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+        let nativeEnabled  = isUsableFeeDestination(feeDestination);
 
         let run = await this.dryRunAction({
             action, params, source, feeOutputs, rawData,
@@ -80,6 +82,16 @@ module.exports = {
             timeoutMs: this.config['BLOCK_PROCESS_TIMEOUT'],
             label: 'feequotedryrun ' + (action || '')
         });
+
+        if(isIncompleteDryRun(run))
+            return {
+                supported: true, dryRun: true, action, coin, feeDestination,
+                blockIndex: run.blockIndex, blockTime: run.blockTime,
+                valid: null, noVerdict: true, retryable: true, status: null,
+                error: 'dry-run produced no verdict (the dry-run did not finish: ' + run.error + '); retry shortly',
+                xchainFee: null, guardGasFee: null, requiredFeeNative: null, requiredFeeSatsExact: null,
+                feeSupported: false
+            };
 
         let valid  = (run.status === 'valid');
         let result = {
@@ -94,10 +106,15 @@ module.exports = {
             status:         run.status,
             error:          valid ? null : (run.error || run.status || 'dry-run produced no status'),
             xchainFee:      (run.xchainFee == null) ? null : this.util.bcformat(this.util.bcnum(run.xchainFee), 8),
+            guardGasFee:    (run.guardGasFee == null) ? null : this.util.bcformat(this.util.bcnum(run.guardGasFee), 8),
             requiredFeeNative: null,
             requiredFeeSatsExact: null,
             feeSupported:   false
         };
+
+        Object.assign(result, payloadUnjudgedFields(action, run.status));
+        if(run.subCommands) result.subCommands = run.subCommands;
+        if(run.legs) result.legs = run.legs;
 
         // Native-fee sizing for the extracted fee, merged without letting a pricing failure
         // (missing/stale oracle) overwrite the handler's validity verdict: on this raw surface
@@ -134,7 +151,7 @@ module.exports = {
     async getFeeSchedule(){
         let coin           = this.config['COIN'];
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
-        let enabled        = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+        let enabled        = isUsableFeeDestination(feeDestination);
         let blockIndex     = await this.indexerDb.getLatestBlockIndex();
         let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
             this.config, this.config['NETWORK'], coin, blockIndex);

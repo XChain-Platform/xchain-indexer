@@ -72,8 +72,8 @@ function buildActionData(tx, action, format, coin, isGenesis){
     data['TX_OUTPUTS']       = tx.tx_outputs || []; // Full native-coin output set (fee detection)
     data['IS_GENESIS']       = isGenesis === true;  // synthetic genesis bootstrap action (genesis.js)
     // Guard-inert marker for the public feequote and preflight dry-runs: when set, a controller
-    // guard refuses at the invokeController chokepoint instead of entering the VM (utility.js),
-    // so neither unauthenticated endpoint can run caller-influenced contract code while
+    // guard refuses at invokeController in src/utility/controller_guard.js instead of entering
+    // the VM, so neither unauthenticated endpoint can run caller-influenced contract code while
     // holding the block-loop mutex. Sourced from tx.guard_inert, which only the synthetic tx of
     // computeFeeQuote and computePreflight carries; ALWAYS false for real decoded transactions.
     data['GUARD_INERT']      = tx.guard_inert === true;
@@ -81,6 +81,9 @@ function buildActionData(tx, action, format, coin, isGenesis){
     // dry_run_support.js syntheticDryRunTx). Sourced from tx.fee_probe, which only the public
     // feequote/preflight synthetic tx carries; ALWAYS false for real decoded transactions.
     data['FEE_PROBE']        = tx.fee_probe === true;
+    // Read-only disclosure marker. Synthetic dry-runs set it; decoded
+    // transactions do not. It never changes handler validation or settlement.
+    if(tx.dry_run === true) data['DRY_RUN'] = true;
 
     // Per-TRANSACTION top-level issuance budget (EMISSION_ISSUANCE_LIMITS).
     // Seeded HERE, at the transaction, because that is the only scope the rule can have:
@@ -163,6 +166,7 @@ module.exports = {
         // Scoped to THIS transaction: the originating action's own verdict, captured if a
         // follow-on matcher takes its record over (see processAction below).
         this._primaryVerdict = null;
+        if(data['DRY_RUN'] === true) this.util.resetGuardGasTotals();
 
         // Process the specific ACTION commands
         await this.processAction(action, params, data, error);

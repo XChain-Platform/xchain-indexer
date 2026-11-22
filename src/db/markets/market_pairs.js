@@ -38,7 +38,7 @@ module.exports = {
         let where      = 'b1.block_index=? AND ';
         // Get the time right now and the time 24 hours ago
         let time_now   = await this.getBlockTime(block_index),
-            time_24hr  = this.util.bcsub(time_now, 86400);
+            time_24hr  = this.util.bcsub(time_now, 86400, 0);
         // Quickly check if we have any ORDER, ORDER_MATCH, ORDER_EXPIRE, or ORDER_CANCEL events for the given block
         counts = await pairScan.orderActionCounts(this, args);
         // Updates to find markets which have not been updated in the last 24 hours

@@ -40,6 +40,7 @@ const {
     NETWORK, SNAPSHOT, ORIGIN, NAME, COPY, BRIDGE_BTC_ON_DOGE,
     ADDR_A, ADDR_B, ADDR_C, makeSnapshot, makeCtx,
 } = require('./policy_apply.test/helpers/setup.js');
+const chainIdentity = require('../../../src/hub/hub_db_sync/chain_identity.js');
 
 describe('policy apply: token-policy inheritance onto a bridged copy', function(){
     describe('the membership hash', function(){
@@ -171,6 +172,8 @@ function registerTerminalPolicyValidationTests() {
 }
 
 function registerTerminalPolicyScopeTests() {
+    // A foreign network is terminal in this pass. A foreign btc_chain_id is refused by the
+    // mirror apply fence (refuseForeignChainRow), and this pass reads no per-node identity.
     it('is TERMINAL for a foreign network and for a foreign btc_chain_id', async function(){
         const keys = [makeKey(), makeKey(), makeKey()];
         const lines = [];
@@ -188,14 +191,21 @@ function registerTerminalPolicyScopeTests() {
             c.ctx.config['BTC_CHAIN_ID'] = 'c'.repeat(64);
             const foreignChain = await BS.applyPolicySnapshot(
                 makeSnapshot(keys, { row: { btc_chain_id: 'b'.repeat(64) } }), c.ctx);
-            assert.strictEqual(foreignChain.terminal, true);
-            assert.strictEqual(foreignChain.reason, BS.SETTLE_REASON.CHAIN_ID);
+            assert.notStrictEqual(foreignChain.reason, BS.SETTLE_REASON.CHAIN_ID,
+                'the policy pass compared the row against a per-node chain identity');
+            const fence = { _expectedBtcChainId: 'c'.repeat(64), _refusedChainIdRows: new Map(),
+                            noteRefusedRowName() {} };
+            assert.strictEqual(chainIdentity.refuseForeignChainRow.call(
+                fence, 'policy_snapshots', { btc_chain_id: 'b'.repeat(64) }), true,
+                'the mirror apply fence admitted a snapshot from another chain instance');
+            assert.strictEqual(chainIdentity.refuseForeignChainRow.call(
+                fence, 'policy_snapshots', { btc_chain_id: 'c'.repeat(64) }), false,
+                'the mirror apply fence refused a snapshot of its own chain');
         } finally {
             console.warn = origWarn;
         }
         assert.deepStrictEqual(lines, [
-            '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.NETWORK + ' : terminal',
-            '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.CHAIN_ID + ' : terminal'
+            '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.NETWORK + ' : terminal'
         ]);
     });
 }

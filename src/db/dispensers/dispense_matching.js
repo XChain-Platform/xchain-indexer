@@ -137,7 +137,7 @@ module.exports = {
             // token-SEND channel sets it, utility.js), so tick_id is null. Without a
             // predicate the native branch left `where` empty and matched EVERY open
             // dispenser at the address, including token-priced ones (get_tick_id non-null),
-            // then dispense.js settled the seller's escrow by comparing a native amount to a
+            // then dispense/pricing.js settled the seller's escrow by comparing a native amount to a
             // token-denominated GET_AMOUNT with no unit check - escrow dispensed against
             // payment in the WRONG asset. A native trigger must only settle native-priced
             // dispensers (get_tick_id IS NULL). Correcting the match set changes how
@@ -164,7 +164,7 @@ module.exports = {
         let results = await this.doQuery(query, args);
         if(results.length > 0){
             for(let row of results){
-                // FIAT dispensers: include regardless of coin_amount (matching happens in dispense.js via reverse price lookup)
+                // FIAT dispensers: include regardless of coin_amount (matching happens in dispense/pricing_paths.js via reverse price lookup)
                 // Non-FIAT dispensers: only include if coin_amount >= get_amount
                 if(!this.util.isNull(row.fiat_id) || this.util.bcgte(coin_amount, row.get_amount))
                     dispensers.push(Number(row.action_index));
@@ -174,12 +174,14 @@ module.exports = {
     },
 
     // Observability helper (read-only): given the COIN network and a paid address,
-    // return the most recent dispenser at that address whose LATEST status is
-    // 'cancelled' or 'expired', or false if none. Used by dispense.js to tag a
-    // DISPENSE trigger that matched no open dispenser: when the address DID hold a
-    // dispenser the indexer has since closed or re-dated, this identifies which one
-    // and why. Purely for metrics - it changes no validation or state outcome, and
-    // uses the same latest-status idiom as findMatchingDispensers / getDispenserInfo.
+    // return the most recent dispenser at that address whose LATEST status is any
+    // terminal one ('cancelled', 'empty', 'expired', 'max_dispenses_reached', the
+    // set util.isDispenserSettled names), or false if none. Used by dispense/context.js
+    // to tag a DISPENSE trigger that matched no open dispenser: when the address DID
+    // hold a dispenser the indexer has since closed (cancelled, expired, sold out or
+    // at the fill cap), this identifies which one and why. Purely for metrics - it
+    // changes no validation or state outcome, and uses the same latest-status idiom as
+    // findMatchingDispensers / getDispenserInfo.
     async getClosedDispenserAtAddress(coin, address){
         if(!fitsUtf8mb3(coin) || !fitsUtf8mb3(address))
             return false;
@@ -203,7 +205,7 @@ module.exports = {
                         ) AND
                         c1.coin=? AND
                         a3.address=? AND
-                        s3.status IN ('cancelled', 'expired')
+                        s3.status IN ('cancelled', 'empty', 'expired', 'max_dispenses_reached')
                     ORDER BY d1.action_index DESC
                     LIMIT 1`;
         let results = await this.doQuery(query, [coin, address]);

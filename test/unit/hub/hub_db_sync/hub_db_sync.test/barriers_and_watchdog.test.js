@@ -265,3 +265,44 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
         }
     });
 });
+
+// The pre-ready seed from HUB_SYNC_WATERMARK_INTERVAL_MS goes through the same finite check and
+// floor/ceiling clamp as an interval the hub advertises in its ready frame.
+describe('HubDbSync pre-ready watermark interval seed @regression @tier2', function () {
+    const KEY = 'HUB_SYNC_WATERMARK_INTERVAL_MS';
+
+    function seedFromEnv(value) {
+        const prior = process.env[KEY];
+        if (value === undefined) delete process.env[KEY]; else process.env[KEY] = value;
+        try {
+            const sync = new HubDbSync({ doQuery: sinon.stub().resolves([{ h: 0 }]) }, { hubUrl: 'http://hub.test' });
+            return [sync.watermarkIntervalMs, sync.watermarkTimeoutMs];
+        } finally {
+            if (prior === undefined) delete process.env[KEY]; else process.env[KEY] = prior;
+        }
+    }
+
+    it('falls back to 10000 ms when the env value is unset, malformed or not positive', function () {
+        for (const bad of [undefined, '', 'abc', '10s', '0', '-5']) {
+            assert.deepStrictEqual(seedFromEnv(bad), [10000, 30000], 'env value ' + JSON.stringify(bad));
+        }
+    });
+
+    it('clamps an env seed to the 1000 ms floor and the 300000 ms ceiling', function () {
+        assert.deepStrictEqual(seedFromEnv('5'), [1000, 3000]);
+        assert.deepStrictEqual(seedFromEnv('99999999'), [300000, 900000]);
+        assert.deepStrictEqual(seedFromEnv('45000'), [45000, 135000]);
+    });
+
+    it('keeps an explicit watermarkIntervalMs option unclamped', function () {
+        process.env[KEY] = '45000';
+        try {
+            const sync = new HubDbSync({ doQuery: sinon.stub().resolves([{ h: 0 }]) },
+                { hubUrl: 'http://hub.test', watermarkIntervalMs: 50 });
+            assert.strictEqual(sync.watermarkIntervalMs, 50);
+            assert.strictEqual(sync.watermarkTimeoutMs, 150);
+        } finally {
+            delete process.env[KEY];
+        }
+    });
+});

@@ -216,8 +216,8 @@ describe('capability snapshot proof hold barrier @regression @tier1', function (
         unavailable = true;
         await sync.retryHeldCapabilityRows();
 
-        assert.strictEqual(inserted.length, 1);
-        assert.strictEqual(sync.capabilityProofSatisfied(), true);
+        assert.strictEqual(inserted.length, 0, 'a judge failure cannot release a retained proof hold');
+        assert.strictEqual(sync.capabilityProofSatisfied(), false);
     });
 
     it('encodes every proof endpoint parameter', async function () {

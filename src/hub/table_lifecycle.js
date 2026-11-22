@@ -91,6 +91,8 @@
  *                               the replica's rows wholesale; only for a mirror
  *                               table safe to rebuild whole from the source
  *               absent: no self-repair, the gap is reported only
+ *   infra       root table forwarded to infra-only subscribers; its lookups
+ *               and actions are added by xchain-sync derivation
  *   alsoRecomputed  true when a generically-deleted table is ADDITIONALLY
  *               refreshed by the recompute pass (coverage is a union)
  *   hashed      { classes: [...], note }. classes from:
@@ -183,8 +185,9 @@ const ORPHAN_SWEEPS = [
 //      than detect. Both keep the convergence channel they already have (the
 //      snapshot upsert; ClientSync.reconcileDispensers' periodic replace).
 //
-//   2. IN-PLACE MUTATED tables (exactly the tables declaring the 'state_hash'
-//      class above) are NOT excluded whole; only their edited columns are, via
+//   2. IN-PLACE MUTATED tables (every table declaring the 'state_hash' class
+//      above, plus any un-hashed table a later block edits in place, today
+//      order_matches) are NOT excluded whole; only their edited columns are, via
 //      CONTENT_PARITY_IN_PLACE_COLUMNS. The reasoning below explains why those
 //      columns cannot be windowed. A row of theirs written in block N is edited again in a
 //      later block M, so "the content of blocks [a..b]" is not a stable
@@ -198,7 +201,8 @@ const ORPHAN_SWEEPS = [
 //      callback, lists, mint window, bridge) are in no consensus hash; only the
 //      opt-in, never-halting TOKEN_FOLD_PARITY_CHECK digest in xchain-sync
 //      watches them. Outside the carve-outs, only the in-place COLUMNS in
-//      CONTENT_PARITY_IN_PLACE_COLUMNS below leave the window.
+//      CONTENT_PARITY_IN_PLACE_COLUMNS and the by-design differences in
+//      CONTENT_PARITY_EXCLUDED_COLUMNS below leave the window.
 const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
     Object.freeze({ table: 'markets', dbType: 'indexer',
         reason: 'Derived full-snapshot OHLCV aggregate with no clean block bound (operator ruling 2026-08-11); converges through the snapshot upsert.' }),
@@ -404,11 +408,11 @@ function contentParityCarveOut(table, dbType){
     return hit ? hit.reason : null;
 }
 
-// Tables the source mutates in place after the block that wrote them, which is
-// the same set that declares the state_hash class (that hash commits these
-// mutations, but only the columns each section reads). Derived, never
-// hand-listed, so a new mutation class joins both the hash and this exclusion
-// in one registry edit.
+// The hashed subset of the tables the source mutates in place after the block
+// that wrote them: exactly the tables declaring the state_hash class (that hash
+// commits these mutations, but only the columns each section reads). Derived,
+// never hand-listed. Un-hashed in-place tables (today order_matches) are not in
+// this list; CONTENT_PARITY_IN_PLACE_COLUMNS is the complete in-place set.
 function contentParityMutableTables(){
     return hashClassTables('state_hash');
 }

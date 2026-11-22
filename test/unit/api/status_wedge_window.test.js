@@ -57,7 +57,8 @@ function heldIndexer(holdSince){
     let now = Date.now();
     let ix = new XChainIndexer();
     ix.indexerDb   = { getLatestBlockIndex: async () => 1000 };
-    ix.decoderDb   = { getBlockIndex: async () => 1000 };
+    ix.decoderHeight = 1000;
+    ix.decoderDb   = { getBlockIndex: async () => ix.decoderHeight };
     ix.utxoTracker = null;
     ix.lastPollAt  = now;
     ix.decoderReorgHalted = false;
@@ -91,12 +92,31 @@ describe('GET /status wedge window starts at the barrier hold', function(){
     afterEach(closeServer);
 
     it('answers 200 for a 60 s barrier wait after a 21 minute commit gap', async function(){
-        await serve(heldIndexer(60 * 1000));
+        let ix = heldIndexer(60 * 1000);
+        await serve(ix);
         let status = await get(port, '/status');
         assert.strictEqual(status.status, 200);
         assert.strictEqual(status.body.stallClass, 'barrier_defer');
         assert.strictEqual(status.body.ready, true);
         let ready = await get(port, '/ready');
+        assert.strictEqual(ready.status, 200);
+
+        ix.decoderHeight = 1006;
+        ix.lastBlockCommittedAt = Date.now() - 30 * MIN;
+        ix.readyBehindSince = Date.now() - 29 * MIN;
+        ix.stallReason = 'price_sync_barrier';
+        ix.stallBlock = 1001;
+        ix.stallClearsAt = Date.now() - 5000;
+        ix.barrierHold = null;
+        status = await get(port, '/status');
+        assert.strictEqual(status.status, 200);
+        assert.strictEqual(status.body.ready, true);
+
+        ix.futureWaitClearsAt = { block: 1001, at: ix.stallClearsAt };
+        ix.stallClearsAt = null;
+        ix.barrierHold = { block: 1001, reason: ix.stallReason,
+                           since: Date.now() - 1000, notified: false };
+        ready = await get(port, '/ready');
         assert.strictEqual(ready.status, 200);
     });
 

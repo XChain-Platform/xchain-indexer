@@ -293,6 +293,14 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
             assert.strictEqual(canonical,
                 eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base),
                 'a v0 section canonical must byte-match the per-chain XCHECKPOINT the hub signed');
+            const superseding = Object.assign({}, row, {
+                supersedes_from: 400, rules_digest: 'AB'.repeat(32),
+                SUPERSEDES_FROM: 400, RULES_DIGEST: 'AB'.repeat(32)
+            });
+            assert.strictEqual(handler.canonical(superseding), canonical,
+                'a v0 section has no wire fields from which to rebuild a SUPERSEDE leg');
+            assert.ok(!canonical.includes('|SUPERSEDE|'),
+                'the hub excludes superseding checkpoints from ANCHOR v0 bundles');
         }
     });
 });

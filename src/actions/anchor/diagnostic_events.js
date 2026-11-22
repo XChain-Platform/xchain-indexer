@@ -40,6 +40,11 @@
 const { getLogger, getRegistry } = require('../../observability');
 
 let _counters = null;
+const _warnedBacklogPasses = new Set();
+
+// Finalized mirror rows a per-block pass reads in one query before its cap applies. The cap
+// bounds what a block applies, not what it reads, so past this size the read is worth a look.
+const MIRROR_BACKLOG_WARN_ROWS = 10000;
 
 function counters() {
     if (!_counters) {
@@ -49,10 +54,42 @@ function counters() {
                 name: 'xchain_crashes_total',
                 help: 'Uncaught exceptions and unhandled rejections',
                 labelNames: ['kind']
+            }),
+            mirrorRows: registry.gauge({
+                name: 'xchain_indexer_cross_chain_mirror_rows_read',
+                help: 'Finalized mirror rows the last per-block cross-chain read returned, before the cap',
+                labelNames: ['pass']
+            }),
+            mirrorReadSeconds: registry.histogram({
+                name: 'xchain_indexer_cross_chain_mirror_read_seconds',
+                help: 'Time spent on the full mirror read of a per-block cross-chain pass',
+                labelNames: ['pass']
             })
         };
     }
     return _counters;
+}
+
+/**
+ * Record how large a per-block cross-chain mirror read was. Observation only: it never
+ * throws, and no caller may feed what it measures back into block processing.
+ *
+ * @param {object} d
+ * @param {string} d.pass  which pass read (cross_settle, xexec_dispatch, xcall_result)
+ * @param {number} d.rows  rows the mirror query returned, before the per-block cap
+ * @param {number} d.ms    milliseconds the mirror query took
+ */
+function noteMirrorBacklogRead({ pass, rows, ms } = {}) {
+    try {
+        const label = { pass: String(pass) };
+        const c = counters();
+        c.mirrorRows.set(label, Number(rows) || 0);
+        c.mirrorReadSeconds.observe(label, (Number(ms) || 0) / 1000);
+        if (Number(rows) >= MIRROR_BACKLOG_WARN_ROWS && !_warnedBacklogPasses.has(label.pass)) {
+            _warnedBacklogPasses.add(label.pass);
+            getLogger().warn('CROSS_CHAIN_MIRROR_BACKLOG', { read: label.pass, rows: Number(rows), ms: Number(ms) || 0 });
+        }
+    } catch { /* an observation never reaches the pass it measures */ }
 }
 
 /**
@@ -137,9 +174,12 @@ function installCrashHandlers({ proc = process, exitOnUncaught = true } = {}) {
 // Tests only: the counter handles are process-wide.
 function resetDiagnostics() {
     _counters = null;
+    _warnedBacklogPasses.clear();
 }
 
 module.exports = {
+    noteMirrorBacklogRead,
+    MIRROR_BACKLOG_WARN_ROWS,
     noteXcallRejected,
     noteAnchorFailed,
     isAnchorFailureStatus,

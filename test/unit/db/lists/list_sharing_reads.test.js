@@ -20,6 +20,7 @@ const sinon = require('sinon');
 const {
     isListShared,
     getSharedLists,
+    getSharedListDetails,
     getListOwner,
     createListTransfer
 } = require('../../../../src/db/lists/sharing');
@@ -71,6 +72,29 @@ describe('shared list storage reads', function(){
         });
 
         assert.deepStrictEqual(await getSharedLists({ doQuery }), rows);
+        const details = [{
+            root_index: 10,
+            share_action_index: 20,
+            share_block: 200,
+            name: 'Shared list',
+            owner: 'current-owner'
+        }];
+        const detailQuery = sinon.stub().callsFake(async (sql, args) => {
+            const query = normalized(sql);
+            assert.match(query, /lm\.list_action_index=l\.list_action_index/);
+            assert.match(query, /ms\.status='valid'/);
+            assert.match(query, /ORDER BY lm\.action_index DESC LIMIT 1/);
+            assert.match(query, /FROM list_transfers lt/);
+            assert.match(query, /ORDER BY lt\.action_index DESC LIMIT 1/);
+            assert.match(query, /root\.action_index=l\.list_action_index/);
+            assert.match(query, /a\.action_format=2/);
+            assert.match(query, /s\.status='valid'/);
+            assert.match(query, /ORDER BY l\.action_index ASC$/);
+            assert.deepStrictEqual(args, []);
+            return details;
+        });
+        assert.deepStrictEqual(await getSharedListDetails({ doQuery: detailQuery }), details);
+        assert.ok(detailQuery.calledOnce);
     });
 
     it('returns the destination of the newest transfer after two transfers', async function(){

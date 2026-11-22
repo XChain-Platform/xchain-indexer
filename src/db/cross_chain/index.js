@@ -47,11 +47,22 @@ module.exports = {
         // holds a transaction, so doQuery turns a transient DB fault into an empty set on this
         // node alone - peers settle the matches, this node does not, and the block hashes
         // diverge. Throwing rolls the block back so it retries.
+        // Residual cost: the per-block cap below bounds what a block settles, not what is
+        // read. Settled matches stay finalized on the mirror, so this read and the id list
+        // below grow with every match ever mirrored for this chain; noteMirrorBacklogRead
+        // reports that size. Unlike getEffectiveUnprocessedCallResults this reader has no
+        // single-DB NOT EXISTS form: its SQL is pinned byte for byte in both topologies, and
+        // the table collation is case-insensitive where the JS compare below is byte-exact,
+        // so a pushed-down form needs a BINARY id guard proven against a populated database
+        // before it replaces the pin. A separate mirror cannot join the local settlements
+        // table at all.
+        let readStart = Date.now();
         let matches = await this.mirrorDb().doQueryStrict(
             `SELECT * FROM cross_chain_matches
              WHERE status = 'finalized' AND network = ? AND ${bind.sql} AND (a_chain = ? OR b_chain = ?)
              ORDER BY snapshot_block ASC, match_id ASC`,
             [network].concat(bind.args, [coin, coin]));
+        diag.noteMirrorBacklogRead({ pass: 'cross_settle', rows: matches.length, ms: Date.now() - readStart });
         if(matches.length === 0) return [];
         let ids = matches.map(m => m.match_id);
         let placeholders = ids.map(() => '?').join(',');
@@ -113,12 +124,20 @@ module.exports = {
         // holds a transaction, so doQuery turns a transient DB fault into an empty dispatch set
         // on this node alone - peers inject the XEXEC actions, this node does not, and the
         // block hashes diverge. Throwing rolls the block back so it retries.
+        // Residual cost: same shape as getEffectiveUnsettledMatches. The cap bounds the
+        // injections per block, not the read, which re-scans every finalized dispatch row
+        // for this chain each block; noteMirrorBacklogRead reports that size. A single-DB
+        // NOT EXISTS form like the result reader's is the same equivalence, but this
+        // statement's text is pinned byte for byte in both topologies, so it moves only with
+        // its pin and a proof on a populated database.
+        let readStart = Date.now();
         let calls = await this.mirrorDb().doQueryStrict(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'dispatch' AND status = 'finalized' AND network = ?
                AND target_chain = ? AND ${bind.sql}
              ORDER BY snapshot_block ASC, call_id ASC`,
             [network, coin].concat(bind.args));
+        diag.noteMirrorBacklogRead({ pass: 'xexec_dispatch', rows: calls.length, ms: Date.now() - readStart });
         if(calls.length === 0) return [];
         let ids = calls.map(c => c.call_id);
         let placeholders = ids.map(() => '?').join(',');
@@ -174,13 +193,15 @@ module.exports = {
                  LIMIT ?`,
                 [network, coin].concat(bind.args, [cap]));
         }
-        let bind    = this.mirrorBindClause(block_time, block_index);
-        let results = await mirror.doQueryStrict(
+        let bind      = this.mirrorBindClause(block_time, block_index);
+        let readStart = Date.now();
+        let results   = await mirror.doQueryStrict(
             `SELECT * FROM cross_chain_calls
              WHERE phase = 'result' AND status = 'finalized' AND network = ?
                AND source_chain = ? AND ${bind.sql}
              ORDER BY snapshot_block ASC, call_id ASC`,
             [network, coin].concat(bind.args));
+        diag.noteMirrorBacklogRead({ pass: 'xcall_result', rows: results.length, ms: Date.now() - readStart });
         if(results.length === 0) return [];
         let ids = results.map(r => r.call_id);
         let placeholders = ids.map(() => '?').join(',');

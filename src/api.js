@@ -26,12 +26,13 @@ const dotenv        = require('dotenv');
 // Parse in .env config data BEFORE any local require. src/config.js captures the
 // environment once at module load, and XChainIndexer below loads it, so a later
 // dotenv.config() would leave every .env-supplied setting at its default.
-dotenv.config();
+dotenv.config({ quiet: true });
 const express       = require('express');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
-const { installMiddleware } = require('./api/middleware');
+const { installMiddleware, rpcErrorHandler } = require('./api/middleware');
 const { buildRpcController } = require('./api/rpc');
+const rpcParams = require('./api/rpc/params.js');
 const { mountStatusRoute } = require('./api/status_endpoint');
 const { createShutdown, createIndexerDrain } = require('./api/shutdown');
 const crypto        = require('crypto');
@@ -163,6 +164,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getactivestakeweights',
     'getcapabilityvalidators',
     'getstakeweightsbycapability',
+    'getcapabilitystakeproof',
     'getstakesourcebypubkey',
     'getfullnodeverifiers',
     'getpendingattestation_requests',
@@ -225,7 +227,7 @@ function crossChainCallRpc({ indexer }){
         async getcrosschaincall({call_id}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
+            if(!rpcParams.isHexId(call_id))
                 return { error: 'call_id must be a 64-hex id' };
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
@@ -342,6 +344,10 @@ async function startApi(){
 
     // Allow JSON-RPC requests
     app.use(jsonRouter({methods: jsonRpcController}));
+
+    // Keep this last: parser failures and errors thrown by any route must become
+    // JSON-RPC envelopes instead of Express's HTML stack-trace response.
+    app.use(rpcErrorHandler);
 
     // Start the server. The handle is kept so the shutdown drain below can stop
     // accepting connections and let in-flight requests finish.

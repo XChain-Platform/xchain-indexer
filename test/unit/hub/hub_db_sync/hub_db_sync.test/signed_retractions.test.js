@@ -172,7 +172,7 @@ describe('HubDbSync applyRetraction signed retractions @regression @tier1', func
 
     // Twin parity: the tally marks a pubkey into the dedupe set only
     // AFTER its signature verifies, exactly as the hub producer twin
-    // (RetractionConsensus.handleFinalized) and the sibling tallies in anchor.js,
+    // (RetractionConsensus.handleFinalized) and the sibling tallies in src/actions/anchor/,
     // recovery.js and StateAnchorPublisher already do. Pre-fix this consumer marked on
     // first encounter, so a garbage entry ordered ahead of the real one for the same
     // snapshot member silently under-counted the quorum and refused a hub-finalized

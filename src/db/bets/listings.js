@@ -21,6 +21,19 @@
  *
  ********************************************************************/
 
+const { fitsUtf8mb3 } = require('../utf8mb3.js');
+
+// index_statuses and index_addresses are utf8mb3, so a status or source filter holding a
+// character above U+FFFF matches no row; binding it would instead throw errno 1267
+// (Illegal mix of collations). index_tickers is utf8mb4, so a tick filter still binds.
+function utf8mb3FiltersFit(db, opts){
+    for(let key of ['status', 'source']){
+        if(!db.util.isNull(opts[key]) && !fitsUtf8mb3(opts[key]))
+            return false;
+    }
+    return true;
+}
+
 const BET_FEED_ROWS_QUERY = `SELECT
                                 f.action_index,
                                 f.label,
@@ -110,6 +123,7 @@ module.exports = {
     async getBetFeedRows(opts = {}){
         let limit = parseInt(opts.limit);
         if(!Number.isFinite(limit) || limit <= 0) limit = 100;
+        if(!utf8mb3FiltersFit(this, opts)) return [];
         const { sql, args } = betFeedRowFilters(this, opts);
         const query = BET_FEED_ROWS_QUERY + sql + `
                     ORDER BY f.action_index ASC
@@ -142,6 +156,7 @@ module.exports = {
     async getBetRows(opts = {}){
         let limit = parseInt(opts.limit);
         if(!Number.isFinite(limit) || limit <= 0) limit = 100;
+        if(!utf8mb3FiltersFit(this, opts)) return [];
         let sql  = '';
         let args = [];
         if(!this.util.isNull(opts.feed) && this.util.isNumeric(opts.feed)){

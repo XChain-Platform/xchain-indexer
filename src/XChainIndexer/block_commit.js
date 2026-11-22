@@ -24,6 +24,13 @@
 const { getLogger } = require('../observability/index.js');
 const AddressRetry  = require('../hub/hub_push_queue/address_retry.js');
 
+function stopsLiveDeliveryRun(err){
+    if(err && err.rateLimited) return true;
+    if(err && err.hubRejection) return false;
+    if(err && err.rpcCode !== undefined) return false;
+    return true;
+}
+
 module.exports = {
 
     // Deliver the hub pushes staged (and durably written via enqueueHubPushTx) during the block
@@ -31,9 +38,9 @@ module.exports = {
     // HubPushQueue drain uses; on success the row is settled (dropped once every unpinned
     // candidate hub has it, see settleLiveDelivery), on any failure it is left for
     // HubPushQueue to retry with backoff. Never throws into the block loop.
-    async deliverStagedHubPushes(){
+    async deliverStagedHubPushes({ skipLive = false } = {}){
         let staged = this.indexerDb.takeStagedHubPushes();
-        if(!staged || staged.length === 0 || !this.hubClient) return;
+        if(skipLive || !staged || staged.length === 0 || !this.hubClient) return;
         let live = AddressRetry.liveFacade(this.hubPushQueue);
         for(let entry of staged){
             let target = live ? live.liveDeliveryTarget(this.hubClient) : { client: this.hubClient, address: null };
@@ -69,14 +76,14 @@ module.exports = {
                 // Live delivery failed; the durable row stays for HubPushQueue's backoff retry.
                 getLogger().warn('Staged hub push ' + entry.pushType + ' row ' + entry.id +
                     ' live delivery failed; HubPushQueue will retry:', err && err.message);
-                // A 429 says the hub is refusing this IP for the rest of its window, so the
-                // remaining staged entries would each buy one more rejection and one more
-                // log line. Stop here: every one of them is already durable in
-                // pending_hub_pushes, and HubPushQueue holds off until the window clears.
+                // A 429 or transport failure applies to the rest of this run, so the
+                // remaining staged entries would each buy one more failure and log line.
+                // A payload-specific hub rejection or RPC verdict does not block later rows.
+                // Stop safely because every row is already durable in pending_hub_pushes.
                 // This is the shape a chain-only node replaying a
                 // batch-bearing chain against a REMOTE hub takes, where the block loop
                 // outruns any per-IP cap by orders of magnitude.
-                if(err && err.rateLimited) break;
+                if(stopsLiveDeliveryRun(err)) break;
             }
         }
     },
@@ -99,7 +106,7 @@ module.exports = {
         // value. The hub only wants the live tip. Only push within
         // CHAIN_TIP_PUSH_MAX_LAG blocks of the decoder tip (lastDecoderBlock here is
         // the prior iteration's value, i.e. at most one block stale, which is fine).
-        if(!this.util.bcgt(this.util.bcsub(lastDecoderBlock, blockToParse), this.config['CHAIN_TIP_PUSH_MAX_LAG'])){
+        if(!this.util.bcgt(this.util.bcsub(lastDecoderBlock, blockToParse, 0), this.config['CHAIN_TIP_PUSH_MAX_LAG'])){
             // The chain identity rides the tip push that already exists rather than
             // a new RPC. Resolved here (not only at startup) because a chain that
             // was re-genesised has no block 1 to read when this process boots; the
@@ -115,9 +122,14 @@ module.exports = {
         // transaction (mirrors rollback.js's post-commit retraction delivery). Each row
         // already survives a crash here (HubPushQueue drains the survivors on restart);
         // this is only an immediate live-delivery fast path that drops the durable row on
-        // success and leaves it for the queue on any failure. Best-effort and never throws
-        // into the block loop.
-        await this.deliverStagedHubPushes();
+        // success and leaves it for the queue on any failure. While catching up, drain the
+        // staging buffer without hub I/O and let the queue deliver it. Best-effort and never
+        // throws into the block loop.
+        let livePushMaxLag = Number.isFinite(this.config['HUB_LIVE_PUSH_MAX_LAG'])
+            ? this.config['HUB_LIVE_PUSH_MAX_LAG'] : 3;
+        let skipLive = this.util.bcgt(
+            this.util.bcsub(lastDecoderBlock, blockToParse, 0), livePushMaxLag);
+        await this.deliverStagedHubPushes({ skipLive: skipLive });
 
         // Refresh the decoder tip after each committed block. Without this the
         // decoder tip is snapshotted once per outer-loop iteration and stays frozen
@@ -141,6 +153,7 @@ module.exports = {
         // advancing-but-barrier-deferring indexer from a wedged one.
         this.stallReason = null;
         this.stallClearsAt = null;              // the stall is over, so is its deadline
+        this.futureWaitClearsAt = null;
         this.lastBlockCommittedAt = Date.now();
         // Whatever this block was held behind, it is not held any more. Cleared here
         // as well as by nextBarrierHold's block-changed reset so a commit ends the

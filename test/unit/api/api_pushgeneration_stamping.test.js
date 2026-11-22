@@ -121,6 +121,8 @@ describe('push_generation stamping on hub-pinned federation reads (item 2367) @r
                 'the follower-side dispatch pin (xchain-hub CrossChainCallEngine.validateDispatch) '
                 + 'compares call.push_generation; omitting it wedges XCALL relay on any chain that '
                 + 'has rolled back at least once');
+            assert.ok(handlerBody('getcrosschaincall').includes('rpcParams.isHexId(call_id)'),
+                'getcrosschaincall must reject coercible objects and arrays before database access');
         });
 
         it('still carries every other field the hub pin compares', function () {

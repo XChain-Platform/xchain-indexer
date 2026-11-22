@@ -16,6 +16,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 
 const AnchorRecovery = require('../../../../bin/recovery.js');
+const bridgePolicy = require('../../../../bin/recovery/bridge_policy.js');
 const {
     makeKeypair, buildBatch, rawMatch, rawBridge, rawPolicy,
     BRIDGE_KEYS, POLICY_KEYS
@@ -43,7 +44,9 @@ describe('AnchorRecovery bridge and policy tables @regression @tier2', function 
 
     it('uses the ABP archive key orders and only the full writer restores both tables', async function () {
         let bridge = rawBridge('a'.repeat(64), 'finalized');
-        let policy = rawPolicy('b'.repeat(64));
+        let policy = rawPolicy('b'.repeat(64), {
+            allow_list: JSON.stringify('BTC:12'), block_list: JSON.stringify('DOGE:9')
+        });
         let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
             { bridges: [bridge], policies: [policy] });
 
@@ -61,6 +64,8 @@ describe('AnchorRecovery bridge and policy tables @regression @tier2', function 
         assert.strictEqual(report.policies, 1);
         assert.strictEqual(fullDb.bridges.length, 1);
         assert.strictEqual(fullDb.policies.length, 1);
+        assert.strictEqual(fullDb.policies[0].allow_list, JSON.stringify('BTC:12'));
+        assert.strictEqual(fullDb.policies[0].block_list, JSON.stringify('DOGE:9'));
 
         let dryDb = memDb([batch.v1], batch.v2s);
         let dryReport = await new AnchorRecovery(dryDb, Object.assign({ dryRun: true }, quiet)).run();
@@ -106,6 +111,20 @@ describe('AnchorRecovery bridge and policy tables @regression @tier2', function 
         assert.strictEqual(db.policies.length, 0);
     });
 
+    it('restores legacy uppercase ids and policy hashes without changing signed bytes', async function () {
+        let bridge = rawBridge('a'.repeat(64).toUpperCase(), 'finalized');
+        let policy = rawPolicy('b'.repeat(64).toUpperCase());
+        policy.policy_hash = policy.policy_hash.toUpperCase();
+        let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
+            { bridges: [bridge], policies: [policy] });
+        let db = memDb([batch.v1], batch.v2s);
+        let report = await new AnchorRecovery(db, quiet).run();
+        assert.strictEqual(report.verified, 1);
+        assert.strictEqual(db.bridges[0].transfer_id, bridge.transfer_id);
+        assert.strictEqual(db.policies[0].snapshot_id, policy.snapshot_id);
+        assert.strictEqual(db.policies[0].policy_hash, policy.policy_hash);
+    });
+
     it('rejects a policy list that does not hash to the signed policy_hash', async function () {
         let policy = rawPolicy('f'.repeat(64));
         policy.allow_list = JSON.stringify(['addr1', 'addr2', 'attacker']);
@@ -119,6 +138,24 @@ describe('AnchorRecovery bridge and policy tables @regression @tier2', function 
         assert.strictEqual(db.matches.length, 0);
         assert.strictEqual(db.bridges.length, 0);
         assert.strictEqual(db.policies.length, 0);
+
+        let below = rawPolicy('9'.repeat(64), {
+            network: 'testnet', snapshot_block: 154776,
+            allow_list: JSON.stringify('BTC:12'), validator_signatures: '[]'
+        });
+        assert.throws(() => bridgePolicy.validatePolicy(below, 'testnet'), /below the producer gate/);
+        let active = rawPolicy('8'.repeat(64), {
+            network: 'testnet', snapshot_block: 154777,
+            allow_list: JSON.stringify('BTC:12'), validator_signatures: '[]'
+        });
+        assert.doesNotThrow(() => bridgePolicy.validatePolicy(active, 'testnet'));
+        for(let value of [JSON.stringify('BTC:0'), JSON.stringify('XYZ:1'), '{"ref":"BTC:12"}']){
+            let malformed = rawPolicy('7'.repeat(64), {
+                allow_list: value, policy_hash: 'a'.repeat(64), validator_signatures: '[]'
+            });
+            assert.throws(() => bridgePolicy.validatePolicy(malformed, 'regtest'),
+                /malformed or unordered membership list/);
+        }
     });
 
     it('fails a policy sequence collision with a different snapshot id', async function () {

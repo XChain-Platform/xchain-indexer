@@ -27,7 +27,7 @@
 const { HUB_SYNC_WATERMARK_GRACE_S, HUB_SYNC_BARRIER_HOLD_CEILING_S } = require('../hub/hub_db_sync.js');
 const { blockMayReadPrice } = require('../chain/price_read_predicate.js');
 const { nextBarrierHold, isMirrorBarrierReason, barrierHoldMs,
-        barrierCeilingExceeded } = require('./stall_health.js');
+        barrierCeilingExceeded, waitingOnFutureBlock } = require('./stall_health.js');
 const { getLogger } = require('../observability/index.js');
 
 module.exports = {
@@ -35,11 +35,11 @@ module.exports = {
     // The wall-clock instant at which a time-keyed hub-sync barrier can FIRST be
     // satisfied for a block, or null when that cannot be determined. Every such barrier has
     // the same escape hatch (`streamWatermark >= blockTime + grace`), and the watermark only
-    // advances as real time does, so a block stamped in the FUTURE cannot clear before
-    // blockTime + grace no matter how healthy the mirror is. Their other satisfaction case
-    // (the mirror already holds a row at/past blockTime) cannot fire early either, because
-    // rows effective at a future instant do not exist yet. Returns null when sync is off or
-    // the inputs are not finite, which leaves the caller's verdict exactly as it was before.
+    // advances as real time does, so that escape cannot clear before blockTime + grace.
+    // A content-based satisfaction case may instead open from blockTime onward. Callers with
+    // a content case and a long grace must report that earlier floor separately, as the price
+    // barrier does, or a later fallback would suppress the hold for real mirror lag. Returns
+    // null when sync is off or the inputs are not finite.
     //
     // Above the mirror-admission activation the barriers are keyed on the hub's per-table
     // height watermark, which can open them at any instant, so no first instant exists (the
@@ -120,6 +120,14 @@ module.exports = {
         this.stallBlock    = null;
     },
 
+    // End the hold for a pass that attempts no block (a decoder halt, a diverged replay
+    // witness). A hold is the age of one block's barrier wait, so a pass that waits on no
+    // barrier cannot extend it, and leaving it in place would let the next status read count
+    // the whole halt against the ceiling and name a barrier that is not being waited on.
+    releaseBarrierHold(){
+        this.barrierHold = null;
+    },
+
     // Fold one poll-loop pass into the mirror-barrier hold, and act when it crosses the
     // named ceiling. Called once per pass, right after the catch-up loop exits,
     // where `this.stallReason` and `this.stallClearsAt` already carry whatever the defer
@@ -137,6 +145,11 @@ module.exports = {
     // Returns the hold in ms (0 when nothing is held), for the caller and for tests.
     noteBarrierHold(blockToParse, now = Date.now()){
         this.stallBlock = this.stallReason ? blockToParse : null;
+        if(waitingOnFutureBlock(this.stallReason, this.stallClearsAt, now))
+            this.futureWaitClearsAt = { block: blockToParse, at: this.stallClearsAt };
+        else if(!this.stallReason || !this.futureWaitClearsAt
+                || this.futureWaitClearsAt.block !== blockToParse)
+            this.futureWaitClearsAt = null;
         let prev = this.barrierHold;
         this.barrierHold = nextBarrierHold(prev, blockToParse, this.stallReason, this.stallClearsAt, now);
         let hold = this.barrierHold;
@@ -149,6 +162,8 @@ module.exports = {
         // a pointless reconnect. The hold and its ceiling still apply to those: naming how
         // long a block has been stuck is worth having whatever is holding it.
         let mirrorBarrier = isMirrorBarrierReason(hold.reason);
+        let canResync = mirrorBarrier && !!this.hubDbSync &&
+                        typeof this.hubDbSync.requestResync === 'function';
 
         // Announce the crossing ONCE per held block, then keep re-driving the mirror on the
         // ceiling cadence: requestResync() throttles itself on the same value, so calling it
@@ -160,12 +175,15 @@ module.exports = {
                 hold.reason + ' for ' + Math.round(barrierHoldMs(hold, now) / 1000) + 's, past the ' +
                 Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling (HUB_SYNC_BARRIER_HOLD_CEILING_S, default ' +
                 HUB_SYNC_BARRIER_HOLD_CEILING_S + 's). The block is still deferring, which is correct. ' +
-                (mirrorBarrier
+                (canResync
                     ? 'Requesting hub-mirror recovery: a stream watermark that stops advancing holds every ' +
                       'one of these barriers open-endedly. An active drain may finish while it keeps making progress.'
+                    : mirrorBarrier
+                    ? 'No hub-mirror resync is being requested: this node reads the hub DB directly or its ' +
+                      'mirror cannot resync; check the hub DB feed.'
                     : 'Not a hub-mirror barrier, so no resync is forced; this is a host fault to investigate.'));
         }
-        if(mirrorBarrier && this.hubDbSync && typeof this.hubDbSync.requestResync === 'function')
+        if(canResync)
             this.hubDbSync.requestResync('block ' + blockToParse + ' held at ' + hold.reason +
                                          ' past the ' + Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling');
         return barrierHoldMs(hold, now);

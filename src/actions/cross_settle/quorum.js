@@ -71,10 +71,7 @@ async function verifyMatchQuorum(m, verdict){
         return false;
     }
 
-    let sigs;
-    try { sigs = JSON.parse(m.validator_signatures || '[]'); }
-    catch(_) { sigs = []; }
-
+    let sigs = parseSignatureList(m.validator_signatures);
     let canonical = this.canonical(m);
     let validSigners = collectValidSigners(validators, sigs, canonical);
     let quorumMet = weighted
@@ -111,7 +108,7 @@ function collectValidSigners(validators, sigs, canonical){
         if(!snapPubkeys.has(pk)) continue;
         if(!ed25519.verify(canonical, sig, pk)) continue;
         // Mark seen only AFTER the signature verifies, matching the hub
-        // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
+        // finalizer and the SDK/explorer/sync verifiers (and src/actions/anchor/):
         // marking on first encounter lets a garbage-then-valid pair for one
         // qualified validator suppress the real signature (order-dependent
         // quorum under-count, fails quorate settlements closed).
@@ -119,6 +116,16 @@ function collectValidSigners(validators, sigs, canonical){
         validSigners.push(pk);
     }
     return validSigners;
+}
+
+// A mirrored signature column is untrusted row data. Invalid JSON, a JSON value
+// other than an array, and non-object entries all mean zero usable signatures.
+function parseSignatureList(text){
+    let sigs;
+    try { sigs = JSON.parse(text || '[]'); }
+    catch(_){ return []; }
+    if(!Array.isArray(sigs)) return [];
+    return sigs.filter(s => s && typeof s === 'object');
 }
 
 /**
@@ -136,12 +143,7 @@ async function verifyCanonicalQuorum(indexerDb, canonical, signaturesJson, snaps
     let N = (validators && validators.length) ? validators.length : 0;
     if(N === 0) return { met: false, snapshotAbsent: true };
 
-    let sigs;
-    try { sigs = JSON.parse(signaturesJson || '[]'); }
-    catch(_) { sigs = []; }
-    if(!Array.isArray(sigs)) sigs = [];
-
-    let validSigners = collectValidSigners(validators, sigs.filter(s => s && typeof s === 'object'), canonical);
+    let validSigners = collectValidSigners(validators, parseSignatureList(signaturesJson), canonical);
     let met = weighted
         ? swq.meetsStakeThreshold(validators, validSigners)
         : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
@@ -150,5 +152,7 @@ async function verifyCanonicalQuorum(indexerDb, canonical, signaturesJson, snaps
 
 module.exports = {
     verifyMatchQuorum,
-    verifyCanonicalQuorum
+    verifyCanonicalQuorum,
+    collectValidSigners,
+    parseSignatureList
 };

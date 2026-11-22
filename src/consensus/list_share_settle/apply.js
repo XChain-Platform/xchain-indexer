@@ -24,32 +24,14 @@ const { injectListShareLegs } = require('./inject.js');
 const { listShareTarget } = require('./target.js');
 const { verifyMirrorMembers } = require('./reread.js');
 const { recordListShareApplied } = require('./record.js');
-const gateRegistry = require('../gate_registry.js');
+const {
+    isListMetaActive,
+    isListMetaApplyActive,
+} = require('../gates/list_meta_gate.js');
 const {
     ListShareHaltError,
     LIST_SHARE_HALT_REASON,
-    LIST_META_GATE_KEY,
 } = require('./halt.js');
-
-function isListMetaActive(snapshotBlock, network){
-    return gateRegistry.activeAt(
-        LIST_META_GATE_KEY,
-        network,
-        'BTC',
-        snapshotBlock,
-        null
-    );
-}
-
-function isListMetaApplyActive(coin, network, blockIndex){
-    return gateRegistry.activeAt(
-        LIST_META_GATE_KEY,
-        network,
-        coin,
-        blockIndex,
-        null
-    );
-}
 
 function wireListMetaConsumer(deps){
     if(typeof deps.isListMetaApplyActive === 'function') return;

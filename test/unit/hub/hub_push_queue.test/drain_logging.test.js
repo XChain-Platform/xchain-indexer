@@ -98,7 +98,7 @@ function registerTimerTests(){
         const tick = sinon.stub(q, 'drainAndLog').resolves();
         q.start();
         try {
-            clock.tick(3000);
+            await clock.tickAsync(3000);
             assert.strictEqual(tick.callCount, 3);
             assert.deepStrictEqual(tick.firstCall.args, [], 'the tick takes the default logger');
         } finally {

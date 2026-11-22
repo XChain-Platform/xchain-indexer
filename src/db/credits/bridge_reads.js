@@ -25,6 +25,7 @@
 // path commits, never a rebuilt in-memory tree, so a proof this method hands out can only
 // ever match what was actually committed.
 const bridgeMerkle = require('../../consensus/merkle.js');
+const { fitsUtf8mb3 } = require('../utf8mb3.js');
 const bridgeStateCommitment = require('../../state_commitment/index.js');
 // state_root_version is a DERIVED-per-height quantity (api.js getblockhashes is the ONLY
 // place it is MINTED), never the static merkle.STATE_ROOT_VERSION constant: a static
@@ -74,7 +75,13 @@ async function readVerifiedCheckpoint(db, chain, network, height){
 
 // The address's net tick balance as of `height`, bounded through the actions join so it
 // reads the ledger at that block, never the current one.
+//
+// index_addresses.address is utf8mb3 and createAddress refuses to store any address that
+// does not fit it, so such an address has no credits or debits and its balance is zero at
+// every height. It is answered as zero without binding it, which would throw errno 1267.
 async function ledgerBalanceAt(db, address, tick, height){
+    if(!fitsUtf8mb3(address))
+        return db.util.bcstr(db.util.bcsub('0', '0', 18));
     let balRows = await db.doQueryStrict(
         `SELECT
                 (SELECT COALESCE(SUM(CAST(c.amount AS DECIMAL(60,18))),0) FROM credits c

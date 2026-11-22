@@ -26,6 +26,10 @@ const { getLogger } = require('../../observability/index.js');
 const gateRegistry = require('../../consensus/gate_registry.js');
 const { prelaunchAdmits } = require('../../consensus/gates/mainnet_launch_gate.js');
 const { prelaunchInput } = require('../../XChainIndexer/block_admission.js');
+const { foldLegVerdicts } = require('../send/leg_verdicts.js');
+
+// Actions that debit VM gas without a fees row (DEPLOY includes its chunk carriers).
+const VM_GAS_ACTIONS = new Set(['EXECUTE', 'DEPLOY']);
 
 // The verdict for a transaction the mainnet launch gate refuses: the chain never processes it.
 const NOT_ADMITTED_BEFORE_LAUNCH = 'invalid: not admitted before mainnet launch ' +
@@ -68,7 +72,8 @@ function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeF
         txOutputs = [{ address: probeFeeDestination, value: '21000000.00000000' }];
 
     // Synthetic transaction mirroring what the decoder feeds processTransaction. The tx_hash
-    // is unique + clearly marked; it and any handler writes vanish on rollback.
+    // is unique + clearly marked; it and any handler writes vanish on rollback. The decoder
+    // hardcodes transaction fee to 0, which also keeps data['FEE'] identical here.
     return {
         data:          (typeof rawData === 'string') ? rawData : [action].concat(params).join('|'),
         source:        source,
@@ -78,10 +83,13 @@ function syntheticDryRunTx(actions, { action, params, source, feeOutputs, probeF
         vout:          0,
         block_index:   blockIndex,
         block_time:    blockTime,
-        fee:           null,
+        fee:           0,
         source_pubkey: null,
         tx_outputs:    txOutputs,
         raw_data:      null,
+        // Every synthetic run keeps read-only verdict disclosures. Decoded
+        // transactions never carry this marker.
+        dry_run:       true,
         // Marks a run whose controller guards must NOT enter the VM (the public
         // feequote path; see computeFeeQuote). Set only here on the synthetic tx and
         // only when the caller asks, so it is absent from every decoder-fed block tx
@@ -135,6 +143,20 @@ function quietAbandonedRun(dryRunProcessing){
     });
 }
 
+// A multi-leg SEND settles each leg on its own and leaves STATUS holding the LAST leg's
+// verdict, which is not the action's: the leg verdicts the probe kept (send/settle.js
+// recordProbeLegVerdict) answer instead. The quote reads 'valid' only when every leg settles;
+// otherwise it carries the first refused leg's own status, so every consumer that keys on the
+// status string (isGuardInertError, the fee quote) still sees a real chain verdict. `legs`
+// lists each leg in settle order so a composer can see which will settle.
+function applyLegVerdicts(resultData, verdict, isGuardInert){
+    let legs = resultData ? resultData['PROBE_LEG_VERDICTS'] : null;
+    let folded = foldLegVerdicts(legs, isGuardInert);
+    if(!folded) return;
+    verdict.legs = folded.legs;
+    verdict.status = folded.status;
+}
+
 // Read the handler's verdict, staged fee and probe disclosures off a finished run into
 // `verdict`, field by field in the order the run exposes them, while the transaction is
 // still open. Filling the caller's object (rather than returning a new one) keeps what was
@@ -149,6 +171,9 @@ async function readDryRunVerdict(actions, resultData, verdict){
     verdict.status = primary
         ? primary.status
         : ((resultData && resultData['STATUS'] !== undefined) ? resultData['STATUS'] : null);
+    verdict.action = resultData && resultData['ACTION'];
+    if(!batched && !primary)
+        applyLegVerdicts(resultData, verdict, (status) => actions.util.isGuardInertError(status));
     // Extract the handler-computed fee while the transaction is still open (the row
     // vanishes on rollback). `amount` is XCHAIN-denominated in every payment mode.
     let actionIndex = primary
@@ -161,12 +186,16 @@ async function readDryRunVerdict(actions, resultData, verdict){
         verdict.feeWithheld = true;
     else if(actionIndex !== null)
         verdict.feeRecord = await actions.indexerDb.getFeeRecord(actionIndex);
+    if(!batched && resultData && Object.prototype.hasOwnProperty.call(resultData, 'PROBE_SETTLED_GAS_FEE'))
+        verdict.settledGasFee = String(resultData['PROBE_SETTLED_GAS_FEE']);
     if(resultData && Array.isArray(resultData['PROBE_SUB_VERDICTS']))
         verdict.subCommands = resultData['PROBE_SUB_VERDICTS'];
     if(resultData && resultData['PROBE_ORACLE_FEES'] &&
        typeof resultData['PROBE_ORACLE_FEES'] === 'object' &&
        Object.keys(resultData['PROBE_ORACLE_FEES']).length > 0)
         verdict.oracleFeesOwed = resultData['PROBE_ORACLE_FEES'];
+    if(resultData && Array.isArray(resultData['PROBE_NATIVE_FEE_LEGS']))
+        verdict.nativeFeeLegs = resultData['PROBE_NATIVE_FEE_LEGS'].slice();
     if(resultData && Object.prototype.hasOwnProperty.call(resultData, 'BATCH_POSITION')){
         let payments = actions.util.probePaymentDisclosure(resultData);
         if(payments){
@@ -175,6 +204,19 @@ async function readDryRunVerdict(actions, resultData, verdict){
                 verdict.coinPaymentsOwed = payments.coinPaymentsOwed;
         }
     }
+    if(resultData && resultData['SOURCE'] !== undefined)
+        verdict.guardGasFee = actions.util.guardGasTotal(resultData['SOURCE']);
+}
+
+// The quoted XCHAIN fee. VM actions debit GAS without a fees row, so their figure is the
+// handler's disclosed settled debit (paid whatever the status); a VM action with neither
+// reads as unknown, because a missing row there does not mean the run was free.
+function dryRunFee(verdict, dryRunError, action){
+    if(dryRunError || verdict.feeWithheld) return null;
+    if(verdict.feeRecord) return String(verdict.feeRecord.amount);
+    if(verdict.settledGasFee !== undefined) return String(verdict.settledGasFee);
+    if(VM_GAS_ACTIONS.has(String(action || '').toUpperCase())) return null;
+    return verdict.status === 'valid' ? '0' : null;
 }
 
 // The dryRunAction result shape.
@@ -186,15 +228,16 @@ function dryRunOutcome(blockIndex, blockTime, verdict, dryRunError, sourceFeeBal
         error:      dryRunError,
         // null, never '0', when the read-back failed or a batch withheld its fee:
         // '0' would tell a confirm screen it is free without a complete verdict.
-        xchainFee:  dryRunError ? null
-                   : verdict.feeWithheld ? null
-                   : verdict.feeRecord ? String(verdict.feeRecord.amount)
-                   : ((verdict.status === 'valid') ? '0' : null),
+        xchainFee:  dryRunFee(verdict, dryRunError, verdict.action),
+        guardGasFee: dryRunError || verdict.feeWithheld || verdict.status !== 'valid'
+                   ? null : String(verdict.guardGasFee || '0'),
         sourceFeeBalance: sourceFeeBalance,
         subCommands:      verdict.subCommands,
+        legs:             verdict.legs,
         oracleFeesOwed:   verdict.oracleFeesOwed,
         nativeFeeOwed:    verdict.nativeFeeOwed,
-        coinPaymentsOwed: verdict.coinPaymentsOwed
+        coinPaymentsOwed: verdict.coinPaymentsOwed,
+        nativeFeeLegs:    verdict.nativeFeeLegs || null
     };
 }
 

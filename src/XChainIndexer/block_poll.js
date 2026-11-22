@@ -54,7 +54,8 @@ module.exports = {
                                     ? await indexerReorgView.getLastProcessedReorgWitness() : null;
         let unprocessedReorgs    = await this.decoderDb.getReorgsSince(lastProcessedReorgId, cursorWitness);
         // Keep the decoder-halt flag current on every poll (loud on transition, then
-        // periodic). pollDecoderOnce reads it to stop advancing while the halt stands.
+        // periodic). Long catch-up loops also re-probe it on the reorg-check cadence.
+        // pollDecoderOnce reads it to stop advancing while the halt stands.
         await this.checkDecoderReorgHalt();
 
         // Get last processed block from Indexer and Decoder databases
@@ -89,6 +90,7 @@ module.exports = {
         // beginPollPass, which would otherwise clear it, so every pass reports it.
         if(await this.replayWitnessHoldsBlocks(indexerReorgView)){
             this.beginPollPass(null);
+            this.releaseBarrierHold();
             this.holdRetroactiveReplayDiverged();
             return;
         }
@@ -104,6 +106,7 @@ module.exports = {
         // never wedged. A probe fault keeps the last known halt state (checkDecoderReorgHalt).
         if(this.decoderReorgHalted === true || this.decoderReorgHalted === null){
             this.beginPollPass(null);
+            this.releaseBarrierHold();
             return;
         }
 
@@ -111,12 +114,12 @@ module.exports = {
         if(this.util.isNull(lastIndexerBlock)){
             firstDecoderBlock = await this.decoderDb.getBlockIndex('decoder', 'first');
             if(!this.util.isNull(firstDecoderBlock))
-                lastIndexerBlock = this.util.bcsub(firstDecoderBlock,1);
+                lastIndexerBlock = this.util.bcsub(firstDecoderBlock,1, 0);
         }
 
         // Print out status message about where parsing is resuming
         if(this.synced === false && !this.util.isNull(lastIndexerBlock)){
-            let startBlock = this.util.bcadd(lastIndexerBlock,1)
+            let startBlock = this.util.bcadd(lastIndexerBlock,1, 0)
             if(this.util.bclt(startBlock, lastDecoderBlock))
                 getLogger().info('Resuming block parsing at block ' + startBlock + '...');
         }
@@ -132,7 +135,10 @@ module.exports = {
 
         // A diverged chunk stopped the catch-up; hold now rather than fold it into the
         // mirror-barrier ceiling, which would ask the mirror to resync over a data fault.
-        if(this.replayWitnessPhase === 'diverged') return;
+        if(this.replayWitnessPhase === 'diverged'){
+            this.releaseBarrierHold();
+            return;
+        }
 
         // The witness pass reproduced its record through replay_to. The new rules apply
         // only from a fresh boot, so this process ends here and the supervisor restarts it.
@@ -148,8 +154,9 @@ module.exports = {
         // lines. A no-op when nothing is stalled; see noteBarrierHold.
         this.noteBarrierHold(this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1);
 
-        // Set flag to indicate fully synced and listening for block
-        if(!this.synced && !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
+        // Treat an unknown decoder tip as unsynced; empty and failed reads both return null.
+        if(!this.synced && !this.util.isNull(lastDecoderBlock) &&
+           !this.util.bclt(lastIndexerBlock, lastDecoderBlock)){
             this.synced = true;
             getLogger().info('Listening for blocks...');
         }
@@ -324,8 +331,21 @@ module.exports = {
         let midCursorWitness = (lastProcessedReorgId != null)
                                 ? await indexerReorgView.getLastProcessedReorgWitness() : null;
         let midReorgs = await this.decoderDb.getReorgsSince(lastProcessedReorgId, midCursorWitness);
-        if(midReorgs.length === 0) return false;
-        getLogger().info('Detected a decoder reorg mid-catch-up; breaking to handle it before block ' + (Number(lastIndexerBlock) + 1));
+        if(midReorgs.length > 0){
+            getLogger().info('Detected a decoder reorg mid-catch-up; breaking to handle it before block ' +
+                (Number(lastIndexerBlock) + 1));
+            return true;
+        }
+        return await this.decoderHaltLandedMidCatchUp(lastIndexerBlock, REORG_RECHECK_BLOCKS);
+    },
+
+    // getReorgsSince cannot see REORG_HALT rows, and a halt can land without a
+    // matching REORG event. Re-probe it on the same bounded catch-up cadence.
+    async decoderHaltLandedMidCatchUp(lastIndexerBlock, REORG_RECHECK_BLOCKS){
+        if((Number(lastIndexerBlock) % REORG_RECHECK_BLOCKS) !== 0) return false;
+        if((await this.checkDecoderReorgHalt()) !== true) return false;
+        getLogger().info('Detected a decoder REORG_HALT mid-catch-up; breaking before block ' +
+            (Number(lastIndexerBlock) + 1));
         return true;
     }
 };

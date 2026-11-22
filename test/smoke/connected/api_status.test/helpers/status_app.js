@@ -47,7 +47,10 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
     if(isOperatorActionHold(stallReason)) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
-    return (now - lastBlockCommittedAt) > graceMs;
+    let windowStart = Number.isFinite(stallClearsAtMs)
+        ? Math.max(lastBlockCommittedAt, stallClearsAtMs)
+        : lastBlockCommittedAt;
+    return (now - windowStart) > graceMs;
 }
 
 // Standalone copies of the status discriminators, same rationale as above; the

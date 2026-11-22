@@ -23,6 +23,27 @@
  *
  ********************************************************************/
 
+const { EMPTY_PART_ERROR } = require('../file_multipart_validate.js');
+
+// A FILE part's bytes ride in the transaction payload, which the synthetic dry-run
+// transaction never carries and no quote RPC accepts. Its only possible refusal for want of
+// them is the empty-part status, the last check the handler runs, so every earlier check
+// (source, hash, index) has already passed when it appears. That status says the dry-run
+// could not see the bytes, not that the chain would refuse the part, so the surfaces answer
+// it as unjudged instead of relaying a refusal no caller can act on.
+const PAYLOAD_UNJUDGED_NOTE = 'FILE part bytes are not sent to a dry-run, so the payload is not judged: ' +
+    'every other check passed.';
+
+function isPayloadUnjudged(action, status){
+    return action === 'FILE' && status === EMPTY_PART_ERROR;
+}
+
+// The fields that replace a surface's verdict when its status is the unjudged one, or null.
+function payloadUnjudgedFields(action, status){
+    if(!isPayloadUnjudged(action, status)) return null;
+    return { valid: null, status: null, error: null, payloadUnjudged: true, note: PAYLOAD_UNJUDGED_NOTE };
+}
+
 // Normalize exactly as processTransaction will before dispatch: trim then uppercase,
 // then resolve ACTION aliases. Otherwise a whitespace-padded or aliased name would
 // classify differently here than at dispatch, letting a caller skip the denylist and
@@ -34,7 +55,7 @@ function normalizeQuoteRequest(aliases, action, params){
             action = aliases[alias];
     }
     if(!Array.isArray(params)) params = String(params == null ? '' : params).split('|');
-    params = params.map(v => String(v).trim());
+    params = params.map(v => (v == null ? '' : String(v)).trim());
     return { action, params };
 }
 
@@ -44,7 +65,7 @@ function normalizeQuoteRequest(aliases, action, params){
 // params dispatch has already trimmed, uppercased and de-aliased.
 function batchRequestWire(action, rawAction, rawParams){
     if(action !== 'BATCH') return null;
-    let tail = Array.isArray(rawParams) ? rawParams.map(String).join('|')
+    let tail = Array.isArray(rawParams) ? rawParams.map(v => v == null ? '' : String(v)).join('|')
                                         : String(rawParams == null ? '' : rawParams);
     return String(rawAction == null ? '' : rawAction) + '|' + tail;
 }
@@ -110,6 +131,11 @@ function feeQuoteNoVerdict(base, run){
         error: 'fee quote produced no verdict (the dry-run did not finish: ' + run.error + '); retry shortly' });
 }
 
+// Any incomplete run has no verdict, including a read-back failure after STATUS was copied.
+function isIncompleteDryRun(run){
+    return !!(run && run.error && (run.status == null || /^handler threw:/.test(run.error)));
+}
+
 // The quote a finished dry-run answers WITHOUT pricing, or null when the verdict is valid
 // and the fee should be priced.
 function dryRunVerdictQuote(actions, base, run, action){
@@ -126,6 +152,10 @@ function dryRunVerdictQuote(actions, base, run, action){
             guardInertReason: actions.util.describeGuardInert(run.status),
             error: 'native fee pre-flight not supported for a controller-bound ' + action + ' ('
                  + actions.util.guardInertDetail(run.status) + '; pay the fee in XCHAIN)' });
+
+    let unjudged = payloadUnjudgedFields(action, run.status);
+    if(unjudged)
+        return Object.assign(base, unjudged, { validated: false, xchainFee: null });
 
     // The handler's verdict is authoritative; its reason (class-A or class-B) verbatim.
     if(run.status !== 'valid')
@@ -275,10 +305,17 @@ function preflightResult(actions, base, run, resolvedMode, feeTick){
         blockTime:  run.blockTime
     });
 
+    Object.assign(result, payloadUnjudgedFields(base.action, run.status));
+
     // BATCH only. `subCommands` is each sub-command's own verdict in list order, which is
     // what a batch pre-flight actually owes a composer: sub-commands are NOT atomic, so
     // "the BATCH is valid" says nothing about which of them will settle.
     if(run.subCommands) result.subCommands = run.subCommands;
+
+    // SEND only. Each leg's own verdict in settle order: legs settle independently, so a
+    // multi-send can move some legs while the chain refuses others, and `status` (the first
+    // refused leg's, or 'valid' when every leg settles) cannot say which.
+    if(run.legs) result.legs = run.legs;
 
     // Oracle usage fees this batch owes, per oracle address, summed over its Mode B
     // DISPENSER sub-commands. DISCLOSED, not judged: a probe carries no transaction and
@@ -305,7 +342,9 @@ module.exports = {
     exemptFeeQuote,
     feeQuoteLockBusy,
     feeQuoteNoVerdict,
+    isIncompleteDryRun,
     dryRunVerdictQuote,
+    payloadUnjudgedFields,
     resolvePreflightFeeMode,
     preflightGateAnswer,
     preflightLockBusy,

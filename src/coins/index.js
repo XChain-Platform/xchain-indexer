@@ -22,7 +22,7 @@
  * overrides applied, internal $-descriptors stripped) for consumers to adapt.
  *
  * consensusHash(tick, network) returns the sha256 of the consensus-critical
- * subset (network byte-prefixes, addresses, fee math, gas schedule, staking),
+ * fields selected by consensusSubset() below, the authoritative field list and
  * the value the per-service content-pin verifies against. Genesis pins are
  * deliberately excluded here because genesis.js already fail-closes on them,
  * and chainGenesisHash (the node's own block-0 hash) is excluded because it
@@ -388,7 +388,8 @@ function verifyConsensusPin(network){
 // conservative: the validator simply waits longer. Only lowering forks co-signing.
 // The floor also keeps a hub from ever attesting an anchor SHALLOWER than the BTC
 // indexer's reward-mint gate will accept, which is frozen at the same per-coin
-// default (ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS in anchor_reward_activation.js).
+// default (the anchor_reward_activation.ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS gate row,
+// read through consensus/gates/anchor_reward_gate.js).
 // The mint gate is NOT this knob and never reads it: it is a ledger input, this is
 // local hub trust policy, and on regtest the two may legitimately differ.
 function resolveConfirmations(cfg, network){

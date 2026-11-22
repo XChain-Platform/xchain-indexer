@@ -73,7 +73,12 @@ async function detectSides(handler, st){
     let isCrossChain      = (format==0 && !handler.util.isNull(data['GET_COIN']) && data['GET_COIN']!=handler.config['COIN']);
     let crossChainEnabled = isCrossChain ? await handler.actions.protocolChanges.isEnabled('CROSS_CHAIN_DEX', data['BLOCK_INDEX']) : false;
 
-    Object.assign(st, { isNativeCoinGive, isNativeCoinGet, isOwnershipGive, isOwnershipGet, isCrossChain, crossChainEnabled });
+    // From ORDER_GET_ADDRESS_COIN a cross-chain GET_ADDRESS is checked against GET_COIN's
+    // address format, not this chain's. Resolved here because validateFormats is synchronous;
+    // a same-chain ORDER skips the lookup, since GET_COIN is this chain's COIN either way.
+    let getAddressOnGetCoin = isCrossChain ? await handler.actions.protocolChanges.isEnabled('ORDER_GET_ADDRESS_COIN', data['BLOCK_INDEX']) : false;
+
+    Object.assign(st, { isNativeCoinGive, isNativeCoinGet, isOwnershipGive, isOwnershipGet, isCrossChain, crossChainEnabled, getAddressOnGetCoin });
 }
 
 // Load the records the checks rely on (tokens, the order being cancelled or edited,

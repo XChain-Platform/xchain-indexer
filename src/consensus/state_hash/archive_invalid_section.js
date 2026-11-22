@@ -14,7 +14,7 @@
  *
  * invalid_archive stamp on anchor_actions archive-head parent rows. When the
  * final v2 chunk of a chunked archive batch lands at block B and the
- * reassembled blob fails its CRC check, anchor.js stamps the parent archive
+ * reassembled blob fails its CRC check, archive/archive_verdict.js stamps the parent archive
  * head 'invalid_archive' in place. The parent's action_index is in an earlier
  * block, so it is invisible to the action-scoped consensus hashes and to the
  * per-block stream. Resolved via the status name (not status_id) to stay

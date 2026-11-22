@@ -16,8 +16,8 @@
 // that sentence or at the fail-closed rules that make it safe.
 //
 // BOTH ARMS RUN, in one default `npm test` invocation and with nothing pending. That is not a
-// stylistic choice: every activation map in this train is deliberately INERT, so a default run
-// drives only the legacy branch, and the armed branch, which is the one that changes what a
+// stylistic choice: B is below every pinned testnet activation and regtest is unarmed by
+// default, so a default run drives only the legacy branch. The armed branch changes what a
 // node commits, would ship undriven. The arming seam is the established one: the activation
 // resolver freezes at REQUIRE time (setting process.env afterwards arms nothing, measured),
 // so the armed describe clears the require cache for the activation module and every module
@@ -102,8 +102,8 @@ describeArmed(function () {
     it('the arming seam actually arms (otherwise every case below is vacuous)', function () {
         assert.strictEqual(armed.act.isMirrorAdmissionConsumerActive('BTC', 'regtest', B), true);
         assert.strictEqual(armed.act.isMirrorAdmissionProducerActive('BTC', 'regtest', B), true);
-        // and it is still INERT off regtest, which is what keeps testnet and mainnet on the
-        // legacy rule until their heights are sized at the cut.
+        // At B, testnet is below its pinned activation and mainnet has no activation, so both
+        // still use the legacy rule.
         assert.strictEqual(armed.act.isMirrorAdmissionConsumerActive('BTC', 'testnet', B), false);
         assert.strictEqual(armed.act.isMirrorAdmissionConsumerActive('BTC', 'mainnet', B), false);
     });
@@ -351,6 +351,8 @@ describeArmed(function () {
 describe('mirror-admission height barriers: UNARMED (today\'s rule, byte for byte) @regression @tier1', function () {
     const HubDbSync = require('../../../src/hub/hub_db_sync.js');
 
+    // The pinned title's "every network" is scoped to B: testnet is below its pin, mainnet has
+    // no activation, and the regtest lever is unset.
     it('is INERT on every network in this train, so nothing below the cut changes', function () {
         const act = require('../../../src/consensus/gates/mirror_admission_gate.js');
         for (const net of ['mainnet', 'testnet', 'regtest']) {
