@@ -950,28 +950,6 @@
       "E2E: Order Lifecycle @regression @tier2 order creation and matching matched orders transfer balances and appear in API",
       "E2E: Order Lifecycle @regression @tier2 order expiration expired order appears in order_expires endpoint"
     ],
-    "0df8e33d38ab2a4c": [
-      "migration live-schema MODIFY guard @regression @tier1 does not read a keyword inside a string literal as an attribute",
-      "migration live-schema MODIFY guard @regression @tier1 finds each MODIFY clause, ignoring FIRST/AFTER and other clauses",
-      "migration live-schema MODIFY guard @regression @tier1 passes a MODIFY that restates every attribute or only widens",
-      "migration live-schema MODIFY guard @regression @tier1 passes when the live column is absent or the probe answers without a column row",
-      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips AUTO_INCREMENT",
-      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips ON UPDATE, COMMENT or a generation expression",
-      "migration live-schema MODIFY guard @regression @tier1 refuses a MODIFY that strips a DEFAULT",
-      "migration live-schema MODIFY guard @regression @tier1 refuses narrowing a nullable live column to NOT NULL or PRIMARY KEY",
-      "migration live-schema MODIFY guard @regression @tier1 refuses narrowing of type, length and charset",
-      "migration live-schema MODIFY guard: block comments @regression @tier1 does not read a keyword inside a block comment as a restated attribute",
-      "migration live-schema MODIFY guard: block comments @regression @tier1 leaves comment markers inside a quoted literal and executable comments alone",
-      "migration live-schema MODIFY guard: block comments @regression @tier1 still finds a MODIFY behind a block comment anywhere before the column",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 allows the retype on an empty table and on a BigInt minimum",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 allows the retype when no stored id is negative",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 does not count AUTO_INCREMENT inside a COMMENT literal as restated",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 refuses the retype when a stored id is negative and names the minimum",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a MODIFY that drops AUTO_INCREMENT while going unsigned",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a narrower rank even when the id is AUTO_INCREMENT and unsigned",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses a signed to unsigned retype of a column without AUTO_INCREMENT",
-      "migration live-schema MODIFY guard: signed AUTO_INCREMENT id to unsigned @regression @tier1 still refuses unsigned to signed on an AUTO_INCREMENT id"
-    ],
     "0e1fdb59a16d241f": [
       "ROLLCALL epoch close (\u00a73.4) deferral: every way of not knowing defers when the DOGE peer cannot decide, rather than reading silence as absence",
       "ROLLCALL epoch close (\u00a73.4) deferral: every way of not knowing defers when the epoch block has no stored ledger_hash",
@@ -1191,12 +1169,6 @@
       "mirror signer set is canonical @regression @tier3 a stored set wholly outside the responsible set falls back to it",
       "mirror signer set is canonical @regression @tier3 the settle pay set is the rank-best redundancy of what the row stores",
       "mirror signer set is canonical @regression @tier3 two different verified supersets store the same signer rows"
-    ],
-    "127c0cefaf825341": [
-      "fee quote discloses the oracle usage fee owed @regression @tier1 a valid Mode B quote carries oracleFeesOwed beside the protocol-fee sizing",
-      "fee quote discloses the oracle usage fee owed @regression @tier1 answers the same map the pre-flight answers for the same run",
-      "fee quote discloses the oracle usage fee owed @regression @tier1 omits the field on a rejected run, which owes nothing",
-      "fee quote discloses the oracle usage fee owed @regression @tier1 omits the field when no oracle fee is owed"
     ],
     "127df5c011e290d0": [
       "ANCHOR archive MATCH_COUNT gate activates at the armed DOGE testnet height",
@@ -1991,15 +1963,6 @@
       "applyPendingReorgs logging and processed-reorg count counts each reorg once its marker row is written",
       "applyPendingReorgs logging and processed-reorg count leaves the count unmoved when a marker write fails",
       "applyPendingReorgs logging and processed-reorg count logs the detection once at warn with the deepest block number in the message"
-    ],
-    "1ca812c110fd4110": [
-      "BATCH dry-run read-back off the probe path @regression @tier1 answers for the BATCH when its last sub-command is invalid",
-      "BATCH dry-run read-back off the probe path @regression @tier1 ignores a filling sub-command's match capture",
-      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 BELOW-PROBE CONTROL: a decoded batch keeps the capture exactly as before",
-      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 a sub-command with no match keeps the status it really got",
-      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 gives every filling ORDER its own snapshot, not just the first",
-      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 leaves no sub-command's snapshot behind to answer for the batch",
-      "BATCH pre-flight : a filling ORDER sub-command answers for itself @regression @tier1 lists the ORDER as valid, not as its match's pending_coinpay"
     ],
     "1ce3597834bf96b5": [
       "retroactive witness chunk comparisons @regression @tier1 compares valid digests case-insensitively",
@@ -4444,11 +4407,6 @@
     "39deaa3f8a62287c": [
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 keeps the indexer regtest activation at genesis",
       "protocol_changes/vm_twin/vm_lint_syntax_depth_matches_vm: VM activation map @regression @tier1 matches every VM mainnet and testnet activation"
-    ],
-    "39e97c7b93d617e8": [
-      "capability snapshot proof startup pin wiring @regression @tier1 does not refuse an unarmed chain, BTC, or regtest",
-      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with an invalid pin",
-      "capability snapshot proof startup pin wiring @regression @tier1 refuses an armed mirror-backed testnet with no pin and names rotation variables"
     ],
     "3a25c746f0ad7a91": [
       "database session time zone @regression @tier1 pins direct and pooled connections to UTC"
@@ -16918,15 +16876,6 @@
       "ORDER and DISPENSER expiration boundary tests @regression @tier2 TS-04: EXPIRATION at 183 days charges a fee and is valid when balance covers it",
       "ORDER and DISPENSER expiration boundary tests @regression @tier2 TS-05: Missing EXPIRATION uses default (BLOCK_TIME + 90 days) and is valid"
     ],
-    "cebe47e7351730ad": [
-      "BATCH quote dispatch exception @regression @tier1 allows only EXECUTE through the quote-specific pre-scan",
-      "mandatory-native BATCH fee quote @regression @tier1 keeps XEXEC and non-pricing sub-commands refused",
-      "mandatory-native BATCH fee quote @regression @tier1 prices EXECUTE below and at the metered-gas gate",
-      "mandatory-native BATCH fee quote @regression @tier1 quotes DOGE DEPOSIT then EXECUTE at or above the exact accepted boundary",
-      "mandatory-native BATCH fee quote @regression @tier1 quotes a VM-free batch at or above the exact accepted boundary",
-      "mandatory-native BATCH fee quote @regression @tier1 returns no-verdict for an incomplete whole-batch run",
-      "mandatory-native BATCH fee quote @regression @tier1 uses one literal-wire run and its sequential second-leg fee"
-    ],
     "cec03c99db37953b": [
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure BELOW-PROBE CONTROL: a real transaction still needs the output and records nothing",
       "BATCH sub-command pre-flight (spec row 46) @regression @tier1 probe-local oracle fee disclosure BELOW-PROBE CONTROL: a real transaction that PASSES the oracle check records nothing",
@@ -19243,20 +19192,6 @@
       "stateCommitment.reportOrphanStats @regression @tier2 returns all-zero for an empty store",
       "stateCommitment.reportOrphanStats @regression @tier2 stops the walk at maxNodes and flags the truncated figure as an estimate"
     ],
-    "eb5fe05fc04dd774": [
-      "migration live-schema MODIFY guard: named charset and collation @regression @tier1 leaves a case-insensitive column to the charset default whatever the server version names it",
-      "migration live-schema MODIFY guard: named charset and collation @regression @tier1 passes a restated collation and a widen that keeps the collation and changes only the charset",
-      "migration live-schema MODIFY guard: named charset and collation @regression @tier1 refuses a MODIFY that names the charset but lets a binary collation fall to its default",
-      "migration live-schema MODIFY guard: named charset and collation @regression @tier1 refuses an explicit COLLATE that coarsens or otherwise changes the live collation",
-      "migration live-schema MODIFY guard: omitted charset and collation @regression @tier1 passes when the column already carries the table default or the MODIFY names its charset",
-      "migration live-schema MODIFY guard: omitted charset and collation @regression @tier1 refuses a charset-less text MODIFY that drops a column collation",
-      "migration live-schema MODIFY guard: omitted charset and collation @regression @tier1 refuses a charset-less text MODIFY that falls back to a different table charset",
-      "migration live-schema MODIFY guard: type changes @regression @tier1 names the live and restated types when a decimal score would be rounded to an integer",
-      "migration live-schema MODIFY guard: type changes @regression @tier1 passes the timestamp to datetime move the committed auto migrations make",
-      "migration live-schema MODIFY guard: type changes @regression @tier1 passes widenings and alias restatements",
-      "migration live-schema MODIFY guard: type changes @regression @tier1 refuses a same-name restatement that drops precision, fractional seconds or width",
-      "migration live-schema MODIFY guard: type changes @regression @tier1 refuses a type change it has no widening rule for"
-    ],
     "eb89e21438d117f3": [
       "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 agrees with regtestHeight on every accepted, refused and garbage input",
       "ROLLCALL base-rail regtest resolver matches the running parser @regression @tier1 lands on the documented values, so agreement is not two copies of one mistake"
@@ -21480,7 +21415,7 @@
   "scripts": {
     "test": {
       "fileCount": 1707,
-      "titleCount": 16575,
+      "titleCount": 16574,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -22623,7 +22558,7 @@
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
         "test/unit/fees/fee_quote.test/airdrop_leg_draw_parity.test.js": "03533bd5b864e86b",
-        "test/unit/fees/fee_quote.test/batch_fee_quote.test.js": "cebe47e7351730ad",
+        "test/unit/fees/fee_quote.test/batch_fee_quote.test.js": "6447cdb10a6b8999",
         "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js": "a147574d481bc948",
         "test/unit/fees/fee_quote.test/compute_fee_quote.test.js": "f617f8c3e61185f6",
         "test/unit/fees/fee_quote.test/dry_run_launch_gate.test.js": "ee89b27c2210a19c",
@@ -23576,7 +23511,7 @@
     },
     "test:regression": {
       "fileCount": 1308,
-      "titleCount": 13105,
+      "titleCount": 13111,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23646,7 +23581,7 @@
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
         "test/unit/action_dispatch/airdrop_destroy_multileg_preflight.test.js": "b1f68eec644f5216",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
-        "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "1ca812c110fd4110",
+        "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "564a0d3a2cd9b0be",
         "test/unit/action_dispatch/batch_probe_preflight.test.js": "0fc541411cfe9827",
         "test/unit/action_dispatch/batch_probe_preflight.test/coin_payments_disclosure.test.js": "8fba7e8bd4c65ff0",
         "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js": "8c24733fe3680942",
@@ -24201,7 +24136,7 @@
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
-        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "e44564e3fb3fe405",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -24480,7 +24415,7 @@
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "a301c0edda99b954",
-        "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
+        "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "55a3cc516852ecc3",
         "test/unit/fees/gas_mint_network_gate.test.js": "bd9b18d570905037",
         "test/unit/fees/guard_gas_chain_gate.test.js": "0aa5897f5f625a79",
         "test/unit/fees/guard_gas_disclosure.test/source_tree_scan.test.js": "16ac75c939bbe4ef",
@@ -24621,9 +24556,9 @@
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/destructive_guard_statement_allow_list.test.js": "a8be1dced7a7271c",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
-        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "0df8e33d38ab2a4c",
+        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "4775750ce5a991ad",
         "test/unit/migration/migration_runner.test/live_schema_guard.test/safety.test.js": "c2fbc94e3aacc401",
-        "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "eb5fe05fc04dd774",
+        "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "40cce3c81f3211cb",
         "test/unit/migration/migration_runner.test/query_timeout.test.js": "7e822a73cbf9b18f",
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
         "test/unit/migration/migration_runner.test/runner_guards.test.js": "af768b97a8636398",
@@ -24890,7 +24825,7 @@
     },
     "test:regression:fast": {
       "fileCount": 706,
-      "titleCount": 7327,
+      "titleCount": 7333,
       "files": {
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -24904,7 +24839,7 @@
         "test/regression/vote_ballot_column_verdicts.test.js": "aaed2124c8f1290a",
         "test/unit/action_dispatch/airdrop_destroy_multileg_preflight.test.js": "b1f68eec644f5216",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
-        "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "1ca812c110fd4110",
+        "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "564a0d3a2cd9b0be",
         "test/unit/action_dispatch/batch_probe_preflight.test.js": "0fc541411cfe9827",
         "test/unit/action_dispatch/batch_probe_preflight.test/coin_payments_disclosure.test.js": "8fba7e8bd4c65ff0",
         "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js": "8c24733fe3680942",
@@ -25115,7 +25050,7 @@
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
-        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "e44564e3fb3fe405",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/dispenser_delay_decoder_guard.test.js": "4de41283c9fb7d37",
@@ -25334,7 +25269,7 @@
         "test/unit/fees/fee_quote.test/fee_destination_sentinel.test.js": "5a194095ec3e3e45",
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "a301c0edda99b954",
-        "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
+        "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "55a3cc516852ecc3",
         "test/unit/fees/guard_gas_chain_gate.test.js": "0aa5897f5f625a79",
         "test/unit/fees/guard_gas_disclosure.test/source_tree_scan.test.js": "16ac75c939bbe4ef",
         "test/unit/fees/native_coin_fee.test.js": "5941677267767505",
@@ -25437,9 +25372,9 @@
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/destructive_guard_statement_allow_list.test.js": "a8be1dced7a7271c",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
-        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "0df8e33d38ab2a4c",
+        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "4775750ce5a991ad",
         "test/unit/migration/migration_runner.test/live_schema_guard.test/safety.test.js": "c2fbc94e3aacc401",
-        "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "eb5fe05fc04dd774",
+        "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "40cce3c81f3211cb",
         "test/unit/migration/migration_runner.test/query_timeout.test.js": "7e822a73cbf9b18f",
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
         "test/unit/migration/migration_runner.test/runner_guards.test.js": "af768b97a8636398",
@@ -25602,7 +25537,7 @@
     },
     "test:regression:full": {
       "fileCount": 1308,
-      "titleCount": 13105,
+      "titleCount": 13111,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25672,7 +25607,7 @@
         "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js": "25fa87aa685ad332",
         "test/unit/action_dispatch/airdrop_destroy_multileg_preflight.test.js": "b1f68eec644f5216",
         "test/unit/action_dispatch/batch_guard_inert_sub_command.test.js": "e6ecddd2370fac2d",
-        "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "1ca812c110fd4110",
+        "test/unit/action_dispatch/batch_probe_match_snapshot.test.js": "564a0d3a2cd9b0be",
         "test/unit/action_dispatch/batch_probe_preflight.test.js": "0fc541411cfe9827",
         "test/unit/action_dispatch/batch_probe_preflight.test/coin_payments_disclosure.test.js": "8fba7e8bd4c65ff0",
         "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js": "8c24733fe3680942",
@@ -26227,7 +26162,7 @@
         "test/unit/consensus/capability_snapshot_proof/held_log.test.js": "3a581170e0daad5f",
         "test/unit/consensus/capability_snapshot_proof/mirror_judgement.test.js": "d94045d298f4485f",
         "test/unit/consensus/capability_snapshot_proof/proof_binding.test.js": "abdaaa8e11bc14ba",
-        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "39e97c7b93d617e8",
+        "test/unit/consensus/capability_snapshot_proof/startup_pin.test.js": "e44564e3fb3fe405",
         "test/unit/consensus/capability_snapshot_proof/verify.test.js": "bc9b899ba93759c7",
         "test/unit/consensus/capability_snapshot_proof/wiring.test.js": "bc089c9f6525a81c",
         "test/unit/consensus/consensus_params.test.js": "64b41c6b97257367",
@@ -26506,7 +26441,7 @@
         "test/unit/fees/fee_quote.test/native_fee_mode_parity.test.js": "618ee0b9b08eaa18",
         "test/unit/fees/fee_quote.test/piped_action_name.test.js": "7b28ef47eda24e27",
         "test/unit/fees/fee_quote.test/static_quotes.test.js": "a301c0edda99b954",
-        "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "127c0cefaf825341",
+        "test/unit/fees/fee_quote_oracle_fees_owed.test.js": "55a3cc516852ecc3",
         "test/unit/fees/gas_mint_network_gate.test.js": "bd9b18d570905037",
         "test/unit/fees/guard_gas_chain_gate.test.js": "0aa5897f5f625a79",
         "test/unit/fees/guard_gas_disclosure.test/source_tree_scan.test.js": "16ac75c939bbe4ef",
@@ -26647,9 +26582,9 @@
         "test/unit/migration/migration_runner.test/destructive_guard_session_set.test.js": "112ae99527ed3681",
         "test/unit/migration/migration_runner.test/destructive_guard_statement_allow_list.test.js": "a8be1dced7a7271c",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "ae0822e80bfd8ea1",
-        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "0df8e33d38ab2a4c",
+        "test/unit/migration/migration_runner.test/live_schema_guard.test.js": "4775750ce5a991ad",
         "test/unit/migration/migration_runner.test/live_schema_guard.test/safety.test.js": "c2fbc94e3aacc401",
-        "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "eb5fe05fc04dd774",
+        "test/unit/migration/migration_runner.test/live_schema_guard_types.test.js": "40cce3c81f3211cb",
         "test/unit/migration/migration_runner.test/query_timeout.test.js": "7e822a73cbf9b18f",
         "test/unit/migration/migration_runner.test/reorder_divergence.test.js": "d6f0ae17462f20b4",
         "test/unit/migration/migration_runner.test/runner_guards.test.js": "af768b97a8636398",
