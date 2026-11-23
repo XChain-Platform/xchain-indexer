@@ -684,6 +684,15 @@
       "XChainIndexer hub config overlay resolveCoinpayExpiration (COINPAY_EXPIRATION) treats an empty value as unset rather than as a parse failure",
       "XChainIndexer hub config overlay resolveCoinpayExpiration (COINPAY_EXPIRATION) uses the frozen protocol constant when unset"
     ],
+    "09f7da40420a3357": [
+      "VM token info BRIDGED bit (VM_TOKEN_INFO_LEGACY_WINDOW_END) @regression @tier1 below the height the loader leaves BRIDGED out and keeps the other keys in order",
+      "VM token info BRIDGED bit (VM_TOKEN_INFO_LEGACY_WINDOW_END) @regression @tier1 contract 74 claims at block 150698 through the real VM charge the gas the original network recorded (3169 and 2122)",
+      "VM token info BRIDGED bit (VM_TOKEN_INFO_LEGACY_WINDOW_END) @regression @tier1 contract 74 claims at block 150698 through the real VM with BRIDGED in the token info charge 24 more, the replay fork (3193 and 2146)",
+      "VM token info BRIDGED bit (VM_TOKEN_INFO_LEGACY_WINDOW_END) @regression @tier1 ends the BTC testnet window at 152738 and opens no window anywhere else",
+      "VM token info BRIDGED bit (VM_TOKEN_INFO_LEGACY_WINDOW_END) @regression @tier1 from the height, and on every other network and chain, the loader passes BRIDGED through",
+      "VM token info BRIDGED bit (VM_TOKEN_INFO_LEGACY_WINDOW_END) @regression @tier1 records the new BTC testnet row without replay and moves no other boot gate record",
+      "VM token info BRIDGED bit (VM_TOKEN_INFO_LEGACY_WINDOW_END) @regression @tier1 the fixture is contract 74 byte for byte as the chain stored it"
+    ],
     "0a0fbff4ff2ebe1f": [
       "LIST_TICK_COIN consumers @regression @consensus AIRDROP ticker-list expansion expands bare and own-coin items while skipping unresolved and foreign items when armed",
       "LIST_TICK_COIN consumers @regression @consensus AIRDROP ticker-list expansion passes every item unchanged to the legacy holder loop below the gate",
@@ -2969,12 +2978,6 @@
       "wire text before validation: VOTE v0 create refused before its DEPOSIT check @regression @tier1 a text DEPOSIT \"1x\" on a refused create settles inert",
       "wire text before validation: VOTE v0 create refused before its DEPOSIT check @regression @tier1 a text DEPOSIT \"abc\" on a refused create settles inert",
       "wire text before validation: util.bcparses @regression @tier1 answers exactly whether the raw helpers throw"
-    ],
-    "2904e29ac46aa8eb": [
-      "retroactive consensus gate move at boot @regression @tier1 records the gate height map and null applied tip on an empty database",
-      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when a recorded gate moves to or below the applied tip",
-      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when an applied gate moves above the tip or becomes inactive",
-      "retroactive consensus gate move at boot @regression @tier1 serves and records the new map when the moved gate stays above the applied tip"
     ],
     "291186855c8e229f": [
       "closed replay status after restart @regression @tier1 ignores a final witness that does not identify the closed marker",
@@ -10641,6 +10644,15 @@
       "E2E: Dispenser Lifecycle @regression @tier2 dispenser cancellation cancelled dispenser returns escrow and appears in API",
       "E2E: Dispenser Lifecycle @regression @tier2 dispenser creation and dispense dispenser gives tokens and appears in API"
     ],
+    "7de955cc95153f6d": [
+      "retroactive consensus gate move at boot @regression @tier1 records a newly declared history-preserving gate below the live tip without replaying",
+      "retroactive consensus gate move at boot @regression @tier1 records the gate height map and null applied tip on an empty database",
+      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when a recorded gate moves to or below the applied tip",
+      "retroactive consensus gate move at boot @regression @tier1 refuses to serve when an applied gate moves above the tip or becomes inactive",
+      "retroactive consensus gate move at boot @regression @tier1 serves and records the new map when the moved gate stays above the applied tip",
+      "retroactive consensus gate move at boot @regression @tier1 still refuses a later move of the recorded history-preserving gate",
+      "retroactive consensus gate move at boot @regression @tier1 still refuses an undeclared new gate below the live tip"
+    ],
     "7e185a9e99d30131": [
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch a bad quorum on a completed batch reds the head and pushes nothing",
       "Attest (ATTEST) @regression @tier3 ATTEST v5/v6 response batch a continuation of a head belonging to another publisher absorbs nothing",
@@ -11131,16 +11143,6 @@
       "getNetBalances batched read @regression @tier1 answers every key in one statement and matches getNetBalance",
       "getNetBalances batched read @regression @tier1 dedupes keys, chunks large sets, and reads nothing for an empty set",
       "getNetBalances batched read @regression @tier1 is the read threadBalancesRoot uses instead of a per-key loop"
-    ],
-    "83bee3ae87f42732": [
-      "retroactive gate height map @regression @tier1 flags a later move of an applied height at the old boundary",
-      "retroactive gate height map @regression @tier1 flags an earlier move at the new boundary",
-      "retroactive gate height map @regression @tier1 flags de-arming at the old boundary for null, absent and the sentinel",
-      "retroactive gate height map @regression @tier1 ignores a move wholly above the tip",
-      "retroactive gate height map @regression @tier1 never records epoch or ruleset rows as movable gate heights",
-      "retroactive gate height map @regression @tier1 records every height and time row, including an indexer-only gate",
-      "retroactive gate height map @regression @tier1 refuses a non-listed key and ships no movable gates",
-      "retroactive gate height map @regression @tier1 splits allowlisted and refused moves without changing their shared target"
     ],
     "83e6fe3bdfc789e7": [
       "Legacy db-hits fee accumulation @regression @tier3 CALLBACK below flag-day: db_hits reproduces \"46\" string-concat",
@@ -15842,6 +15844,12 @@
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 pre-verification error strings pass through untouched provider mismatch",
       "ATTEST v1 response verification: captured byte vectors @regression @tier1 pre-verification error strings pass through untouched request already terminal"
     ],
+    "bfd007b6428decef": [
+      "bridge escrow checkpoint pick against the ROLLCALL-evicted roster (TBTC 157235) @regression @tier1 stake weighting is the rule at the rows' own snapshot_block",
+      "bridge escrow checkpoint pick against the ROLLCALL-evicted roster (TBTC 157235) @regression @tier1 the original's roster after the 152388 and 153396 evictions picks the first row above the stamp",
+      "bridge escrow checkpoint pick against the ROLLCALL-evicted roster (TBTC 157235) @regression @tier1 the rebuild's 9-source roster verifies none of the eight candidates, so the block stalls",
+      "bridge escrow checkpoint pick against the ROLLCALL-evicted roster (TBTC 157235) @regression @tier1 with only the 152388 evictions 200000 of 300000 is exactly two thirds and still stalls"
+    ],
     "c01993c1f2cce74e": [
       "Sweep @regression @tier3 all flags combined BALANCES=1, OWNERSHIPS=1, ORDERS/SWAPS/DISPENSERS=1 all processed (via data override)",
       "Sweep @regression @tier3 all flags combined escrowed-ownership tick produces exactly ONE ISSUE when OWNERSHIPS=1 and ORDERS=1",
@@ -16808,6 +16816,17 @@
       "SLASH action handler: equivocation verifier @regression REJECTS XCONFIG when the offender is not in the federation snapshot",
       "SLASH action handler: equivocation verifier @regression REJECTS XCONFIG when the two messages disagree on snapshot_block",
       "SLASH action handler: equivocation verifier @regression REJECTS XCONFIG with a non-config CAPABILITY label (derived, not trusted)"
+    ],
+    "ccf3e1ee05d93d56": [
+      "retroactive gate height map @regression @tier1 flags a later move of an applied height at the old boundary",
+      "retroactive gate height map @regression @tier1 flags an earlier move at the new boundary",
+      "retroactive gate height map @regression @tier1 flags de-arming at the old boundary for null, absent and the sentinel",
+      "retroactive gate height map @regression @tier1 ignores a move wholly above the tip",
+      "retroactive gate height map @regression @tier1 never records epoch or ruleset rows as movable gate heights",
+      "retroactive gate height map @regression @tier1 records every height and time row, including an indexer-only gate",
+      "retroactive gate height map @regression @tier1 records only the first declaration of a history-preserving gate without a replay target",
+      "retroactive gate height map @regression @tier1 refuses a non-listed key and ships no movable gates",
+      "retroactive gate height map @regression @tier1 splits allowlisted and refused moves without changing their shared target"
     ],
     "ccfcffb6bf9aa3e9": [
       "pending_hub_pushes payload widen against MariaDB @tier3 fresh schema stores a large payload with four-byte UTF-8 byte-for-byte",
@@ -21421,8 +21440,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1708,
-      "titleCount": 16579,
+      "fileCount": 1710,
+      "titleCount": 16594,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21646,6 +21665,7 @@
         "test/unit/actions/execute/slash_target.test.js": "b9bb8dfb73d79738",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/execute/state_value_astral_escape.test.js": "eb8b9afa8687c40b",
+        "test/unit/actions/execute/vm_token_info_bridged.test.js": "09f7da40420a3357",
         "test/unit/actions/fee_quote_exact_sats.test.js": "e635dc21a592569f",
         "test/unit/actions/file_multipart_batch.test.js": "d7af709ec3d67e56",
         "test/unit/actions/file_multipart_column_stub.test.js": "2d64b694650fc5bb",
@@ -22115,6 +22135,7 @@
         "test/unit/bridge/db_xbridge_writers.test/handler_end_to_end.test.js": "8e4b2b0723bd8264",
         "test/unit/bridge/db_xbridge_writers.test/token_bridged.test.js": "e6445f756586849c",
         "test/unit/bridge/escrow/escrow_anchor_match.test.js": "33d9ffe466566049",
+        "test/unit/bridge/escrow/escrow_anchor_roster.test.js": "bfd007b6428decef",
         "test/unit/bridge/escrow/escrow_origin_generalization.test.js": "6232990b6d1703a9",
         "test/unit/bridge/escrow_journal_writer.test.js": "8a07660fe3068e2e",
         "test/unit/bridge/escrow_journal_writer.test/attribution_vectors.test.js": "07c18b24eea8ba07",
@@ -22259,7 +22280,7 @@
         "test/unit/consensus/retroactive/checkpoint_supersede_hub_parity.test.js": "f6b259d36a8cb4f1",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
-        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "ccf3e1ee05d93d56",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
@@ -22294,7 +22315,7 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_registry_parity.test.js": "56e2effa6675b4fa",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "7de955cc95153f6d",
         "test/unit/consensus/snapshot_checkpoint/canonical.test.js": "299c4ed3013e8a10",
         "test/unit/consensus/snapshot_checkpoint/canonical_twin.test.js": "9fccb58e5d806628",
         "test/unit/consensus/stake_weighted_quorum.test.js": "96fc25f81530ca93",
@@ -23518,8 +23539,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1309,
-      "titleCount": 13116,
+      "fileCount": 1311,
+      "titleCount": 13131,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23754,6 +23775,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/execute/state_value_astral_escape.test.js": "eb8b9afa8687c40b",
+        "test/unit/actions/execute/vm_token_info_bridged.test.js": "09f7da40420a3357",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
@@ -24099,6 +24121,7 @@
         "test/unit/bridge/db_xbridge_writers.test/handler_end_to_end.test.js": "8e4b2b0723bd8264",
         "test/unit/bridge/db_xbridge_writers.test/token_bridged.test.js": "e6445f756586849c",
         "test/unit/bridge/escrow/escrow_anchor_match.test.js": "33d9ffe466566049",
+        "test/unit/bridge/escrow/escrow_anchor_roster.test.js": "bfd007b6428decef",
         "test/unit/bridge/escrow/escrow_origin_generalization.test.js": "6232990b6d1703a9",
         "test/unit/bridge/escrow_journal_writer.test.js": "8a07660fe3068e2e",
         "test/unit/bridge/escrow_journal_writer.test/attribution_vectors.test.js": "07c18b24eea8ba07",
@@ -24170,7 +24193,7 @@
         "test/unit/consensus/retroactive/checkpoint_supersede_hub_parity.test.js": "f6b259d36a8cb4f1",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
-        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "ccf3e1ee05d93d56",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
@@ -24197,7 +24220,7 @@
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_replay_complete.test.js": "f1b5c8c0a210b001",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "7de955cc95153f6d",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -24833,8 +24856,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 707,
-      "titleCount": 7338,
+      "fileCount": 709,
+      "titleCount": 7353,
       "files": {
         "test/regression/api/keyed_rate_limit.test.js": "8d50dfc49476e446",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
@@ -24908,6 +24931,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/execute/state_value_astral_escape.test.js": "095d5bf80793c514",
+        "test/unit/actions/execute/vm_token_info_bridged.test.js": "09f7da40420a3357",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
@@ -25042,6 +25066,7 @@
         "test/unit/boundary/fees/fee_boundaries.test.js": "8f50c8a77b36be7e",
         "test/unit/bridge/db_pending_bridge_transfers.test.js": "9923a571b138cf79",
         "test/unit/bridge/escrow/escrow_anchor_match.test.js": "33d9ffe466566049",
+        "test/unit/bridge/escrow/escrow_anchor_roster.test.js": "bfd007b6428decef",
         "test/unit/bridge/escrow/escrow_origin_generalization.test.js": "6232990b6d1703a9",
         "test/unit/bridge/policy/policy_barrier_block_ordering.test.js": "280d8c5683faef17",
         "test/unit/bridge/policy/policy_snapshots_lifecycle.test.js": "30592d57d61d6f23",
@@ -25075,7 +25100,7 @@
         "test/unit/consensus/retroactive/checkpoint_supersede_hub_parity.test.js": "f6b259d36a8cb4f1",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
-        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "ccf3e1ee05d93d56",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/replay_marker.test.js": "5288272104276873",
@@ -25101,7 +25126,7 @@
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_replay_complete.test.js": "f1b5c8c0a210b001",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "7de955cc95153f6d",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
@@ -25546,8 +25571,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1309,
-      "titleCount": 13116,
+      "fileCount": 1311,
+      "titleCount": 13131,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25782,6 +25807,7 @@
         "test/unit/actions/execute/nested_execute_gas_sum_gate.test.js": "41e0a710fdea2c8a",
         "test/unit/actions/execute/stake_snapshot_decimal_strings_wiring.test.js": "7b32a9ad80041229",
         "test/unit/actions/execute/state_value_astral_escape.test.js": "eb8b9afa8687c40b",
+        "test/unit/actions/execute/vm_token_info_bridged.test.js": "09f7da40420a3357",
         "test/unit/actions/file_multipart_completion.test.js": "da04a374c96a6868",
         "test/unit/actions/file_multipart_incremental.test.js": "ea10e5540c7ff5a3",
         "test/unit/actions/file_multipart_parse.test.js": "d01a64b6df952a73",
@@ -26127,6 +26153,7 @@
         "test/unit/bridge/db_xbridge_writers.test/handler_end_to_end.test.js": "8e4b2b0723bd8264",
         "test/unit/bridge/db_xbridge_writers.test/token_bridged.test.js": "e6445f756586849c",
         "test/unit/bridge/escrow/escrow_anchor_match.test.js": "33d9ffe466566049",
+        "test/unit/bridge/escrow/escrow_anchor_roster.test.js": "bfd007b6428decef",
         "test/unit/bridge/escrow/escrow_origin_generalization.test.js": "6232990b6d1703a9",
         "test/unit/bridge/escrow_journal_writer.test.js": "8a07660fe3068e2e",
         "test/unit/bridge/escrow_journal_writer.test/attribution_vectors.test.js": "07c18b24eea8ba07",
@@ -26198,7 +26225,7 @@
         "test/unit/consensus/retroactive/checkpoint_supersede_hub_parity.test.js": "f6b259d36a8cb4f1",
         "test/unit/consensus/retroactive/checkpoint_supersede_rules.test.js": "30eea5c9ebd63b22",
         "test/unit/consensus/retroactive/checkpoint_trust_root.test.js": "38c029afe0f6d1a8",
-        "test/unit/consensus/retroactive/gate_heights.test.js": "83bee3ae87f42732",
+        "test/unit/consensus/retroactive/gate_heights.test.js": "ccf3e1ee05d93d56",
         "test/unit/consensus/retroactive/go_binding.test.js": "33bcfe129ec665b5",
         "test/unit/consensus/retroactive/mirror_coverage.test.js": "c2e631a4f801cc39",
         "test/unit/consensus/retroactive/mirror_supersede_columns.test.js": "451d0a6244bcecdb",
@@ -26225,7 +26252,7 @@
         "test/unit/consensus/retroactive/witness/witness_phase_plan.test.js": "d4aeaca3cb118868",
         "test/unit/consensus/retroactive/witness/witness_replay_complete.test.js": "f1b5c8c0a210b001",
         "test/unit/consensus/retroactive/witness/witness_status.test.js": "2d1ca922a946f347",
-        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "2904e29ac46aa8eb",
+        "test/unit/consensus/rules_digest/retroactive_gate_move.test.js": "7de955cc95153f6d",
         "test/unit/consensus/vm_lint_banned_with_matches_vm.test.js": "fad22eb98adb5886",
         "test/unit/consensus/vm_lint_destructure_matches_vm.test.js": "4e8f8ab1fecbfb96",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
