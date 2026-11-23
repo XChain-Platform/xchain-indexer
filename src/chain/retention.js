@@ -122,12 +122,15 @@ function resolveSweepIntervalMs(raw){
 // recovers from. Must stay >= the decoder's values; retention.test.js reads them to check.
 const ROOT_RETENTION_REORG_FLOOR = 126;
 const LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR = 5006;
+const BTC_TESTNET_ROOT_RETENTION_REORG_FLOOR = 5006;
 
-// Pick the floor with the decoder's own rule: Litecoin testnet is the one deep chain.
+// Pick the floor with the decoder's own rule: Litecoin and Bitcoin testnet are the deep chains.
 function resolveRootRetentionFloor(coin, network){
-    return String(coin).toUpperCase() === 'LTC' && String(network).toLowerCase() === 'testnet'
-        ? LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR
-        : ROOT_RETENTION_REORG_FLOOR;
+    if(String(network).toLowerCase() !== 'testnet') return ROOT_RETENTION_REORG_FLOOR;
+    const tick = String(coin).toUpperCase();
+    if(tick === 'LTC') return LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR;
+    if(tick === 'BTC') return BTC_TESTNET_ROOT_RETENTION_REORG_FLOOR;
+    return ROOT_RETENTION_REORG_FLOOR;
 }
 
 // Raise an enabled window to the chain's floor, so a reorg never rolls back past the
@@ -275,6 +278,7 @@ module.exports = {
     MIN_SWEEP_INTERVAL_MS,
     ROOT_RETENTION_REORG_FLOOR,
     LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR,
+    BTC_TESTNET_ROOT_RETENTION_REORG_FLOOR,
     resolveRootRetentionFloor,
     applyReorgSafeFloor,
     planStateRootPrune,

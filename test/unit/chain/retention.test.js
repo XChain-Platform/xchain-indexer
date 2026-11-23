@@ -374,11 +374,12 @@ describe('retention: reorg-safe floor on the root window', () => {
         assert.strictEqual(cfg.floorApplied, true);
     });
 
-    it('uses 5006 on Litecoin testnet only, whatever the case', () => {
+    it('uses 5006 on Litecoin and Bitcoin testnet only, whatever the case', () => {
         const base = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '1' });
-        for(const [coin, net] of [['LTC', 'testnet'], ['ltc', 'TESTNET']])
+        for(const [coin, net] of [['LTC', 'testnet'], ['ltc', 'TESTNET'], ['BTC', 'testnet'], ['btc', 'TESTNET']])
             assert.strictEqual(R.applyReorgSafeFloor(base, coin, net).rootKeepBlocks, 5006);
         assert.strictEqual(R.applyReorgSafeFloor(base, 'LTC', 'mainnet').rootKeepBlocks, 126);
+        assert.strictEqual(R.applyReorgSafeFloor(base, 'BTC', 'mainnet').rootKeepBlocks, 126);
         assert.strictEqual(R.applyReorgSafeFloor(base, 'DOGE', 'testnet').rootKeepBlocks, 126);
     });
 
@@ -402,6 +403,7 @@ describe('retention: reorg-safe floor on the root window', () => {
     it('never lets the local floors fall below the decoder safe depths', () => {
         assert.ok(R.ROOT_RETENTION_REORG_FLOOR >= 126);
         assert.ok(R.LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR >= 5006);
+        assert.ok(R.BTC_TESTNET_ROOT_RETENTION_REORG_FLOOR >= 5006);
     });
 });
 
