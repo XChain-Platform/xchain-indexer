@@ -11984,6 +11984,11 @@
       "config message limits applyMessageMethods sets exactly its consensus keys and values",
       "config message limits keeps every scalar numeric limit a positive integer"
     ],
+    "8d50dfc49476e446": [
+      "authenticated caller rate limits @regression @tier1 gives two valid keys on one IP independent keyed budgets",
+      "authenticated caller rate limits @regression @tier1 keeps missing and invalid keys in the shared client IP bucket",
+      "authenticated caller rate limits @regression @tier1 never includes a configured or presented key in logs or responses"
+    ],
     "8d8bd01b3feabe43": [
       "ANCHOR v3 same-publisher archive re-issue accepts identical content from the same publisher and sequence",
       "ANCHOR v3 same-publisher archive re-issue does not query a fold without an archive section",
@@ -17780,17 +17785,6 @@
     "d9ee41171af5848b": [
       "cancelled dispenser latest-status probe shape @regression @tier1 keys the correlated MAX probe by dispenser and orders the result by action"
     ],
-    "d9f449f3bb6fb396": [
-      "API-key gate (src/api/auth_gate.js) @regression @tier1 keyEquals compares in constant time over equal lengths and refuses a length mismatch",
-      "API-key gate (src/api/auth_gate.js) @regression @tier1 with a key configured, refuses a gated method anywhere in a batch without the key and passes it with",
-      "API-key gate (src/api/auth_gate.js) @regression @tier1 without a key, fails closed unless the keyless escape hatch is set",
-      "GET /status route (src/api/status_endpoint.js) @regression @tier1 answers 200 with the committed height, the in-flight block, the decoder tip and the lag",
-      "GET /status route (src/api/status_endpoint.js) @regression @tier1 answers 503 for a WEDGED stall but 200 for a stall still inside its grace window",
-      "GET /status route (src/api/status_endpoint.js) @regression @tier1 answers 503 with a null height when the indexer database is unreachable",
-      "middleware stack (src/api/middleware.js) @regression @tier1 defaults CORS to localhost and the limit to 600 when unset, and gates AFTER the parse",
-      "middleware stack (src/api/middleware.js) @regression @tier1 leaves /metrics unregistered while METRICS_ENABLED is off",
-      "middleware stack (src/api/middleware.js) @regression @tier1 mounts helmet, the JSON body parser, CORS from the parsed allowlist and the rate limit headers"
-    ],
     "da04a374c96a6868": [
       "FILE multipart completion duplicate manifest @regression @tier1 binds the row to the lowest action index manifest",
       "FILE multipart completion duplicate part @regression @tier1 uses the part with the lowest action index",
@@ -17917,6 +17911,19 @@
       "HubDbSync attestation_responses mirror registration @regression @tier1 fills a NULL link from a re-delivery and stamps the applied v1 row through the request id",
       "HubDbSync attestation_responses mirror registration @regression @tier1 generates an upsert whose ONLY assignment is a hub-following batch_action_index",
       "HubDbSync attestation_responses mirror registration @regression @tier1 skips the link entirely when there is no local indexer connection to stamp"
+    ],
+    "db66a29f3603c501": [
+      "API-key gate (src/api/auth_gate.js) @regression @tier1 accepts every key in a configured allowlist and rejects empty or partial keys",
+      "API-key gate (src/api/auth_gate.js) @regression @tier1 keyEquals compares in constant time over equal lengths and refuses a length mismatch",
+      "API-key gate (src/api/auth_gate.js) @regression @tier1 passes a gated method for each key in the configured allowlist",
+      "API-key gate (src/api/auth_gate.js) @regression @tier1 with a key configured, refuses a gated method anywhere in a batch without the key and passes it with",
+      "API-key gate (src/api/auth_gate.js) @regression @tier1 without a key, fails closed unless the keyless escape hatch is set",
+      "GET /status route (src/api/status_endpoint.js) @regression @tier1 answers 200 with the committed height, the in-flight block, the decoder tip and the lag",
+      "GET /status route (src/api/status_endpoint.js) @regression @tier1 answers 503 for a WEDGED stall but 200 for a stall still inside its grace window",
+      "GET /status route (src/api/status_endpoint.js) @regression @tier1 answers 503 with a null height when the indexer database is unreachable",
+      "middleware stack (src/api/middleware.js) @regression @tier1 defaults CORS to localhost and the limit to 600 when unset, and gates AFTER the parse",
+      "middleware stack (src/api/middleware.js) @regression @tier1 leaves /metrics unregistered while METRICS_ENABLED is off",
+      "middleware stack (src/api/middleware.js) @regression @tier1 mounts helmet, the JSON body parser, CORS from the parsed allowlist and the rate limit headers"
     ],
     "db68fb7aaa7e576a": [
       "HubDbSync rowless snapshot page @regression @tier2 a well-formed page still drains unchanged",
@@ -21414,11 +21421,12 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1707,
-      "titleCount": 16574,
+      "fileCount": 1708,
+      "titleCount": 16579,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
+        "test/regression/api/keyed_rate_limit.test.js": "8d50dfc49476e446",
         "test/regression/api/rate_limit_json_envelope.test.js": "dd09e4445df1623c",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
@@ -22014,7 +22022,7 @@
         "test/unit/api/rpc/compressed_body_refusal.test.js": "f1f9cb19436edd02",
         "test/unit/api/rpc/controller.test.js": "7f911e818403fce9",
         "test/unit/api/rpc/getsharedlist.test.js": "9b17e07ece10663a",
-        "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
+        "test/unit/api/rpc/http_layers.test.js": "db66a29f3603c501",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
         "test/unit/api/rpc/input_bounds.test.js": "f681b10379c9b27f",
         "test/unit/api/rpc/jsonrpc_body_guard.test.js": "58706b2a54fa0008",
@@ -23510,8 +23518,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1308,
-      "titleCount": 13111,
+      "fileCount": 1309,
+      "titleCount": 13116,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -23561,6 +23569,7 @@
         "test/integration/scenarios/parity/16_rollback_replay_idempotency.test.js": "871d9e7c77cd730c",
         "test/integration/scenarios/parity/18_fullnode_reward_determinism.test.js": "c2c55cee18ad3b7e",
         "test/integration/schema_isolation.test.js": "7f87cdd50704d954",
+        "test/regression/api/keyed_rate_limit.test.js": "8d50dfc49476e446",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
@@ -24036,7 +24045,7 @@
         "test/unit/api/rpc/capability_stake_proof.test.js": "b75a3cc2916688fa",
         "test/unit/api/rpc/controller.test.js": "7f911e818403fce9",
         "test/unit/api/rpc/getsharedlist.test.js": "a36f5937569a51c5",
-        "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
+        "test/unit/api/rpc/http_layers.test.js": "db66a29f3603c501",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
         "test/unit/api/rpc/input_bounds.test.js": "f681b10379c9b27f",
         "test/unit/api/rpc/open_reads.test.js": "489760ef82cae36e",
@@ -24824,9 +24833,10 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 706,
-      "titleCount": 7333,
+      "fileCount": 707,
+      "titleCount": 7338,
       "files": {
+        "test/regression/api/keyed_rate_limit.test.js": "8d50dfc49476e446",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
@@ -25008,7 +25018,7 @@
         "test/unit/api/rpc/capability_stake_proof.test.js": "b75a3cc2916688fa",
         "test/unit/api/rpc/controller.test.js": "7f911e818403fce9",
         "test/unit/api/rpc/getsharedlist.test.js": "a36f5937569a51c5",
-        "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
+        "test/unit/api/rpc/http_layers.test.js": "db66a29f3603c501",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
         "test/unit/api/rpc/input_bounds.test.js": "f681b10379c9b27f",
         "test/unit/api/rpc/open_reads.test.js": "489760ef82cae36e",
@@ -25536,8 +25546,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1308,
-      "titleCount": 13111,
+      "fileCount": 1309,
+      "titleCount": 13116,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -25587,6 +25597,7 @@
         "test/integration/scenarios/parity/16_rollback_replay_idempotency.test.js": "871d9e7c77cd730c",
         "test/integration/scenarios/parity/18_fullnode_reward_determinism.test.js": "c2c55cee18ad3b7e",
         "test/integration/schema_isolation.test.js": "7f87cdd50704d954",
+        "test/regression/api/keyed_rate_limit.test.js": "8d50dfc49476e446",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
         "test/regression/attest_response_stake_refused_rows.test.js": "2fd3d584f773d523",
         "test/regression/dispense_ownership_transfer_block_fields.test.js": "9e93cc1f907c0074",
@@ -26062,7 +26073,7 @@
         "test/unit/api/rpc/capability_stake_proof.test.js": "b75a3cc2916688fa",
         "test/unit/api/rpc/controller.test.js": "7f911e818403fce9",
         "test/unit/api/rpc/getsharedlist.test.js": "a36f5937569a51c5",
-        "test/unit/api/rpc/http_layers.test.js": "d9f449f3bb6fb396",
+        "test/unit/api/rpc/http_layers.test.js": "db66a29f3603c501",
         "test/unit/api/rpc/hub_push_delivered.test.js": "4baac2446b4f91e1",
         "test/unit/api/rpc/input_bounds.test.js": "f681b10379c9b27f",
         "test/unit/api/rpc/open_reads.test.js": "489760ef82cae36e",
