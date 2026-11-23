@@ -27,7 +27,7 @@ const sinon   = require('sinon');
 
 const observability = require('../../../../src/observability/index.js');
 const XChainIndexer = require('../../../../src/XChainIndexer');
-const { keyEquals, apiKeyGate } = require('../../../../src/api/auth_gate.js');
+const { keyEquals, apiKeyMatches, apiKeyGate } = require('../../../../src/api/auth_gate.js');
 const { installMiddleware } = require('../../../../src/api/middleware.js');
 const { mountStatusRoute } = require('../../../../src/api/status_endpoint.js');
 const { recordingView, fakeIndexer } = require('../rpc/helpers/fake_indexer.js');
@@ -65,6 +65,13 @@ describe('API-key gate (src/api/auth_gate.js) @regression @tier1', function () {
         assert.strictEqual(keyEquals(undefined, 'x'), false);
     });
 
+    it('accepts every key in a configured allowlist and rejects empty or partial keys', function () {
+        assert.strictEqual(apiKeyMatches('validator-a', 'validator-a, validator-b'), true);
+        assert.strictEqual(apiKeyMatches('validator-b', 'validator-a, validator-b'), true);
+        assert.strictEqual(apiKeyMatches('validator', 'validator-a, validator-b'), false);
+        assert.strictEqual(apiKeyMatches('', 'validator-a,,validator-b'), false);
+    });
+
     // Drive the shipped gate with fake req/res: `next` records pass-through, the
     // response records the refusal shape.
     function run(gate, body, headers = {}) {
@@ -85,6 +92,13 @@ describe('API-key gate (src/api/auth_gate.js) @regression @tier1', function () {
         assert.strictEqual(run(gate, { method: 'getactivevalidators' }, { 'x-api-key': 'k2' }).status, 401);
         assert.strictEqual(run(gate, { method: 'ping' }).passed, true, 'an open method never needs the key');
         assert.strictEqual(run(gate, undefined).passed, true, 'a bodiless request is not a gated call');
+    });
+
+    it('passes a gated method for each key in the configured allowlist', function () {
+        const gate = apiKeyGate(Object.assign({ INDEXER_API_KEY: 'k1,k2', ALLOW_UNAUTHED: false }, SETS));
+        assert.strictEqual(run(gate, { method: 'getactivevalidators' }, { 'x-api-key': 'k1' }).passed, true);
+        assert.strictEqual(run(gate, { method: 'getactivevalidators' }, { 'x-api-key': 'k2' }).passed, true);
+        assert.strictEqual(run(gate, { method: 'getactivevalidators' }, { 'x-api-key': 'k3' }).status, 401);
     });
 
     it('without a key, fails closed unless the keyless escape hatch is set', function () {
@@ -139,6 +153,7 @@ describe('middleware stack (src/api/middleware.js) @regression @tier1', function
         assert.deepStrictEqual(gated.body, { jsonrpc: '2.0', id: 3, error: { code: -32001, message: 'Unauthorized' } });
         const keyed = await served.post({ id: 3, method: 'getactivevalidators' }, { 'x-api-key': 'k1' });
         assert.strictEqual(keyed.status, 200);
+        assert.strictEqual(keyed.headers.get('ratelimit-limit'), '600', 'the keyed budget defaults to 600');
     });
 
     it('leaves /metrics unregistered while METRICS_ENABLED is off', async function () {

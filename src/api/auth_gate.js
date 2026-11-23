@@ -35,6 +35,25 @@ function keyEquals(provided, expected){
     return crypto.timingSafeEqual(a, b);
 }
 
+// Accept one key or a comma-separated allowlist so independent callers can
+// authenticate to one shared indexer without sharing credentials. Empty list
+// entries never become valid keys.
+function configuredApiKeys(configured){
+    return String(configured == null ? '' : configured)
+        .split(',')
+        .map(key => key.trim())
+        .filter(key => key.length > 0);
+}
+
+// Check every configured key so the RPC gate and the rate limiter use exactly
+// the same authentication decision.
+function apiKeyMatches(provided, configured){
+    let matches = false;
+    for(const expected of configuredApiKeys(configured))
+        matches = keyEquals(provided, expected) || matches;
+    return matches;
+}
+
 // API key enforcement for write + federation read + gated exec methods.
 // These methods enumerate the staked validator set, run the VM, or (once a
 // write method exists again) mutate replicated state, so they must never be
@@ -65,7 +84,7 @@ function apiKeyGate({ INDEXER_API_KEY, ALLOW_UNAUTHED, WRITE_METHODS, FEDERATION
         if(gated){
             if(INDEXER_API_KEY){
                 let provided = req.headers['x-api-key'] || '';
-                if(!keyEquals(provided, INDEXER_API_KEY)){
+                if(!apiKeyMatches(provided, INDEXER_API_KEY)){
                     return res.status(401).json({
                         jsonrpc: '2.0', id,
                         error: { code: -32001, message: 'Unauthorized' }
@@ -84,4 +103,4 @@ function apiKeyGate({ INDEXER_API_KEY, ALLOW_UNAUTHED, WRITE_METHODS, FEDERATION
     };
 }
 
-module.exports = { keyEquals, apiKeyGate };
+module.exports = { keyEquals, apiKeyMatches, apiKeyGate };

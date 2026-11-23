@@ -44,7 +44,8 @@ const DB_ENV = [
 // than inheriting the previous scenario's key.
 const OWNED_ENV = DB_ENV.concat([
     'INDEXER_API_PORT', 'INDEXER_API_KEY', 'INDEXER_ALLOW_UNAUTHENTICATED',
-    'INDEXER_RATE_LIMIT_RPM', 'CORS_ORIGIN', 'INDEXER_NETWORK', 'METRICS_ENABLED'
+    'INDEXER_RATE_LIMIT_KEYED_RPM', 'INDEXER_RATE_LIMIT_RPM',
+    'CORS_ORIGIN', 'INDEXER_NETWORK', 'METRICS_ENABLED'
 ])
 
 // This file runs inside the same mocha process as the rest of the unit tier, so

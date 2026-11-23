@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Gave each authenticated indexer API key its own rate-limit budget while retaining the per-client-IP limit for missing or invalid keys.
+
 ## [0.28.1] - 2026-11-22
 
 ### Fixed

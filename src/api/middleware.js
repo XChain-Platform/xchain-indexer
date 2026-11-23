@@ -14,7 +14,7 @@
  *
  * XChain Indexer - the HTTP middleware stack.
  *
- * Mounts, in this order: Helmet, CORS, the per-IP rate limit, the JSON body
+ * Mounts, in this order: Helmet, CORS, the caller rate limit, the JSON body
  * parser, the default-off observability layer with the poll-freshness gauge, and
  * the API-key gate. Everything read from the environment arrives through the
  * apiContext() object src/api.js builds at boot.
@@ -24,18 +24,19 @@
 const bodyParser    = require('body-parser');
 const helmet        = require('helmet');
 const cors          = require('cors');
-// Note: express-rate-limit is mounted per-IP below (INDEXER_RATE_LIMIT_RPM,
-// default 600). The indexer API is intended to be internal-only (hub +
+// Note: express-rate-limit is mounted per authenticated key or client IP below.
+// The indexer API is intended to be internal-only (hub +
 // xchain-node managed deployments), but the stock xchain-node topology can
 // publish the port on all host interfaces, so a generous limiter keeps an
 // anonymous loop off GET /status and the ungated JSON-RPC reads (each of which
 // costs pooled DB round-trips) without affecting the handful of legitimate
 // hub/explorer callers (see sibling services: decoder, encoder, explorer, hub).
-const rateLimit     = require('express-rate-limit');
+const crypto        = require('crypto');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const { installObservability, getLogger } = require('../observability'); // default-off /metrics + structured log shim
 const { installIndexerMetrics } = require('./indexer_metrics');  // poll-freshness heartbeat gauge
 const { parseCorsOrigin } = require('./cors_origin.js');
-const { apiKeyGate } = require('./auth_gate');
+const { apiKeyGate, apiKeyMatches } = require('./auth_gate');
 
 const JSON_RPC_MAX_BATCH = 100;
 
@@ -119,7 +120,7 @@ function rpcErrorHandler(err, req, res, next){
     });
 }
 
-function installSecurityLayers(app, { CONFIG_ENV }){
+function installSecurityLayers(app, { CONFIG_ENV, INDEXER_API_KEY }){
     // Use Helmet to increase security
     app.use(helmet());
 
@@ -133,15 +134,26 @@ function installSecurityLayers(app, { CONFIG_ENV }){
         methods: ['POST']
     }));
 
-    // Per-IP rate limit, mounted ahead of the body parser so a malformed (400) or
+    const ipLimit = parseInt(CONFIG_ENV.INDEXER_RATE_LIMIT_RPM) || 600;
+    const keyedLimit = parseInt(CONFIG_ENV.INDEXER_RATE_LIMIT_KEYED_RPM) || 600;
+
+    // Keyed or per-IP rate limit, mounted ahead of the body parser so a malformed (400) or
     // oversize (413) POST is counted and eventually refused like any other request,
     // generous by default (the real callers are a handful of
-    // hub/explorer processes). Bounds an anonymous flood against GET /status and
+    // hub/explorer processes). Authenticated callers receive independent budgets,
+    // while an invalid or missing key stays in the client IP bucket. This bounds
+    // an anonymous flood against GET /status and
     // the ungated JSON-RPC read methods, both of which cost pooled DB round-trips
     // per hit, so the perimeter assumption is no longer the only guard.
     app.use(rateLimit({
         windowMs: 60 * 1000,
-        limit: parseInt(CONFIG_ENV.INDEXER_RATE_LIMIT_RPM) || 600,
+        limit: req => apiKeyMatches(req.headers['x-api-key'] || '', INDEXER_API_KEY) ? keyedLimit : ipLimit,
+        keyGenerator: req => {
+            const provided = req.headers['x-api-key'] || '';
+            if(!apiKeyMatches(provided, INDEXER_API_KEY)) return ipKeyGenerator(req.ip);
+            const digest = crypto.createHash('sha256').update(String(provided)).digest('hex').slice(0, 32);
+            return 'key:' + digest;
+        },
         standardHeaders: true,
         legacyHeaders: false,
         // The default refusal is a text/html string. Answer with the same JSON-RPC
