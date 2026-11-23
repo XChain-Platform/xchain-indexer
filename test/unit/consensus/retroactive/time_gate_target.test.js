@@ -41,6 +41,7 @@ describe('retroactive time gate target @regression @tier1', function(){
             movableGates: [TIME_GATE],
         }), {
             target: 41,
+            historyPreserving: [],
             movable: [{ key: TIME_GATE, from: 2_000, to: 1_400, target: 41 }],
             refused: [],
         });
@@ -55,6 +56,7 @@ describe('retroactive time gate target @regression @tier1', function(){
             movableGates: [HEIGHT_GATE],
         }), {
             target: 41,
+            historyPreserving: [],
             movable: [{ key: HEIGHT_GATE, from: 42, to: 41, target: 41 }],
             refused: [],
         });
@@ -69,6 +71,7 @@ describe('retroactive time gate target @regression @tier1', function(){
             movableGates: [TIME_GATE],
         }), {
             target: null,
+            historyPreserving: [],
             movable: [],
             refused: [],
         });

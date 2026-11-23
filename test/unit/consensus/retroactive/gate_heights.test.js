@@ -25,12 +25,16 @@ const {
     gateHeightMap,
     classifyGateMoves,
 } = require('../../../../src/consensus/retroactive/gate_heights.js');
-const { MOVABLE_GATES } = require('../../../../src/consensus/retroactive/movable_gates.js');
+const {
+    MOVABLE_GATES,
+    HISTORY_PRESERVING_GATES,
+} = require('../../../../src/consensus/retroactive/movable_gates.js');
 
 const INDEXER_ONLY = 'bridge_policy_detach_activation.BRIDGE_POLICY_DETACH';
 const TIME_GATE = 'price_zero_validity_activation.PRICE_ZERO_VALIDITY_ACTIVATION';
 const EPOCH_GATE = 'rollcall_activation.ROLLCALL_ACTIVATION';
 const RULESET_GATE = 'train_activation.TRAIN_ACTIVATION';
+const LEGACY_WINDOW = 'vm_token_info_legacy_window.VM_TOKEN_INFO_LEGACY_WINDOW_END';
 
 function moves(recorded, current, overrides = {}){
     return classifyGateMoves({ recorded, current, tip: 100, ...overrides });
@@ -63,6 +67,7 @@ describe('retroactive gate height map @regression @tier1', function(){
     it('flags an earlier move at the new boundary', function(){
         assert.deepStrictEqual(moves({ a: 150 }, { a: 80 }), {
             target: 80,
+            historyPreserving: [],
             movable: [],
             refused: [{ key: 'a', from: 150, to: 80, target: 80 }]
         });
@@ -71,6 +76,7 @@ describe('retroactive gate height map @regression @tier1', function(){
     it('flags a later move of an applied height at the old boundary', function(){
         assert.deepStrictEqual(moves({ a: 40 }, { a: 150 }), {
             target: 40,
+            historyPreserving: [],
             movable: [],
             refused: [{ key: 'a', from: 40, to: 150, target: 40 }]
         });
@@ -83,6 +89,7 @@ describe('retroactive gate height map @regression @tier1', function(){
         };
         assert.deepStrictEqual(moves({ absentGate: 30, nullGate: 40, sentinelGate: 50 }, current), {
             target: 30,
+            historyPreserving: [],
             movable: [],
             refused: [
                 { key: 'absentGate', from: 30, to: consensusRules.ABSENT, target: 30 },
@@ -96,6 +103,7 @@ describe('retroactive gate height map @regression @tier1', function(){
     it('ignores a move wholly above the tip', function(){
         assert.deepStrictEqual(moves({ a: 150 }, { a: 120 }), {
             target: null,
+            historyPreserving: [],
             movable: [],
             refused: []
         });
@@ -117,8 +125,33 @@ describe('retroactive gate height map @regression @tier1', function(){
             movableGates: ['a'],
         }), {
             target: 10,
+            historyPreserving: [],
             movable: [{ key: 'a', from: 20, to: 50, target: 20 }],
             refused: [{ key: 'b', from: 30, to: 10, target: 10 }],
         });
+    });
+
+    it('records only the first declaration of a history-preserving gate without a replay target', function(){
+        assert.ok(Object.isFrozen(HISTORY_PRESERVING_GATES));
+        assert.deepStrictEqual(HISTORY_PRESERVING_GATES, [
+            LEGACY_WINDOW,
+        ]);
+        assert.deepStrictEqual(moves({}, { [LEGACY_WINDOW]: 80 }), {
+            target: null,
+            historyPreserving: [{
+                key: LEGACY_WINDOW,
+                from: consensusRules.ABSENT,
+                to: 80,
+                target: 80,
+            }],
+            movable: [],
+            refused: [],
+        });
+        assert.deepStrictEqual(moves({ [LEGACY_WINDOW]: 80 }, { [LEGACY_WINDOW]: 90 }).refused, [{
+            key: LEGACY_WINDOW,
+            from: 80,
+            to: 90,
+            target: 80,
+        }]);
     });
 });

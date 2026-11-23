@@ -24,6 +24,7 @@ const consensusRules = require('../../../../src/consensus_rules_digest.js');
 const startup = require('../../../../src/XChainIndexer/startup.js');
 
 const GATE = 'example_activation.EXAMPLE_ACTIVATION';
+const LEGACY_WINDOW = 'vm_token_info_legacy_window.VM_TOKEN_INFO_LEGACY_WINDOW_END';
 
 function fakeConnection(recorded){
     const state = { gateInserts: [], markers: [], commits: 0, rollbacks: 0, releases: 0 };
@@ -35,7 +36,8 @@ function fakeConnection(recorded){
             if(sql.startsWith('SELECT data, witness_hash')){
                 return recorded ? [{
                     data: JSON.stringify({ applied_tip: recorded.appliedTip,
-                        count: Object.keys(recorded.gateHeights).length }),
+                        count: Object.keys(recorded.gateHeights).length,
+                        ...(recorded.scope ? { scope: recorded.scope } : {}) }),
                     witness_hash: recordedBatch
                 }] : [];
             }
@@ -169,5 +171,56 @@ describe('retroactive consensus gate move at boot @regression @tier1', function(
         assert.deepStrictEqual(JSON.parse(fixture.conn.state.gateInserts[0][0]), [GATE, 0]);
         assert.deepStrictEqual(JSON.parse(fixture.conn.state.markers[0][0]), { applied_tip: null, count: 1, scope: 'registry' });
         assert.strictEqual(fixture.conn.state.commits, 1);
+    });
+
+    it('records a newly declared history-preserving gate below the live tip without replaying', async function(){
+        const current = { [LEGACY_WINDOW]: 152738 };
+        const fixture = bootFixture({
+            recorded: { gateHeights: {}, appliedTip: 162887, scope: 'registry' },
+            current,
+            tip: 162888,
+        });
+
+        await fixture.run();
+
+        assert.strictEqual(fixture.indexer.schemaReady, true);
+        assert.strictEqual(fixture.mirrorStarts(), 1);
+        assert.strictEqual(fixture.conn.state.gateInserts.length, 1);
+        assert.deepStrictEqual(JSON.parse(fixture.conn.state.gateInserts[0][0]), [LEGACY_WINDOW, 152738]);
+        assert.deepStrictEqual(JSON.parse(fixture.conn.state.markers[0][0]), {
+            applied_tip: 162888,
+            count: 1,
+            scope: 'registry',
+        });
+        assert.strictEqual(fixture.conn.state.commits, 1);
+        assert.strictEqual(fixture.conn.state.rollbacks, 0);
+    });
+
+    it('still refuses a later move of the recorded history-preserving gate', async function(){
+        const fixture = bootFixture({
+            recorded: {
+                gateHeights: { [LEGACY_WINDOW]: 152738 },
+                appliedTip: 162887,
+                scope: 'registry',
+            },
+            current: { [LEGACY_WINDOW]: 152739 },
+            tip: 162888,
+        });
+
+        await assert.rejects(fixture.run(), /VM_TOKEN_INFO_LEGACY_WINDOW_END/);
+        assert.strictEqual(fixture.conn.state.gateInserts.length, 0);
+        assert.strictEqual(fixture.conn.state.markers.length, 0);
+    });
+
+    it('still refuses an undeclared new gate below the live tip', async function(){
+        const fixture = bootFixture({
+            recorded: { gateHeights: {}, appliedTip: 162887, scope: 'registry' },
+            current: { [GATE]: 152738 },
+            tip: 162888,
+        });
+
+        await assert.rejects(fixture.run(), /example_activation\.EXAMPLE_ACTIVATION/);
+        assert.strictEqual(fixture.conn.state.gateInserts.length, 0);
+        assert.strictEqual(fixture.conn.state.markers.length, 0);
     });
 });

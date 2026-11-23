@@ -22,7 +22,7 @@ const {
     canonical,
 } = require('../../consensus_rules_digest.js');
 const defaultGateRegistry = require('../gate_registry.js');
-const { MOVABLE_GATES } = require('./movable_gates.js');
+const { MOVABLE_GATES, HISTORY_PRESERVING_GATES } = require('./movable_gates.js');
 
 const RECORDED_UNITS = Object.freeze(['height', 'time']);
 
@@ -82,7 +82,14 @@ function firstBlockAtOrPast(blockTimes, threshold, tip){
     return target;
 }
 
-function classifyGateMoves({ recorded, current, tip, blockTimes, movableGates = MOVABLE_GATES } = {}){
+function classifyGateMoves({
+    recorded,
+    current,
+    tip,
+    blockTimes,
+    movableGates = MOVABLE_GATES,
+    historyPreservingGates = HISTORY_PRESERVING_GATES,
+} = {}){
     if(!Number.isSafeInteger(tip) || tip < 0)
         throw new TypeError('tip must be a non-negative safe integer');
     if(!recorded || typeof recorded !== 'object' || Array.isArray(recorded) ||
@@ -90,7 +97,8 @@ function classifyGateMoves({ recorded, current, tip, blockTimes, movableGates = 
         throw new TypeError('recorded and current must be gate maps');
 
     const movableSet = new Set(movableGates);
-    const result = { target: null, movable: [], refused: [] };
+    const historyPreservingSet = new Set(historyPreservingGates);
+    const result = { target: null, historyPreserving: [], movable: [], refused: [] };
     const keys = new Set([...Object.keys(recorded), ...Object.keys(current)]);
 
     for(const key of [...keys].sort()){
@@ -107,6 +115,11 @@ function classifyGateMoves({ recorded, current, tip, blockTimes, movableGates = 
         if(target === null) continue;
 
         const move = { key, from, to, target };
+        // Record a first declaration whose historical behavior already matches live state.
+        if(from === ABSENT && historyPreservingSet.has(key)){
+            result.historyPreserving.push(move);
+            continue;
+        }
         const bucket = movableSet.has(key) ? result.movable : result.refused;
         bucket.push(move);
         result.target = result.target === null ? target : Math.min(result.target, target);

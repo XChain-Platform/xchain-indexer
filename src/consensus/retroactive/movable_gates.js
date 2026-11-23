@@ -17,5 +17,8 @@
 'use strict';
 
 const MOVABLE_GATES = Object.freeze([]);
+const HISTORY_PRESERVING_GATES = Object.freeze([
+    'vm_token_info_legacy_window.VM_TOKEN_INFO_LEGACY_WINDOW_END',
+]);
 
-module.exports = { MOVABLE_GATES };
+module.exports = { MOVABLE_GATES, HISTORY_PRESERVING_GATES };
