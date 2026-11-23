@@ -224,3 +224,11 @@ addGate('same_token_offer_refusal_activation.SAME_TOKEN_OFFER_REFUSAL_ACTIVATION
 
 addGate('protocol/constants.MULTIPART_FILE_MAX_PARTS', 'constant', 65535);
 addGate('protocol/constants.MULTIPART_FILE_MAX_BYTES', 'constant', 262140000000);
+
+// Preserve the pre-BRIDGED VM token-info bytes until the first post-XBRIDGE fleet block.
+addGate('vm_token_info_legacy_window.VM_TOKEN_INFO_LEGACY_WINDOW_END', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': 152738,
+    testnet: UNARMED,
+    regtest: UNARMED,
+});

@@ -1,0 +1,50 @@
+{
+  "_comment": "Contract 74 on BTC testnet (a vesting demo deployed at block 150681) and the two claim calls it ran at block 150698, copied from the pre-reset TBTC indexer database dump of 2026-11-22. gas is what the original network recorded in contract_executions; the rebuild that put BRIDGED in the token info recorded 24 more on each call.",
+  "contract_index": 74,
+  "code_sha256": "335a9ba45ced2c918c251bb6bea9fd65346cc5ffaab3afb7527068bf95cb7b0f",
+  "code": "var MAX_WINDOW_BLOCKS = 1000000;\nfunction floorToDecimals(value, decimals) {\nvar s = String(value);\nvar neg = s.charAt(0) === '-';\nif (neg) s = s.substring(1);\nvar dot = s.indexOf('.');\nif (dot < 0) return value;\nvar frac = s.substring(dot + 1);\nif (frac.length <= decimals) return value;\nvar kept = decimals > 0 ? '.' + frac.substring(0, decimals) : '';\nvar out = s.substring(0, dot) + kept;\nreturn neg ? '-' + out : out;\n}\nfunction tickDecimals(xchain, tick) {\nvar info = xchain.getTokenInfo(tick);\nxchain.require(info && info.DECIMALS !== null && info.DECIMALS !== undefined,\n'token decimals unavailable: ' + tick);\nreturn info.DECIMALS;\n}\nmodule.exports = {\nabi: { version: 1, methods: {\nfund:   { summary: 'Confirm custody and start the vesting clock (BATCH after a DEPOSIT)', params: [] },\nclaim:  { summary: 'Beneficiary withdraws everything vested but unclaimed', params: [] },\nrevoke: { summary: 'Grantor reclaims the unvested portion (revocable grants only)', params: [] },\ninfo:   { summary: 'Read the vesting schedule and progress', params: [], view: true }\n} },\ninitialize: function (xchain) {\nvar grantor     = xchain.getInputParam(0);\nvar beneficiary = xchain.getInputParam(1);\nvar tick        = xchain.getInputParam(2);\nvar total       = xchain.getInputParam(3);\nvar cliffRaw    = xchain.getInputParam(4);\nvar durationRaw = xchain.getInputParam(5);\nvar revocable   = xchain.getInputParam(6);\nxchain.require(grantor && beneficiary, 'grantor, beneficiary required');\nxchain.require(tick, 'tick required');\nxchain.require(total && xchain.math.gt(total, '0'), 'total must be positive');\nrequireIntInRange(xchain, cliffRaw, 0, MAX_WINDOW_BLOCKS, 'cliffBlocks');\nrequireIntInRange(xchain, durationRaw, 1, MAX_WINDOW_BLOCKS, 'durationBlocks');\nvar cliff    = parseInt(cliffRaw, 10);\nvar duration = parseInt(durationRaw, 10);\nxchain.require(cliff <= duration, 'cliffBlocks must be in [0, durationBlocks]');\nxchain.require(revocable === 'true' || revocable === 'false', 'revocable must be \"true\" or \"false\"');\nxchain.state.set('grantor', grantor);\nxchain.state.set('beneficiary', beneficiary);\nxchain.state.set('tick', tick);\nxchain.state.set('total', total);\nxchain.state.set('cliff', String(cliff));\nxchain.state.set('duration', String(duration));\nxchain.state.set('revocable', revocable);\nxchain.state.set('claimed', '0');\nxchain.state.set('status', 'INIT');\n},\nfund: function (xchain) {\nxchain.require(xchain.state.get('status') === 'INIT', 'vesting not awaiting funds');\nvar tick  = xchain.state.get('tick');\nvar total = xchain.state.get('total');\nvar held  = xchain.getBalance(xchain.getContractAddress(), tick) || '0';\nxchain.require(xchain.math.gte(held, total), 'insufficient deposit');\nxchain.state.set('start', String(xchain.getBlockHeight()));\nxchain.state.set('status', 'ACTIVE');\n},\nclaim: function (xchain) {\nvar status = xchain.state.get('status');\nxchain.require(status === 'ACTIVE' || status === 'REVOKED', 'vesting not active');\nxchain.require(xchain.getSourceAddress() === xchain.state.get('beneficiary'),\n'only the beneficiary can claim');\nvar tick      = xchain.state.get('tick');\nvar vested    = vestedAmount(xchain);\nvar claimed   = xchain.state.get('claimed');\nvar claimable = floorToDecimals(\nxchain.math.subtract(vested, claimed),\ntickDecimals(xchain, tick)\n);\nxchain.require(xchain.math.gt(claimable, '0'), 'nothing to claim');\nxchain.state.set('claimed', xchain.math.add(claimed, claimable));\nxchain.emit.send({\ndestination: xchain.state.get('beneficiary'),\ntick: tick,\nquantity: claimable\n});\nreturn claimable;\n},\nrevoke: function (xchain) {\nxchain.require(xchain.state.get('status') === 'ACTIVE', 'vesting not active');\nxchain.require(xchain.state.get('revocable') === 'true', 'grant is not revocable');\nxchain.require(xchain.getSourceAddress() === xchain.state.get('grantor'),\n'only the grantor can revoke');\nvar tick     = xchain.state.get('tick');\nvar vested   = vestedAmount(xchain);\nvar total    = xchain.state.get('total');\nvar unvested = floorToDecimals(\nxchain.math.subtract(total, vested),\ntickDecimals(xchain, tick)\n);\nxchain.require(xchain.math.gt(unvested, '0'), 'nothing to revoke (fully vested)');\nxchain.state.set('total', vested);\nxchain.state.set('status', 'REVOKED');\nxchain.emit.send({\ndestination: xchain.state.get('grantor'),\ntick: tick,\nquantity: unvested\n});\nreturn unvested;\n},\ninfo: function (xchain) {\nreturn JSON.stringify({\nstatus: xchain.state.get('status'),\ntotal: xchain.state.get('total'),\nclaimed: xchain.state.get('claimed'),\nclaimable: xchain.state.get('status') === 'INIT'\n? '0'\n: xchain.math.subtract(vestedAmount(xchain), xchain.state.get('claimed'))\n});\n}\n};\nfunction vestedAmount(xchain) {\nif (xchain.state.get('status') === 'REVOKED')\nreturn xchain.state.get('total');\nvar total    = xchain.state.get('total');\nvar start    = parseInt(xchain.state.get('start'));\nvar cliff    = parseInt(xchain.state.get('cliff'));\nvar duration = parseInt(xchain.state.get('duration'));\nvar elapsed  = xchain.getBlockHeight() - start;\nif (elapsed < cliff) return '0';\nif (elapsed >= duration) return total;\nreturn xchain.math.divide(xchain.math.multiply(total, String(elapsed)), String(duration));\n}\nfunction requireIntInRange(xchain, v, min, max, name) {\nvar msg = name + ' must be an integer in [' + min + ', ' + max + ']';\nvar s = (typeof v === 'string') ? v : '';\nvar i = (s.charAt(0) === '-') ? 1 : 0;\nvar ok = s.length > i;\nfor (; i < s.length; i++) {\nvar ch = s.charAt(i);\nif (ch < '0' || ch > '9') { ok = false; break; }\n}\nxchain.require(ok, msg);\nvar n = parseInt(s, 10);\nxchain.require(n >= min && n <= max, msg);\n}",
+  "block_index": 150698,
+  "block_time": 1788313371,
+  "caller": "mu1GnzHeZWRntfZkYrZ3yzN64iXEkR3W4d",
+  "state_before": {
+    "grantor": "mu1GnzHeZWRntfZkYrZ3yzN64iXEkR3W4d",
+    "beneficiary": "mu1GnzHeZWRntfZkYrZ3yzN64iXEkR3W4d",
+    "tick": "VEST514",
+    "total": "1000",
+    "cliff": "0",
+    "duration": "1",
+    "revocable": "false",
+    "claimed": "0",
+    "status": "ACTIVE",
+    "start": "150690"
+  },
+  "calls": [
+    {
+      "action_index": 89,
+      "claimed_before": "0",
+      "original_gas": 3169,
+      "rebuild_gas": 3193,
+      "status": "valid"
+    },
+    {
+      "action_index": 92,
+      "claimed_before": "1000",
+      "original_gas": 2122,
+      "rebuild_gas": 2146,
+      "status": "reverted",
+      "error": "revert: nothing to claim"
+    }
+  ],
+  "token_info_at_150698": {
+    "ACTION_INDEX": 65,
+    "TICK": "VEST514",
+    "TICK_ID": 6,
+    "OWNER": "mu1GnzHeZWRntfZkYrZ3yzN64iXEkR3W4d",
+    "MAX_SUPPLY": "1000000",
+    "MAX_MINT": "100000",
+    "DECIMALS": 0,
+    "DESCRIPTION": "vesting demo asset",
+    "BRIDGED": 0,
+    "SUPPLY": "1000"
+  }
+}

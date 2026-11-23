@@ -210,6 +210,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'tick_normalize_activation',
     'archive_rollcall_presence_activation',
     'checkpoint_supersede_activation',
+    'vm_token_info_legacy_window',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

@@ -26,6 +26,21 @@
 // Strict, as the class body these methods came from was.
 'use strict';
 
+const gateRegistry = require('../../consensus/gate_registry.js');
+const { UNARMED } = require('../../protocol_changes/core.js');
+
+const VM_TOKEN_INFO_LEGACY_WINDOW_KEY =
+    'vm_token_info_legacy_window.VM_TOKEN_INFO_LEGACY_WINDOW_END';
+
+// Leave BRIDGED out below an armed legacy-window end so the VM receives the historical bytes.
+function legacyTokenInfoAt(network, coin, blockIndex){
+    const table = gateRegistry.get(VM_TOKEN_INFO_LEGACY_WINDOW_KEY);
+    const coinKey = String(coin) + ':' + String(network);
+    const end = Object.prototype.hasOwnProperty.call(table, coinKey) ? table[coinKey] : table[network];
+    if(typeof end !== 'number' || !Number.isFinite(end) || end >= UNARMED) return false;
+    return !gateRegistry.activeAt(VM_TOKEN_INFO_LEGACY_WINDOW_KEY, network, coin, blockIndex, null);
+}
+
 module.exports = {
 
     // Rewrite one contract_stakes / contract_unstakes row's signing key and journal the previous
@@ -184,6 +199,15 @@ module.exports = {
                 }
             }
             balances[address] = bySymbol;
+        }
+
+        // Copy each object so getTokenInfo callers outside the VM keep the current metadata shape.
+        if(legacyTokenInfoAt(this.config['NETWORK'], this.config['COIN'], blockIndex)){
+            for(let symbol in tokenInfo){
+                let legacy = { ...tokenInfo[symbol] };
+                delete legacy.BRIDGED;
+                tokenInfo[symbol] = legacy;
+            }
         }
 
         return { balances, tokenInfo };
