@@ -159,6 +159,55 @@ module.exports = {
         return stateCommitActive;
     },
 
+    // Run every pass of one block under the epoch fence and the block watchdog.
+    // Resolves with [ledger, actions, contracts]; rejects on a pass failure or a watchdog timeout.
+    async runBlockUnderWatchdog(blk, stateCommitActive){
+        let blockToParse = blk.blockToParse;
+        // Fence the block's writes to THIS transaction's epoch. Read the
+        // epoch that beginTransaction just assigned, then run all block processing
+        // under it (runInTxEpoch) so every DB write it issues carries this epoch.
+        // If the watchdog below fires, the outer catch rolls back and bumps the
+        // epoch; the abandoned promise (which may still resume and try to write on
+        // the shared connection now owned by a later block) then carries a stale
+        // epoch and is rejected inside the db layer before touching the driver.
+        let txEpoch = this.indexerDb.currentTxEpoch();
+
+        // Process the block with a watchdog timeout to detect deadlocks or infinite loops
+        let blockProcessing = this.indexerDb.runInTxEpoch(txEpoch, () => this.runBlockPasses(blk, stateCommitActive));
+
+        // Watchdog-timeout safety. If the watchdog rejects below, we stop
+        // awaiting blockProcessing but the promise stays pending and may settle
+        // later (typically the epoch fence rejecting a zombie write, or the block
+        // finally finishing). Attach a swallow handler so that late settlement can
+        // never surface as an unhandledRejection that crashes the process. The
+        // epoch fence, not this handler, is what prevents the zombie's writes from
+        // landing; this only keeps the abandoned promise's rejection quiet.
+        // The late-settlement line is logged only when the watchdog really gave up
+        // on the promise: a rejection that arrives inside the budget is a plain
+        // block failure and is reported by abandonBlock, not mislabeled here.
+        let processingSettled = false;
+        let watchdogFired     = false;
+        blockProcessing.then(() => { processingSettled = true; }, (e) => {
+            processingSettled = true;
+            if(watchdogFired){
+                getLogger().warn('Abandoned block-processing promise for block ' + blockToParse +
+                    ' settled after watchdog: ' + (e && e.message ? e.message : e));
+            }
+        });
+
+        let blockTimeout = this.blockWatchdogTimeout(blockToParse);
+        let ledger, actions, contracts;
+        try {
+            [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, blockTimeout, 'block ' + blockToParse);
+        } catch(timeoutError){
+            // The settle handler above runs first, so an unsettled promise here
+            // means the watchdog fired rather than the pass itself rejecting.
+            if(!processingSettled) watchdogFired = true;
+            throw timeoutError;
+        }
+        return [ledger, actions, contracts];
+    },
+
     // Apply one block in its own indexer transaction: open it, run every pass under the
     // block watchdog, commit, then the post-commit steps. Returns { committed, stop,
     // lastDecoderBlock } to the catch-up loop. Any failure rolls the block back and stops
@@ -169,32 +218,7 @@ module.exports = {
         let committed = false;
         try {
 
-            // Fence the block's writes to THIS transaction's epoch. Read the
-            // epoch that beginTransaction just assigned, then run all block processing
-            // under it (runInTxEpoch) so every DB write it issues carries this epoch.
-            // If the watchdog below fires, the outer catch rolls back and bumps the
-            // epoch; the abandoned promise (which may still resume and try to write on
-            // the shared connection now owned by a later block) then carries a stale
-            // epoch and is rejected inside the db layer before touching the driver.
-            let txEpoch = this.indexerDb.currentTxEpoch();
-
-            // Process the block with a watchdog timeout to detect deadlocks or infinite loops
-            let blockProcessing = this.indexerDb.runInTxEpoch(txEpoch, () => this.runBlockPasses(blk, stateCommitActive));
-
-            // Watchdog-timeout safety. If the watchdog rejects below, we stop
-            // awaiting blockProcessing but the promise stays pending and may settle
-            // later (typically the epoch fence rejecting a zombie write, or the block
-            // finally finishing). Attach a swallow handler so that late settlement can
-            // never surface as an unhandledRejection that crashes the process. The
-            // epoch fence, not this handler, is what prevents the zombie's writes from
-            // landing; this only keeps the abandoned promise's rejection quiet.
-            blockProcessing.catch((e) => {
-                getLogger().warn('Abandoned block-processing promise for block ' + blockToParse +
-                    ' settled after watchdog: ' + (e && e.message ? e.message : e));
-            });
-
-            let blockTimeout = this.blockWatchdogTimeout(blockToParse);
-            let [ledger, actions, contracts] = await this.util.withTimeout(blockProcessing, blockTimeout, 'block ' + blockToParse);
+            let [ledger, actions, contracts] = await this.runBlockUnderWatchdog(blk, stateCommitActive);
 
             // Commit the block data to the database. False means no block transaction was
             // open to commit, so the block is abandoned rather than reported as committed.
