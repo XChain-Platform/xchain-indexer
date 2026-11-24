@@ -30,6 +30,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert        = require('assert');
 const sinon         = require('sinon');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
+const { getLogger } = require('../../../src/observability/index.js');
 
 const BLOCK_TIME = 2000000000;
 
@@ -42,6 +43,7 @@ function makeIndexer(lastIndexed, firstDecoderBlock, times){
     // key it reads rather than depending on constructor internals.
     indexer.config    = {};
     indexer.indexerDb = {
+        apiView(){ return this; },
         getBlockIndex:   sinon.stub().resolves(lastIndexed),
         getRawBlockTime: sinon.stub().callsFake(async (b) => (b in times) ? times[b] : false)
     };
@@ -102,5 +104,28 @@ describe('XChainIndexer._priceMirrorHorizon @regression @tier2', function () {
         indexer.indexerDb.getRawBlockTime = sinon.stub().rejects(new Error('lock wait timeout'));
 
         assert.strictEqual(await indexer.priceMirrorHorizon(), null);
+    });
+});
+
+describe('XChainIndexer._priceMirrorHorizon under a stale tx epoch @regression @tier2', function () {
+
+    afterEach(function () { sinon.restore(); });
+
+    it('reads committed state through apiView so an M-16 fence on the raw handle cannot trip it', async function () {
+        // A rollback re-bootstraps the mirror from inside the torn-down block's async
+        // context; the raw handle then throws the fence. The pooled view is not fenced.
+        let indexer = makeIndexer(500, null, { 500: BLOCK_TIME });
+        indexer.config['FIAT_DISPENSER_PRICE_WINDOW'] = 3600;
+        const fence = () => Promise.reject(new Error(
+            'transaction fenced (M-16): write from epoch 1 after teardown (current epoch 2); zombie write rejected'));
+        const view = {
+            getBlockIndex:   sinon.stub().resolves(500),
+            getRawBlockTime: sinon.stub().resolves(BLOCK_TIME)
+        };
+        indexer.indexerDb = { getBlockIndex: fence, getRawBlockTime: fence, apiView: () => view };
+        const warn = sinon.stub(getLogger(), 'warn');
+        assert.strictEqual(await indexer.priceMirrorHorizon(), BLOCK_TIME - (2 * 3600) - 86400);
+        assert.ok(view.getBlockIndex.calledOnce && view.getRawBlockTime.calledOnce);
+        assert.ok(warn.notCalled);
     });
 });

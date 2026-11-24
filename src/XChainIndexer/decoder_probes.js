@@ -143,12 +143,17 @@ module.exports = {
         // would be indistinguishable from a horizon that could not be established.
         const absent = (v) => (v === null || v === undefined);
         try {
-            let lastIndexed = await this.indexerDb.getBlockIndex('indexer', 'last');
+            // Read through the committed pool view, never the raw handle: the raw handle fences
+            // a read made from a torn-down block context (a rollback re-bootstraps the mirror
+            // from inside it), which threw here and made every reorg re-mirror in full. A
+            // retention bound wants committed state anyway.
+            const indexerView = this.indexerDb.apiView();
+            let lastIndexed = await indexerView.getBlockIndex('indexer', 'last');
             // Anchor on a block that EXISTS. Resuming, that is the last block parsed rather
             // than the next one: the next block is often not decoded yet (a caught-up node
             // restarting), and one block earlier is the conservative direction anyway. Its
             // time is read from this node's own blocks table, which is guaranteed to hold it.
-            let anchorDb    = absent(lastIndexed) ? this.decoderDb : this.indexerDb;
+            let anchorDb    = absent(lastIndexed) ? this.decoderDb : indexerView;
             let anchorBlock = absent(lastIndexed)
                                  ? await this.decoderDb.getBlockIndex('decoder', 'first')
                                  : Number(lastIndexed);
