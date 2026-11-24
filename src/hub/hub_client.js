@@ -36,6 +36,25 @@ const TERMINAL_HUB_REJECTIONS = [
     /^chain must be one of\b/i             // api.js validateChain
 ];
 
+// Per-method terminal replies for the reorg retractions. A hub without peers never builds its
+// cross-chain call, dex or bridge engine, so it holds no relay, match or transfer rows and a
+// retraction aimed at that engine has nothing to undo. Left retryable, the reply keeps the
+// uncapped *_retraction rows pending forever and every reorg that orphans an action adds three.
+// Keyed on the method so only the reply from the engine a retraction targets drops it; a forward
+// push answered the same way keeps its row, since it may be needed once the engine is up.
+const TERMINAL_REORG_REJECTIONS = {
+    pushxcallreorg:  /^cross-chain call engine not active$/i,
+    pushdexreorg:    /^cross-chain dex engine not active$/i,
+    pushbridgereorg: /^cross-chain bridge engine not active$/i
+};
+
+function isTerminalInResultRejection(method, reason){
+    if(TERMINAL_HUB_REJECTIONS.some(rx => rx.test(reason))) return true;
+    let reorgRx = Object.prototype.hasOwnProperty.call(TERMINAL_REORG_REJECTIONS, method)
+        ? TERMINAL_REORG_REJECTIONS[method] : null;
+    return reorgRx !== null && reorgRx.test(reason);
+}
+
 // Thrown JSON-RPC codes a replay can never clear: only -32602 (Invalid params) judges the payload.
 // -32603, the -32029 throttle and transport errors describe hub state and stay retryable; durable
 // push types have no attempt cap, so a terminal code left retryable would replay forever.
@@ -277,7 +296,7 @@ class HubClient {
         }
         let reason = hubRejectionReason(result);
         if(reason === null) return result;
-        if(TERMINAL_HUB_REJECTIONS.some(rx => rx.test(reason))){
+        if(isTerminalInResultRejection(method, reason)){
             // Terminal: a replay carries the same payload into the same verdict, so keep
             // today's drop. Never silently, though: a rail stopped by the ingest fence is a
             // standing condition an operator has to clear, and this is the log line that says so.
