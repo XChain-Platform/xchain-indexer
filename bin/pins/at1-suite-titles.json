@@ -2790,6 +2790,15 @@
       "JSON-RPC detached token policy reads keeps a detached allow list absent while reading the attached block list",
       "JSON-RPC detached token policy reads returns an existing empty allow list as an empty array"
     ],
+    "264f17f979deff7c": [
+      "XChainIndexer._priceMirrorHorizon @regression @tier2 anchors on the decoder first block when nothing is indexed yet",
+      "XChainIndexer._priceMirrorHorizon @regression @tier2 answers null rather than throwing when a read faults",
+      "XChainIndexer._priceMirrorHorizon @regression @tier2 answers null when no chain has any blocks yet",
+      "XChainIndexer._priceMirrorHorizon @regression @tier2 answers null when the anchor block has no readable time",
+      "XChainIndexer._priceMirrorHorizon @regression @tier2 defaults the window to a day when the config does not set one",
+      "XChainIndexer._priceMirrorHorizon @regression @tier2 sets the horizon back from the tip by both read windows and a day of slop",
+      "XChainIndexer._priceMirrorHorizon under a stale tx epoch @regression @tier2 reads committed state through apiView so an M-16 fence on the raw handle cannot trip it"
+    ],
     "26506740301590af": [
       "barrier stallClearsAt grace-field mapping @regression each barrier keys stallClearsAt on its own grace field",
       "barrier stallClearsAt grace-field mapping @regression every curated barrier registers its release call inside _advanceWatermark",
@@ -4850,14 +4859,6 @@
       "Database.runMigrations() unregistered rename guard @regression @tier1 leaves a renamed applied file unapplied on passive startup and logs the missing entry",
       "Database.runMigrations() unregistered rename guard @regression @tier1 lists ledger names with no file, sorted",
       "Database.runMigrations() unregistered rename guard @regression @tier1 refuses the renamed file on the operator path, naming the registry entry to add"
-    ],
-    "3edaebe4951561d7": [
-      "XChainIndexer._priceMirrorHorizon @regression @tier2 anchors on the decoder first block when nothing is indexed yet",
-      "XChainIndexer._priceMirrorHorizon @regression @tier2 answers null rather than throwing when a read faults",
-      "XChainIndexer._priceMirrorHorizon @regression @tier2 answers null when no chain has any blocks yet",
-      "XChainIndexer._priceMirrorHorizon @regression @tier2 answers null when the anchor block has no readable time",
-      "XChainIndexer._priceMirrorHorizon @regression @tier2 defaults the window to a day when the config does not set one",
-      "XChainIndexer._priceMirrorHorizon @regression @tier2 sets the horizon back from the tip by both read windows and a day of slop"
     ],
     "3eebd9d73e50d1ab": [
       "LIST_SHARE engine tag is exposed through the equivocation header consensus module",
@@ -21456,7 +21457,7 @@
   "scripts": {
     "test": {
       "fileCount": 1712,
-      "titleCount": 16605,
+      "titleCount": 16606,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -23169,7 +23170,7 @@
         "test/unit/xchain_indexer/stall_health_smoke_parity.test.js": "850d161466315079",
         "test/unit/xchain_indexer/stall_reason_current.test.js": "f141d29da9590843",
         "test/unit/xchain_indexer/stall_reason_retry_block.test.js": "2d87aa9a1fdd4953",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "264f17f979deff7c"
       }
     },
     "test:boundary": {
@@ -23557,7 +23558,7 @@
     },
     "test:regression": {
       "fileCount": 1312,
-      "titleCount": 13134,
+      "titleCount": 13135,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24870,7 +24871,7 @@
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/price_time_clear_floor.test.js": "42bbb8c866663d20",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "264f17f979deff7c"
       }
     },
     "test:regression:fast": {
@@ -25591,7 +25592,7 @@
     },
     "test:regression:full": {
       "fileCount": 1312,
-      "titleCount": 13134,
+      "titleCount": 13135,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -26904,7 +26905,7 @@
         "test/unit/xchain_indexer/stall_health.test/price_landing_future_block.test.js": "0c0ddeb9060e7192",
         "test/unit/xchain_indexer/stall_health.test/price_time_clear_floor.test.js": "42bbb8c866663d20",
         "test/unit/xchain_indexer/stall_health.test/train_activation_halt.test.js": "efb099e2e746f08d",
-        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "3edaebe4951561d7"
+        "test/unit/xchain_indexer/x_chain_indexer_price_mirror_horizon.test.js": "264f17f979deff7c"
       }
     },
     "test:security": {
