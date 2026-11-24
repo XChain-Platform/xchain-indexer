@@ -9318,6 +9318,16 @@
       "flag-day placeholder guard @regression @tier1 sibling copies carry no placeholder regression xchain-documentation/protocol/constants.js pins PRICE_SIG_TALLY_ACTIVATION by named export, value-equal to the local copy",
       "flag-day placeholder guard @regression @tier1 sibling copies carry no placeholder regression xchain-hub/src/validators/governance.js declares GOV_SNAPSHOT_ACTIVATION at the cohort height"
     ],
+    "6ba155881978b478": [
+      "HubClient: a reorg retraction to a hub without that engine is terminal does not drop a forward push on an engine-not-active reply",
+      "HubClient: a reorg retraction to a hub without that engine is terminal does not drop a retraction on another engine's reply",
+      "HubClient: a reorg retraction to a hub without that engine is terminal retractBridgeRange resolves when the hub answers \"cross-chain bridge engine not active\"",
+      "HubClient: a reorg retraction to a hub without that engine is terminal retractMatchRange resolves when the hub answers \"cross-chain dex engine not active\"",
+      "HubClient: a reorg retraction to a hub without that engine is terminal retractXcallRange resolves when the hub answers \"cross-chain call engine not active\"",
+      "HubClient: a reorg retraction to a hub without that engine is terminal still throws on an unknown engine reason such as \"engine busy\"",
+      "HubPushQueue: engine-not-active retractions leave the queue instead of growing it drops all three staged retractions in one drain and never re-sends them",
+      "HubPushQueue: engine-not-active retractions leave the queue instead of growing it keeps the rows on an unknown engine reason, so terminal matching stays narrow"
+    ],
     "6ba9ff528d557453": [
       "Callback @regression @tier3 falls back to a generic message when native fee fails without error text",
       "Callback @regression @tier3 native-coin fee payment accepts a valid native-coin fee (PAYMENT_MODE native)",
@@ -20667,6 +20677,11 @@
       "mirror admission schema: the manifest shape (pure) lists every manifest table for the compat gate, so an unlisted table cannot fail it by omission",
       "mirror admission schema: the manifest shape (pure) names exactly the seven admission-bearing mirror tables, in one fixed order"
     ],
+    "f776c4ebdf58bd9f": [
+      "abandoned block-processing promise log @regression @tier1 does not claim the watchdog when a pass rejects inside the budget",
+      "abandoned block-processing promise log @regression @tier1 logs nothing for a block that commits",
+      "abandoned block-processing promise log @regression @tier1 logs the late settlement when the watchdog fired first"
+    ],
     "f788420989313a03": [
       "Price v2 (PRICE batch) @regression @tier3 decompression (step 1) NEVER falls back to reading an undecodable compressed field as an uncompressed body",
       "Price v2 (PRICE batch) @regression @tier3 decompression (step 1) a compression failure stores nothing batch-shaped and pushes nothing",
@@ -21440,8 +21455,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1710,
-      "titleCount": 16594,
+      "fileCount": 1712,
+      "titleCount": 16605,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -22621,6 +22636,7 @@
         "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js": "cbe019ced7ee08e9",
         "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js": "e8f38215ae3e6079",
         "test/unit/hub/client/hub_client_acknowledgement.test.js": "8eb474bd4eebf4ad",
+        "test/unit/hub/client/hub_client_engine_not_active.test.js": "6ba155881978b478",
         "test/unit/hub/client/hub_client_response_settle.test.js": "e79ac0050019ab3e",
         "test/unit/hub/client/hub_client_terminal_rpc_error.test.js": "60e8dc05507d400b",
         "test/unit/hub/client/hub_rate_limit.test.js": "443daccf4ca4d682",
@@ -23124,6 +23140,7 @@
         "test/unit/xcall-constants-cross-repo.test.js": "049843dad5d3e7f1",
         "test/unit/xchain_indexer/abandon_block_rollback_failure.test.js": "e6d68acf0746746c",
         "test/unit/xchain_indexer/apply_pending_reorgs.test.js": "1c8358d37961f103",
+        "test/unit/xchain_indexer/block_abandoned_promise_log.test.js": "f776c4ebdf58bd9f",
         "test/unit/xchain_indexer/block_loop_db_outage.test.js": "672fb570f601c9ad",
         "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
@@ -23539,8 +23556,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 1311,
-      "titleCount": 13131,
+      "fileCount": 1312,
+      "titleCount": 13134,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24836,6 +24853,7 @@
         "test/unit/utility/utility.test/format_and_ledger.test.js": "8c20f0a6066f53f4",
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
         "test/unit/utility/utility_log_amount.test.js": "3863f168f47cce2b",
+        "test/unit/xchain_indexer/block_abandoned_promise_log.test.js": "f776c4ebdf58bd9f",
         "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4",
         "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
@@ -24856,8 +24874,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 709,
-      "titleCount": 7353,
+      "fileCount": 710,
+      "titleCount": 7356,
       "files": {
         "test/regression/api/keyed_rate_limit.test.js": "8d50dfc49476e446",
         "test/regression/attest_price_refused_rows.test.js": "a192e40202bd4a39",
@@ -25555,6 +25573,7 @@
         "test/unit/utility/utility.test/fees_and_transforms.test.js": "b0c6c69916c83dff",
         "test/unit/utility/utility.test/format_and_ledger.test.js": "8c20f0a6066f53f4",
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
+        "test/unit/xchain_indexer/block_abandoned_promise_log.test.js": "f776c4ebdf58bd9f",
         "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4",
         "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
@@ -25571,8 +25590,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 1311,
-      "titleCount": 13131,
+      "fileCount": 1312,
+      "titleCount": 13134,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -26868,6 +26887,7 @@
         "test/unit/utility/utility.test/format_and_ledger.test.js": "8c20f0a6066f53f4",
         "test/unit/utility/utility.test/validation.test.js": "f16d88684a803df3",
         "test/unit/utility/utility_log_amount.test.js": "3863f168f47cce2b",
+        "test/unit/xchain_indexer/block_abandoned_promise_log.test.js": "f776c4ebdf58bd9f",
         "test/unit/xchain_indexer/block_loop_db_outage.test.js": "46a0fd81a76c7ce4",
         "test/unit/xchain_indexer/block_parse.test/block_time_sentinel_guard.test.js": "365999ba7f66f31d",
         "test/unit/xchain_indexer/block_watchdog.test.js": "b2d8bfb13750e3b1",
