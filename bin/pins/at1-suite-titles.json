@@ -1639,6 +1639,24 @@
       "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 SEND: a well-formed in-cap leg is allowed",
       "runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1 SEND: an over-cap total denies with controller (payout exceeds cap)"
     ],
+    "17916a2d65fdf000": [
+      "migrate CLI --file targeting @regression --file scopes the run to the named migration (passes opts.only)",
+      "migrate CLI --file targeting @regression --file with no value exits 2 before building a DB handle",
+      "migrate CLI --file targeting @regression --file=NAME and repeated flags accumulate (comma-separated too)",
+      "migrate CLI --file targeting @regression a default run (no --file) still applies everything with includeManual only",
+      "migrate CLI --file targeting @regression creates boot-time tables before migrations alter them",
+      "migrate CLI --help as a child process @regression --help exits 0 with no DB environment loaded",
+      "migrate CLI --help as a child process @regression --help prints both modes and no apply banner",
+      "migrate CLI --help as a child process @regression an unknown token exits 2 without reaching the DB environment check",
+      "migrate CLI argv refusal @regression --help and -h apply nothing and exit 0",
+      "migrate CLI argv refusal @regression a bare positional applies nothing and exits 2 (it is not a --file value)",
+      "migrate CLI argv refusal @regression an empty --file= value applies nothing rather than widening to everything",
+      "migrate CLI argv refusal @regression an unknown flag applies nothing and exits 2",
+      "migrate CLI argv refusal @regression the refusal prints both modes so an operator can tell them apart",
+      "migrate CLI safety guard does not print the \"applying pending migrations\" banner when it bails out",
+      "migrate CLI safety guard exits with code 2 when the INDEXER_DB_* environment is not loaded",
+      "migrate CLI safety guard names the required environment variables in the failure message"
+    ],
     "17a1943d8dba4aa1": [
       "the price barrier is scoped to consensus, not to \"a context exists\" 1. fires inside a BLOCK-LOOP context when the block skipped the barrier",
       "the price barrier is scoped to consensus, not to \"a context exists\" 2. does NOT fire inside a DRY-RUN context, and writes no block-loop state",
@@ -8161,6 +8179,21 @@
       "retroactive-go rewitness arguments @regression @tier1 accepts --rewitness with the open marker target",
       "retroactive-go rewitness arguments @regression @tier1 accepts bare --rewitness for the open marker target",
       "retroactive-go rewitness arguments @regression @tier1 refuses --rewitness with a target that does not match the open marker"
+    ],
+    "6368c79c3a6d3a2f": [
+      "migrate CLI --file targeting @regression --file scopes the run to the named migration (passes opts.only)",
+      "migrate CLI --file targeting @regression --file with no value exits 2 before building a DB handle",
+      "migrate CLI --file targeting @regression --file=NAME and repeated flags accumulate (comma-separated too)",
+      "migrate CLI --file targeting @regression a default run (no --file) still applies everything with includeManual only",
+      "migrate CLI --file targeting @regression creates boot-time tables before migrations alter them",
+      "migrate CLI --help as a child process @regression --help exits 0 with no DB environment loaded",
+      "migrate CLI --help as a child process @regression --help prints both modes and no apply banner",
+      "migrate CLI --help as a child process @regression an unknown token exits 2 without reaching the DB environment check",
+      "migrate CLI argv refusal @regression --help and -h apply nothing and exit 0",
+      "migrate CLI argv refusal @regression a bare positional applies nothing and exits 2 (it is not a --file value)",
+      "migrate CLI argv refusal @regression an empty --file= value applies nothing rather than widening to everything",
+      "migrate CLI argv refusal @regression an unknown flag applies nothing and exits 2",
+      "migrate CLI argv refusal @regression the refusal prints both modes so an operator can tell them apart"
     ],
     "637483fa712f7853": [
       "FIAT admission below the settlement price gate @regression @tier2 follows an arm of the configured coin slot alone",
@@ -16061,23 +16094,6 @@
       "ANCHOR checkpoint sequence binding gate @regression @tier1 exposes the canonical-safe binding reason beside the activation",
       "ANCHOR checkpoint sequence binding gate @regression @tier1 ships unarmed on mainnet, armed on testnet at its v0.25.0 heights, and inert on regtest"
     ],
-    "c26b3a8dec758d2c": [
-      "migrate CLI --file targeting @regression --file scopes the run to the named migration (passes opts.only)",
-      "migrate CLI --file targeting @regression --file with no value exits 2 before building a DB handle",
-      "migrate CLI --file targeting @regression --file=NAME and repeated flags accumulate (comma-separated too)",
-      "migrate CLI --file targeting @regression a default run (no --file) still applies everything with includeManual only",
-      "migrate CLI --help as a child process @regression --help exits 0 with no DB environment loaded",
-      "migrate CLI --help as a child process @regression --help prints both modes and no apply banner",
-      "migrate CLI --help as a child process @regression an unknown token exits 2 without reaching the DB environment check",
-      "migrate CLI argv refusal @regression --help and -h apply nothing and exit 0",
-      "migrate CLI argv refusal @regression a bare positional applies nothing and exits 2 (it is not a --file value)",
-      "migrate CLI argv refusal @regression an empty --file= value applies nothing rather than widening to everything",
-      "migrate CLI argv refusal @regression an unknown flag applies nothing and exits 2",
-      "migrate CLI argv refusal @regression the refusal prints both modes so an operator can tell them apart",
-      "migrate CLI safety guard does not print the \"applying pending migrations\" banner when it bails out",
-      "migrate CLI safety guard exits with code 2 when the INDEXER_DB_* environment is not loaded",
-      "migrate CLI safety guard names the required environment variables in the failure message"
-    ],
     "c2b02f4fb3266ef1": [
       "Database._destructiveAutoStatement() @regression @tier1 a destructive keyword inside a comment does not trigger",
       "Database._destructiveAutoStatement() @regression @tier1 a destructive statement hiding behind a safe one is still flagged",
@@ -19389,20 +19405,6 @@
       "VOTE settlement exact activation: split tally @regression @tier1 unarmed (mainnet committed row) keeps the half-up portions of a 1:1:4 split of 100, which sum above the weight",
       "VOTE settlement exact activation: split tally @regression @tier1 unarmed (testnet committed row) keeps the half-up portions of a 1:1:4 split of 100, which sum above the weight"
     ],
-    "ec0896fe79ded60b": [
-      "migrate CLI --file targeting @regression --file scopes the run to the named migration (passes opts.only)",
-      "migrate CLI --file targeting @regression --file with no value exits 2 before building a DB handle",
-      "migrate CLI --file targeting @regression --file=NAME and repeated flags accumulate (comma-separated too)",
-      "migrate CLI --file targeting @regression a default run (no --file) still applies everything with includeManual only",
-      "migrate CLI --help as a child process @regression --help exits 0 with no DB environment loaded",
-      "migrate CLI --help as a child process @regression --help prints both modes and no apply banner",
-      "migrate CLI --help as a child process @regression an unknown token exits 2 without reaching the DB environment check",
-      "migrate CLI argv refusal @regression --help and -h apply nothing and exit 0",
-      "migrate CLI argv refusal @regression a bare positional applies nothing and exits 2 (it is not a --file value)",
-      "migrate CLI argv refusal @regression an empty --file= value applies nothing rather than widening to everything",
-      "migrate CLI argv refusal @regression an unknown flag applies nothing and exits 2",
-      "migrate CLI argv refusal @regression the refusal prints both modes so an operator can tell them apart"
-    ],
     "ec54ef7f5a98eeeb": [
       "HubDbSync BTC anchor reward copies fail closed @regression @tier1 does not cache a transient table-probe failure as a missing table",
       "HubDbSync BTC anchor reward copies fail closed @regression @tier1 keeps the bootstrap cursor before a row whose copy write fails",
@@ -21474,7 +21476,7 @@
   "scripts": {
     "test": {
       "fileCount": 1714,
-      "titleCount": 16617,
+      "titleCount": 16618,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -22821,7 +22823,7 @@
         "test/unit/migration/db_reconcile_fulltext_index.test.js": "918fa176a8537ff6",
         "test/unit/migration/key_witness/assert_unique_key_witness.test.js": "bc0fdae14389c0fc",
         "test/unit/migration/key_witness/committed_auto_files.test.js": "47b5ee89067e58ec",
-        "test/unit/migration/migrate.test.js": "c26b3a8dec758d2c",
+        "test/unit/migration/migrate.test.js": "17916a2d65fdf000",
         "test/unit/migration/migrate_status.test.js": "30f2df93b628c0e0",
         "test/unit/migration/migrate_status_backdating.test/output.test.js": "79051bb3913d2ce0",
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
@@ -23577,7 +23579,7 @@
     },
     "test:regression": {
       "fileCount": 1312,
-      "titleCount": 13141,
+      "titleCount": 13142,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -24598,7 +24600,7 @@
         "test/unit/migration/db_reconcile_fulltext_index.test.js": "918fa176a8537ff6",
         "test/unit/migration/key_witness/assert_unique_key_witness.test.js": "bc0fdae14389c0fc",
         "test/unit/migration/key_witness/committed_auto_files.test.js": "47b5ee89067e58ec",
-        "test/unit/migration/migrate.test.js": "ec0896fe79ded60b",
+        "test/unit/migration/migrate.test.js": "6368c79c3a6d3a2f",
         "test/unit/migration/migrate_status.test.js": "30f2df93b628c0e0",
         "test/unit/migration/migrate_status_backdating.test/output.test.js": "79051bb3913d2ce0",
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
@@ -25611,7 +25613,7 @@
     },
     "test:regression:full": {
       "fileCount": 1312,
-      "titleCount": 13141,
+      "titleCount": 13142,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -26632,7 +26634,7 @@
         "test/unit/migration/db_reconcile_fulltext_index.test.js": "918fa176a8537ff6",
         "test/unit/migration/key_witness/assert_unique_key_witness.test.js": "bc0fdae14389c0fc",
         "test/unit/migration/key_witness/committed_auto_files.test.js": "47b5ee89067e58ec",
-        "test/unit/migration/migrate.test.js": "ec0896fe79ded60b",
+        "test/unit/migration/migrate.test.js": "6368c79c3a6d3a2f",
         "test/unit/migration/migrate_status.test.js": "30f2df93b628c0e0",
         "test/unit/migration/migrate_status_backdating.test/output.test.js": "79051bb3913d2ce0",
         "test/unit/migration/migration_auto_index_key_length.test.js": "62321e67976f95c9",
