@@ -6663,6 +6663,10 @@
       "hub_db_sync retraction fence columns declares both per-leg fence columns on cross_chain_matches",
       "hub_db_sync retraction fence columns declares push_generation on every RETRACTION_COLUMNS table and on cross_chain_calls"
     ],
+    "5220e7cbdd8ea301": [
+      "vendored multipart FILE vectors carries a non-empty vector set",
+      "vendored multipart FILE vectors is byte-identical to the documentation authority when available"
+    ],
     "5271f40e9ec920ee": [
       "PRICE v0 canonical: the admission field on the indexer verifier against the hub producer and its ingest verifier all three twins emit the identical canonical for a legacy round",
       "PRICE v0 canonical: the admission field on the indexer verifier against the hub producer and its ingest verifier all three twins emit the identical canonical for an admission-era round",
@@ -21469,8 +21473,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1713,
-      "titleCount": 16615,
+      "fileCount": 1714,
+      "titleCount": 16617,
       "files": {
         "test/regression/api/body_parse_after_limiter.test.js": "a3333fb64c0bae72",
         "test/regression/api/json_body_limit_matches_preflight_ceiling.test.js": "92271c169965fc3a",
@@ -21778,6 +21782,7 @@
         "test/unit/actions/market/swap_match.test.js": "d9e56256815af359",
         "test/unit/actions/market/swap_match.test/list_trigger.test.js": "c81302ed424ed439",
         "test/unit/actions/market/swap_match.test/payout_policy.test.js": "fc068e67f68f4891",
+        "test/unit/actions/multipart_file_vectors_vendor.test.js": "5220e7cbdd8ea301",
         "test/unit/actions/multipart_memory_db.test.js": "f9e50939fc062462",
         "test/unit/actions/multipart_piece_sequences.test.js": "7ab11904a7bdf754",
         "test/unit/actions/nodeproof.test.js": "9cb414273879c7d9",
