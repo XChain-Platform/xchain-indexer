@@ -166,7 +166,7 @@ const ASSERTIONS = [
         'CREATE TABLE index_addresses (address VARCHAR(120) NOT NULL PRIMARY KEY)' + UTF8,
         'CREATE TABLE index_pubkeys (pubkey CHAR(64) NOT NULL PRIMARY KEY)' + UTF8),
     assertion('ordering tables absent', 'assertStakeWeightOrderingCollation'),
-].concat(require('./migration_live_schema_guard.test/helpers/utf8mb4_cases.js').assertions);
+].concat(require('./migration_live_schema_guard.test/helpers/utf8mb4_cases.js').assertions, require('./migration_live_schema_guard.test/helpers/outbox_cases.js').assertions);
 const SETTLED = BRIDGE_TABLES.concat(LIST_TABLES).map(simpleTable);
 const NARROW_TICK = 'CREATE TABLE oracle_prices (id INT NOT NULL PRIMARY KEY, tick VARCHAR(100) NOT NULL)';
 const AUTO_COLUMN = 'CREATE TABLE guard_probe (value BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY)';

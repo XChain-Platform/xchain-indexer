@@ -12,7 +12,7 @@
 --
 --********************************************************************
 
--- xchain:migration mode=manual
+-- xchain:migration mode=manual deploy-precondition=required
 --
 -- Migration: pending_hub_pushes.payload TEXT utf8mb3 -> MEDIUMTEXT utf8mb4
 --

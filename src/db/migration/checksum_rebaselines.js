@@ -225,6 +225,12 @@ const MIGRATION_CHECKSUM_REBASELINES = {
         from: '069f0e73f1cb6179d0dcab361832204c96aa1cb4072454ddcd7e6a8acd2d31ab', // a0dd6d08, pre-tag
         to:   '37ff284b7f11f248e9f52979f70e5fe8f13c9cad7a7e719b4633866e8c81dc1a',
     },
+    // Deploy-precondition header token only. The ALTER TABLE residue is byte-identical
+    // to a11e0d7b, the file's only committed revision.
+    '2026-11-19-pending-hub-pushes-widen-payload.sql': {
+        from: 'a3fbee1967cf769450c5fffff4188f18fac7287583a96efb505ad4564203b75f', // a11e0d7b, pre-tag
+        to:   'e9aa269d9c32b3d7e78b2b507ad247f8e6881aae5da4481763b3e5354834b026',
+    },
     // Scoped the bridge-table provenance claim to the column definitions as copied on
     // 2026-09-12. Comment lines only; the four CREATE TABLE statements are byte-identical.
     // The three predecessor hashes cover every committed spelling of the moved test paths.

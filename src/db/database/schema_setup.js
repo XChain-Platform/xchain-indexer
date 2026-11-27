@@ -334,6 +334,7 @@ module.exports = {
         await Database.prototype.assertBridgeTablesPresent.call(this);
         // The shared-list tables are a registered deploy precondition too, so the same rule.
         await Database.prototype.assertListShareTablesPresent.call(this);
+        await Database.prototype.assertPendingHubPushPayloadIsWide.call(this);
         return result;
     },
 

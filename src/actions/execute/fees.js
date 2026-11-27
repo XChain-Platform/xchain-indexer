@@ -24,10 +24,7 @@
 
 'use strict';
 
-const gateRegistry = require('../../consensus/gate_registry');
-
-const EXECUTE_NATIVE_METERED_GAS_KEY =
-    'execute_native_metered_gas_activation.EXECUTE_NATIVE_METERED_GAS_ACTIVATION';
+const { executeNativeMeteredGasActive } = require('./native_metered_gas.js');
 
 /*****************************************************************
  * Gas Fee Calculation
@@ -85,8 +82,7 @@ async function chargeGasFee(ctx, limits){
     if(!ctx.error && !ctx.skipFee && ctx.tokenInfo && this.util.bcgt(ctx.fee, 0)){
         let pmMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
         if(pmMode === 'native'){
-            let meteredNativeGas = gateRegistry.activeAt(EXECUTE_NATIVE_METERED_GAS_KEY,
-                this.config['NETWORK'], this.config['COIN'], Number(data['BLOCK_INDEX']), null);
+            let meteredNativeGas = executeNativeMeteredGasActive(this, data['BLOCK_INDEX']);
             await payFeeFromNativeCoin.call(this, ctx, limits, meteredNativeGas);
         } else if(pmMode === 'rejected'){
             ctx.error = 'invalid: insufficient fee (native coin output required)';

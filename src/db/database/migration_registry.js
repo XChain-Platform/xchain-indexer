@@ -173,6 +173,11 @@ const STARTUP_ASSERTED_MIGRATIONS = [
         file:      '2026-09-30-list-share-tables.sql',
         assertion: 'assertListShareTablesPresent',
         symptom:   'Fatal indexer error: the shared-list tables list_snapshots and list_share_mirrors are absent'
+    },
+    {
+        file:      '2026-11-19-pending-hub-pushes-widen-payload.sql',
+        assertion: 'assertPendingHubPushPayloadIsWide',
+        symptom:   'Fatal indexer error: pending_hub_pushes.payload is'
     }
 ];
 

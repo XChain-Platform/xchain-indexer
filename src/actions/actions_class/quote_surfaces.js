@@ -26,22 +26,15 @@
 const dryRunSupport = require('./dry_run_support.js');
 const quoteAnswers  = require('./quote_answers.js');
 const { isUsableFeeDestination, usableFeeDestination } = require('../../config/fee_destination.js');
-const gateRegistry = require('../../consensus/gate_registry');
+const { executeNativeMeteredGasActive } = require('../execute/native_metered_gas.js');
 const { syntheticDryRunTx, sourceFeeBalanceOrNull, quietAbandonedRun, readDryRunVerdict, dryRunOutcome } = dryRunSupport;
 const { launchGateAdmits, rollbackPreservingError, NOT_ADMITTED_BEFORE_LAUNCH } = dryRunSupport;
 const { normalizeQuoteRequest, batchRequestWire, feeQuoteBase, exemptFeeQuote, feeQuoteLockBusy, feeQuoteNoVerdict, isIncompleteDryRun, dryRunVerdictQuote } = quoteAnswers;
 const { malformedActionAnswer } = quoteAnswers;
 const { resolvePreflightFeeMode, preflightGateAnswer, preflightLockBusy, preflightNoVerdict, preflightResult } = quoteAnswers;
 
-const EXECUTE_NATIVE_METERED_GAS_KEY =
-    'execute_native_metered_gas_activation.EXECUTE_NATIVE_METERED_GAS_ACTIVATION';
 const EXECUTE_QUOTE_GAS_SAFETY_MARGIN_PERCENT = 20;
 const EXECUTE_GAS_CEILING = 1000000;
-
-function executeNativeMeteredGasActive(actions, blockIndex){
-    return gateRegistry.activeAt(EXECUTE_NATIVE_METERED_GAS_KEY,
-        actions.config['NETWORK'], actions.config['COIN'], Number(blockIndex), null);
-}
 
 function executeQuoteGas(actions, xchainFee){
     let baseGas = Number(actions.util.vmGasCost(actions.config['GAS_SCHEDULE'] || {}, 'EXECUTE', 0));
@@ -299,9 +292,11 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     // Native-coin fees are off unless a real FEE_DESTINATION is configured.
     if(!isUsableFeeDestination(feeDestination))
         return Object.assign(base, { supported: false, valid: false, error: 'native coin fee not enabled (no FEE_DESTINATION configured)' });
-    let tipBlockIndex = action === 'EXECUTE' ? await this.indexerDb.getLatestBlockIndex() : null;
-    let meteredExecuteQuote = action === 'EXECUTE' && executeNativeMeteredGasActive(this, tipBlockIndex);
     let batchNativeQuote = action === 'BATCH' && this.nativeFeeMandatory();
+    let tipBlockIndex = (action === 'EXECUTE' || batchNativeQuote)
+        ? await this.indexerDb.getLatestBlockIndex() : null;
+    let meteredExecuteQuote = action === 'EXECUTE' && executeNativeMeteredGasActive(this, tipBlockIndex);
+    let batchExecuteAllowed = batchNativeQuote && executeNativeMeteredGasActive(this, tipBlockIndex);
 
     // Single classification path (classifyFeeQuoteAction) shared with the conformance test;
     // it re-applies the same trim/uppercase/de-alias normalization (idempotent on the already
@@ -316,7 +311,7 @@ async function computeFeeQuote(policy, { action, params, source, feeOutputSats }
     if(feeClass === 'exempt')
         return exemptFeeQuote(base, action);
     if(batchNativeQuote){
-        let forbidden = this.batchProbeForbiddenSubAction(params, true);
+        let forbidden = this.batchProbeForbiddenSubAction(params, batchExecuteAllowed);
         if(forbidden)
             return Object.assign(base, { supported: false, denied: true, valid: false,
                 deniedSubAction: forbidden,

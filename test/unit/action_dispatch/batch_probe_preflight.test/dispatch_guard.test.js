@@ -16,8 +16,10 @@ const {
 } = require('./helpers/preflight.js');
 
 let indexer, actionsCtx, handler;
+let executeGateBefore;
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const WIRE = 'BATCH|0|SEND|0|TEST|10|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM;DEPLOY|0|Y29kZQ==;SEND|0|TEST|5|mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+const EXECUTE_GATE = 'XC_EXECUTE_NATIVE_METERED_GAS_REGTEST_ACTIVATION';
 
 function setupBatchHarness() {
     indexer    = createMockIndexer();
@@ -50,8 +52,15 @@ function probeData(){
 describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', function () {
 
     describe('batch.js dispatch-loop guard (the load-bearing one)', function () {
-        beforeEach(setupBatchHarness);
-        afterEach(function () { sinon.restore(); });
+        beforeEach(function () {
+            executeGateBefore = process.env[EXECUTE_GATE];
+            setupBatchHarness();
+        });
+        afterEach(function () {
+            if(executeGateBefore === undefined) delete process.env[EXECUTE_GATE];
+            else process.env[EXECUTE_GATE] = executeGateBefore;
+            sinon.restore();
+        });
 
         it('never dispatches a VM sub-command on the probe path', async function () {
             const data = probeData();
@@ -125,6 +134,7 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
         });
 
         it('runs quote EXECUTE after prior state and captures both staged fees', async function () {
+            process.env[EXECUTE_GATE] = '100';
             let deposited = false;
             actionsCtx.processAction = sinon.stub().callsFake(async (action, params, data) => {
                 if(action === 'DEPOSIT') deposited = true;
@@ -146,6 +156,26 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
                 { action: 'DEPOSIT', xchainFee: '1.00000000' },
                 { action: 'EXECUTE', xchainFee: '7.00000000' }
             ]);
+        });
+
+        it('refuses quote EXECUTE below the metered-gas gate', async function () {
+            process.env[EXECUTE_GATE] = '101';
+            actionsCtx.processAction = sinon.stub().callsFake(async (action, params, data) => {
+                data['STATUS'] = 'valid';
+            });
+            indexer.indexerDb.getFeeRecord = sinon.stub().resolves({ amount: '1.00000000' });
+            handler = new Batch(actionsCtx);
+            const data = createBaseData({ ACTION: 'BATCH', FORMAT: 0, SOURCE,
+                FEE_PROBE: true, GUARD_INERT: true, DRY_RUN: true, BATCH_FEE_QUOTE: true,
+                TX_DATA: 'BATCH|0|DEPOSIT|0|JDOG|1|7;EXECUTE|0|7|claim' });
+            await handler.parse(['0'], data, null);
+            assert.deepStrictEqual(actionsCtx.processAction.getCalls().map(c => c.args[0]), ['DEPOSIT']);
+            assert.deepStrictEqual(data['PROBE_SUB_VERDICTS'][1], {
+                position: 1,
+                action: 'EXECUTE',
+                status: null,
+                refused: 'VM action not dispatched on the public pre-flight'
+            });
         });
     });
 });

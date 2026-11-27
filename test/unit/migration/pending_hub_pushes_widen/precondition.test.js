@@ -38,7 +38,7 @@ function payloadDefinition(file) {
 describe('pending_hub_pushes payload capacity @regression @tier1', function () {
     it('fresh and migrated schemas use the same MEDIUMTEXT utf8mb4 shape', function () {
         const migration = fs.readFileSync(MIGRATION, 'utf8');
-        assert.match(migration, /^-- xchain:migration mode=manual\s*$/m);
+        assert.match(migration, /^-- xchain:migration mode=manual deploy-precondition=required\s*$/m);
         assert.strictEqual(payloadDefinition(DEFINITION), TARGET);
         assert.strictEqual(payloadDefinition(MIGRATION), TARGET);
     });

@@ -34,34 +34,34 @@ async function quoteAt(activation, dryRun, feeOutputSats){
     }
 }
 
-async function validateLegs(util, sats){
+async function validateLegs(util, sats, executeFee){
     let db = makeDb({ prices: DOGE_PRICES, blockIndex: 100 });
     let data = { BLOCK_INDEX: 100, BLOCK_TIME: 1000, TX_OUTPUTS: [
         { address: FEE_DEST, value: util.bcdiv(sats, 100000000, 8) }],
         BATCH_VALUE_LEDGER: { nativeFeeConsumed: '0' } };
     let first = await util.validateNativeCoinFee(data, { AMOUNT: '1.00000000' }, db, data.TX_OUTPUTS);
-    let second = await util.validateNativeCoinFee(data, { AMOUNT: '0.01000000' }, db, data.TX_OUTPUTS);
+    let second = await util.validateNativeCoinFee(data, { AMOUNT: executeFee || '0.01000000' }, db, data.TX_OUTPUTS);
     return { first, second };
 }
 
 describe('mandatory-native BATCH fee quote @regression @tier1', function () {
     it('quotes DOGE DEPOSIT then EXECUTE at or above the exact accepted boundary', async function () {
         let run = batchRun([{ action: 'DEPOSIT', xchainFee: '1' }, { action: 'EXECUTE', xchainFee: '9' }]);
-        let { quote, util } = await quoteAt(null, run);
+        let { quote, util } = await quoteAt(100, run);
         let floorSats = Number(util.bcformat(util.bcmul(quote.minAcceptable, 100000000, 0), 0));
-        let recommended = await validateLegs(util, quote.requiredFeeSats);
-        let exact = await validateLegs(util, floorSats);
-        let short = await validateLegs(util, floorSats - 1);
+        let recommended = await validateLegs(util, quote.requiredFeeSats, '10.00000000');
+        let exact = await validateLegs(util, floorSats, '10.00000000');
+        let short = await validateLegs(util, floorSats - 1, '10.00000000');
         assert(quote.requiredFeeSats >= floorSats, 'the recommendation never sits below the floor');
         assert.strictEqual(recommended.first.valid, true);
         assert.strictEqual(recommended.second.valid, true);
         assert.strictEqual(exact.first.valid, true);
         assert.strictEqual(exact.second.valid, true);
         assert.strictEqual(short.second.valid, false);
-        assert.strictEqual(quote.xchainFee, '1.01000000');
+        assert.strictEqual(quote.xchainFee, '11.00000000');
         let airdropRun = batchRun([{ action: 'AIRDROP', xchainFees: ['1', '1'] }],
             { subCommands: [{ action: 'AIRDROP', status: 'valid' }] });
-        let airdrop = await quoteAt(null, airdropRun);
+        let airdrop = await quoteAt(100, airdropRun);
         assert.strictEqual(airdrop.quote.xchainFee, '2.00000000');
         assert.strictEqual(airdrop.quote.minAcceptable, '19.50000000');
         assert(Number(airdrop.quote.requiredFeeNative) >= 19.5, 'the AIRDROP recommendation clears its floor');
@@ -71,7 +71,7 @@ describe('mandatory-native BATCH fee quote @regression @tier1', function () {
 describe('mandatory-native BATCH fee quote @regression @tier1', function () {
     it('uses one literal-wire run and its sequential second-leg fee', async function () {
         let run = batchRun([{ action: 'DEPOSIT', xchainFee: '1' }, { action: 'SEND', xchainFee: '7' }]);
-        let { quote, built } = await quoteAt(null, run);
+        let { quote, built } = await quoteAt(100, run);
         assert.strictEqual(built.calls.dryRuns, 1);
         assert.strictEqual(built.calls.dryRunArgs.rawData, 'BATCH|' + WIRE);
         assert.strictEqual(built.calls.dryRunArgs.batchFeeQuote, true);
@@ -82,19 +82,21 @@ describe('mandatory-native BATCH fee quote @regression @tier1', function () {
         let run = batchRun([{ action: 'DEPOSIT', xchainFee: '1' }, { action: 'EXECUTE', xchainFee: '0.5' }]);
         let below = await quoteAt(101, run);
         let active = await quoteAt(100, run);
-        assert.strictEqual(below.quote.xchainFee, '1.01000000');
+        assert.strictEqual(below.quote.denied, true);
+        assert.strictEqual(below.quote.deniedSubAction, 'EXECUTE');
+        assert.strictEqual(below.built.calls.dryRuns, 0);
         assert.strictEqual(active.quote.xchainFee, '1.60000000');
         assert.strictEqual(active.quote.gasSafetyMarginPercent, 20);
     });
 
     it('returns no-verdict for an incomplete whole-batch run', async function () {
         let run = batchRun(null, { status: null, error: 'handler threw: timed out' });
-        let { quote } = await quoteAt(null, run);
+        let { quote } = await quoteAt(100, run);
         assert.strictEqual(quote.valid, null);
         assert.strictEqual(quote.noVerdict, true);
         assert.strictEqual(quote.requiredFeeSats, undefined);
         let invalidRun = batchRun(null, { status: 'invalid: COMMAND (empty)', error: null });
-        let invalid = await quoteAt(null, invalidRun);
+        let invalid = await quoteAt(100, invalidRun);
         assert.strictEqual(invalid.quote.valid, false);
         assert.strictEqual(invalid.quote.noVerdict, undefined);
     });
@@ -108,7 +110,7 @@ describe('mandatory-native BATCH fee quote @regression @tier1', function () {
             { action: 'BATCH', params: '0|DEPLOY|0|code', source: 'src' });
         let guardedRun = batchRun([], { subCommands: [
             { action: 'SEND', status: null, refused: 'controller guard not run' }] });
-        let guarded = await quoteAt(null, guardedRun);
+        let guarded = await quoteAt(100, guardedRun);
         assert.strictEqual(xexec.supported, false);
         assert.strictEqual(forbidden.deniedSubAction, 'DEPLOY');
         assert.strictEqual(guarded.quote.deniedSubAction, 'SEND');
@@ -120,6 +122,8 @@ describe('BATCH quote dispatch exception @regression @tier1', function () {
     it('allows only EXECUTE through the quote-specific pre-scan', function () {
         let util = makeUtil('DOGE', FEE_DEST);
         let ctx = makeCtx(util, makeDb({ prices: DOGE_PRICES })).ctx;
+        assert.strictEqual(ctx.batchProbeForbiddenSubAction(['0', 'EXECUTE|0|7|m']), 'EXECUTE');
+        assert.strictEqual(ctx.batchProbeForbiddenSubAction(['0', 'EXECUTE|0|7|m'], false), 'EXECUTE');
         assert.strictEqual(ctx.batchProbeForbiddenSubAction(['0', 'EXECUTE|0|7|m'], true), null);
         assert.strictEqual(ctx.batchProbeForbiddenSubAction(['0', 'XEXEC|0|7|m'], true), 'XEXEC');
         assert.strictEqual(Actions.isBatchProbeForbiddenSubAction('EXECUTE'), true);

@@ -43,6 +43,7 @@ const mintCap    = require('./mint_cap.js');
 const fees       = require('./fees.js');
 const validate   = require('./validate.js');
 const probe      = require('./probe.js');
+const { executeNativeMeteredGasActive } = require('../execute/native_metered_gas.js');
 
 class Batch {
 
@@ -198,7 +199,8 @@ async function dispatchSubCommands(commands, data, error, normalize, collect){
         // batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
         // but only this one is impossible to spell around, because there is no further
         // transformation between the check and the call.
-        let quoteExecute = data['BATCH_FEE_QUOTE'] === true && action === 'EXECUTE';
+        let quoteExecute = data['BATCH_FEE_QUOTE'] === true && action === 'EXECUTE' &&
+            executeNativeMeteredGasActive(this, data['BLOCK_INDEX']);
         if(data['GUARD_INERT'] === true && this.actions.isBatchProbeForbiddenSubAction(action) && !quoteExecute){
             if(collect) data['PROBE_SUB_VERDICTS'].push({
                     position: batchPosition,

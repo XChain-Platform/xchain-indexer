@@ -129,6 +129,7 @@ function installOnPrototype(methods){
 installOnPrototype(require('./database/schema_setup.js'));
 installOnPrototype(require('./database/migration_runner.js'));
 installOnPrototype(require('./database/startup_assertions.js'));
+installOnPrototype(require('./database/startup_assertions_outbox.js'));
 installOnPrototype(require('./database/migration_scan.js'));
 installOnPrototype(require('./database/schema_drift.js'));
 installOnPrototype(require('./database/index_reconcile.js'));
