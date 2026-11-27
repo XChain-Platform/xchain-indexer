@@ -333,6 +333,10 @@ async function main(){
         } else {
             console.log('migrate: applying pending migrations (auto + manual) to ' + name + ' ...');
         }
+        // Match normal startup ordering so migrations can alter tables introduced by
+        // boot-time definitions after an older database image was created.
+        const tablesVerified = await db.verifyTables();
+        if(!tablesVerified) throw new Error('Database ' + name + ' tables could not be verified.');
         const res = await db.runMigrations(runOpts);
         if(res.lockSkipped){
             // A lock-skip examined nothing; do not report it as a completed run.

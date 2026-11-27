@@ -109,15 +109,29 @@ function tearDownTargetingCase() {
 
 // `done` resolves when pool.end() runs (the CLI's finally block), which is the
 // end of main() on every path.
-function makeFakeDb() {
+function makeFakeDb(options = {}) {
     let resolveDone;
     const done = new Promise((res) => { resolveDone = res; });
-    const state = { runArgs: null, poolEnded: false, done };
+    const state = { runArgs: null, poolEnded: false, bootTablesPresent: false, calls: [], done };
     class FakeDatabase {
         constructor() {
             this.pool = { end: async () => { state.poolEnded = true; resolveDone(); } };
         }
-        async runMigrations(opts) { state.runArgs = opts; return { applied: [], pending: [] }; }
+        async verifyTables() {
+            state.calls.push('verifyTables');
+            state.bootTablesPresent = true;
+            return true;
+        }
+        async runMigrations(opts) {
+            state.calls.push('runMigrations');
+            state.runArgs = opts;
+            if(options.requireBootTables && !state.bootTablesPresent){
+                const error = new Error("Table 'indexer_test.polls' doesn't exist");
+                error.code = 'ER_NO_SUCH_TABLE';
+                throw error;
+            }
+            return { applied: [], pending: [] };
+        }
     }
     state.FakeDatabase = FakeDatabase;
     return state;
@@ -195,6 +209,16 @@ describe('migrate CLI --file targeting @regression', function () {
         await fake.done;
         assert.deepStrictEqual(fake.runArgs, { includeManual: true },
             'a blanket run must NOT set opts.only');
+    });
+
+    it('creates boot-time tables before migrations alter them', async function () {
+        const fake = makeFakeDb({ requireBootTables: true });
+        loadMigrateWith(fake.FakeDatabase);
+        await fake.done;
+        assert.deepStrictEqual(fake.calls, ['verifyTables', 'runMigrations'],
+            'an old database without polls must receive current table definitions before migration replay');
+        assert.strictEqual(cli.consoleErrStub.called, false,
+            'the migration run must not hit ER_NO_SUCH_TABLE after table verification');
     });
 });
 
